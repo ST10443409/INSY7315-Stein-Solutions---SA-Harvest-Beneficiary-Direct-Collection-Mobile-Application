@@ -1,0 +1,7 @@
+﻿services:
+  beneficiarybackend:
+    image: beneficiarybackend
+    build:
+      context: .
+      dockerfile: BeneficiaryBackend/Dockerfile
+

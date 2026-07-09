@@ -1,27 +1,228 @@
-# Compiled class file
+#############################################
+# Operating System Files
+#############################################
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+#############################################
+# IDEs
+#############################################
+
+# IntelliJ IDEA / Android Studio / Rider
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Rider
+.idea_modules/
+
+# Visual Studio
+.vs/
+.vscode/
+*.code-workspace
+
+#############################################
+# JetBrains
+#############################################
+
+.jetbrains/
+
+#############################################
+# Java / Kotlin
+#############################################
+
 *.class
-
-# Log file
 *.log
-
-# BlueJ files
 *.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
 
-# Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
+#############################################
+# Gradle
+#############################################
+
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin
 .kotlin/
+
+#############################################
+# Android
+#############################################
+
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APKs
+*.apk
+*.ap_
+*.aab
+
+# Dex
+*.dex
+
+# Android Studio Navigation Editor
+.navigation/
+
+# Android Studio captures
+outputs/
+
+#############################################
+# Java Archives
+#############################################
+
+*.jar
+*.war
+*.ear
+*.nar
+
+#############################################
+# Archives
+#############################################
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.7z
+*.rar
+
+#############################################
+# Mobile Tools for Java (J2ME)
+#############################################
+
+.mtj.tmp/
+
+#############################################
+# .NET / C#
+#############################################
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.rsuser
+*.sln.docstates
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# .NET CLI
+artifacts/
+
+#############################################
+# Rider Specific
+#############################################
+
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries/
+.idea/**/shelf/
+
+#############################################
+# Visual Studio Profiler
+#############################################
+
+*.psess
+*.vsp
+*.vspx
+
+#############################################
+# Resharper
+#############################################
+
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+#############################################
+# Azure
+#############################################
+
+.publishsettings
+PublishProfiles/
+
+#############################################
+# Environment Files
+#############################################
+
+.env
+.env.*
+!.env.example
+
+#############################################
+# Node (if frontend exists)
+#############################################
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+#############################################
+# Generated Documentation
+#############################################
+
+docs/_site/
+
+#############################################
+# Temporary Files
+#############################################
+
+*.tmp
+*.temp
+*.cache
+*.pid
+*.seed
+*.swp
+*.swo
+*~
+
+#############################################
+# Logs
+#############################################
+
+logs/
+*.log
+
+#############################################
+# Coverage
+#############################################
+
+coverage/
+.coverage/
+coverage.xml
+
+#############################################
+# Misc
+#############################################
+
+*.orig
+*.rej

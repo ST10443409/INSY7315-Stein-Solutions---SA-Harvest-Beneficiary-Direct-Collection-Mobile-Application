@@ -14,6 +14,12 @@ import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.local.entity.FoodspaceBeneficiaryRecord
 import com.example.client.data.local.entity.VettingDecision
 
+import com.example.client.data.local.dao.CboDao
+import com.example.client.data.local.dao.CboCollectionDao
+import com.example.client.data.local.dao.ProductLineDao
+import com.example.client.data.local.dao.FoodspaceBeneficiaryDao
+import com.example.client.data.local.dao.VettingDecisionDao
+
 @Database(
     entities = [
         SyncPayload::class,
@@ -29,6 +35,11 @@ import com.example.client.data.local.entity.VettingDecision
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun syncPayloadDao(): SyncPayloadDao
+    abstract fun cboDao(): CboDao
+    abstract fun cboCollectionDao(): CboCollectionDao
+    abstract fun productLineDao(): ProductLineDao
+    abstract fun foodspaceBeneficiaryDao(): FoodspaceBeneficiaryDao
+    abstract fun vettingDecisionDao(): VettingDecisionDao
 
     companion object {
         @Volatile

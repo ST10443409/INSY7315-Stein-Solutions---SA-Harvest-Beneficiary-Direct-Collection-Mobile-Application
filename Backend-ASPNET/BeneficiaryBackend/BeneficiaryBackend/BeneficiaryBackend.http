@@ -1,6 +1,0 @@
-@BeneficiaryBackend_HostAddress = http://localhost:5296
-
-GET {{BeneficiaryBackend_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

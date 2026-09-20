@@ -1,0 +1,34 @@
+package com.example.client.data.local.entity
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import java.util.UUID
+
+@Entity(tableName = "cbo_collections")
+data class CboCollectionEntity(
+    @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
+    
+    // Foreign key to CBO (conceptually, actual FK relation not required in this sprint)
+    val cboId: String,
+    
+    // Collection Record Fields
+    val arrivalTime: String,
+    val departureTime: String?,
+    val donorName: String,
+    val donorSigned: Boolean,
+    val cboSigned: Boolean,
+    val deliveryNote: String,
+    val noteAttached: Boolean,
+    val collectNotes: String,
+    val shots: List<Boolean>,
+    
+    // Location / GPS Capture
+    val latitude: Double?,
+    val longitude: Double?,
+    
+    // Offline-first bookkeeping fields
+    val syncStatus: SyncStatus = SyncStatus.PENDING,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)

@@ -11,12 +11,17 @@ import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.CboEntity
 import com.example.client.data.local.entity.ProductLineEntity
 
+import com.example.client.data.local.entity.FoodspaceBeneficiaryRecord
+import com.example.client.data.local.entity.VettingDecision
+
 @Database(
     entities = [
         SyncPayload::class,
         CboEntity::class,
         CboCollectionEntity::class,
-        ProductLineEntity::class
+        ProductLineEntity::class,
+        FoodspaceBeneficiaryRecord::class,
+        VettingDecision::class
     ], 
     version = 1, 
     exportSchema = true

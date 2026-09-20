@@ -1,6 +1,7 @@
 package com.example.client.data.local.converter
 
 import androidx.room.TypeConverter
+import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.data.local.entity.Tone
 
@@ -34,5 +35,26 @@ class Converters {
     fun toBooleanList(value: String?): List<Boolean>? {
         if (value.isNullOrEmpty()) return emptyList()
         return value.split(",").map { it.toBoolean() }
+    }
+
+    @TypeConverter
+    fun fromDecisionOutcome(value: DecisionOutcome?): String? {
+        return value?.name
+    }
+
+    @TypeConverter
+    fun toDecisionOutcome(value: String?): DecisionOutcome? {
+        return value?.let { DecisionOutcome.valueOf(it) }
+    }
+
+    @TypeConverter
+    fun fromStringList(value: List<String>?): String? {
+        return value?.joinToString(separator = "|||")
+    }
+
+    @TypeConverter
+    fun toStringList(value: String?): List<String>? {
+        if (value.isNullOrEmpty()) return emptyList()
+        return value.split("|||")
     }
 }

@@ -5,7 +5,23 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [SyncPayload::class], version = 1, exportSchema = false)
+import androidx.room.TypeConverters
+import com.example.client.data.local.converter.Converters
+import com.example.client.data.local.entity.CboCollectionEntity
+import com.example.client.data.local.entity.CboEntity
+import com.example.client.data.local.entity.ProductLineEntity
+
+@Database(
+    entities = [
+        SyncPayload::class,
+        CboEntity::class,
+        CboCollectionEntity::class,
+        ProductLineEntity::class
+    ], 
+    version = 1, 
+    exportSchema = true
+)
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun syncPayloadDao(): SyncPayloadDao
 

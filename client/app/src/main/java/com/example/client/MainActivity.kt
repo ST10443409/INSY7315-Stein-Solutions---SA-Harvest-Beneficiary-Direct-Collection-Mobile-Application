@@ -2,27 +2,47 @@ package com.example.client
 
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.example.client.auth.RoleProvider
 import com.example.client.data.AppDatabase
 import com.example.client.data.SyncPayload
 import com.example.client.network.RetrofitClient
 import com.example.client.network.SyncRequest
+import com.example.client.ui.navigation.AppRoot
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private val TAG = "MainActivity"
 
+    @Inject
+    lateinit var roleProvider: RoleProvider
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Set basic layout if available, for now just logic
-        // setContentView(R.layout.activity_main)
+
+        setContent {
+            val role by roleProvider.currentRole.collectAsState()
+            MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    AppRoot(role)
+                }
+            }
+        }
 
         lifecycleScope.launch {
             // 1. Simulate saving data while offline

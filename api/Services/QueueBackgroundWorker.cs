@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using api.Models;
 
 namespace api.Services;
 

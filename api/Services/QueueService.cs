@@ -1,12 +1,7 @@
 using System.Threading.Channels;
+using api.Models;
 
 namespace api.Services;
-
-public class SyncPayload
-{
-    public string Id { get; set; } = string.Empty;
-    public string Data { get; set; } = string.Empty;
-}
 
 public interface IQueueService
 {

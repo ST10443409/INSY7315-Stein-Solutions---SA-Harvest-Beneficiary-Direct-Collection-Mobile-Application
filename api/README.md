@@ -56,3 +56,25 @@ dotnet test api.Tests
 ```
 
 If you change a Room entity, update the matching model and add a migration in the same PR.
+
+## Authentication (JWT)
+
+`POST /api/auth/login` with `{"username": "...", "password": "..."}` returns
+`{"token": "<jwt>", "role": "CBO_COLLECTION|VETTING|ADMIN", "expiresAt": "..."}`; wrong credentials of any kind
+return `401 {"error":"Invalid username or password."}`. Send the token as `Authorization: Bearer <token>`.
+
+- **Role claim:** the JWT carries a `role` claim whose value is exactly the Android `UserRole` name
+  (`CBO_COLLECTION`, `VETTING`, `ADMIN`). `api.Tests` fails if the two enums drift. Use
+  `[Authorize(Roles = AppRoles.Admin)]` etc.; `Controllers/AccessDemoController.cs` shows the pattern (delete it once real endpoints exist).
+- **Configuration** (section `Jwt`): `Issuer`, `Audience`, `ExpiryMinutes` (default 60) live in `appsettings.json`.
+  **`Jwt:SigningKey` is a secret** and must be at least 32 characters; the app refuses to start without it.
+  ```bash
+  cd api
+  dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 48)"
+  ```
+  In Docker it comes from `JWT_SIGNING_KEY` in `.env`.
+- **Passwords** are hashed with ASP.NET Core's `PasswordHasher` (PBKDF2, per-user salt).
+- **Test users** (development only): with `Seed:Enabled=true` (set in `compose.yaml`) the app creates
+  `cbo_test_user`, `vetting_test_user` and `admin_test_user`, all using the password in `SEED_TEST_PASSWORD`
+  (`.env.example` has a dev-only value). For `dotnet run` set `Seed:Enabled` and `Seed:TestUserPassword` via user-secrets.
+- **Ports:** in Docker the API is on `http://localhost:5000` (what the Android emulator reaches as `10.0.2.2:5000`).

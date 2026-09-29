@@ -1,6 +1,13 @@
+using System.Text;
 using api.Data;
+using api.Models;
+using api.Options;
 using api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +20,44 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")
         ?? throw new InvalidOperationException(
             "Connection string 'ConnectionStrings:Default' is missing. See api/README.md.")));
+
+// ── Authentication: JWT bearer ────────────────────────────────────────────────────────────
+// Issuer, audience and signing key all come from configuration ("Jwt" section); the signing key is a
+// secret (user-secrets / env var) and the app refuses to start without a strong one.
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtOptions>>((bearer, jwtOptions) =>
+    {
+        var jwt = jwtOptions.Value;
+
+        bearer.MapInboundClaims = false; // keep claim names as issued ("role", "sub", "name")
+        bearer.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwt.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwt.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)),
+            ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
+            RequireExpirationTime = true,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30), // default is 5 minutes, which would blur the short expiry
+            NameClaimType = "name",
+            RoleClaimType = JwtTokenService.RoleClaim, // [Authorize(Roles = "...")] reads the "role" claim
+        };
+    });
+builder.Services.AddAuthorization();
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
 // Register the queue service as a singleton
 builder.Services.AddSingleton<IQueueService, QueueService>();
@@ -38,6 +83,22 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
 }
 
+// Opt-in (Seed:Enabled=true, local dev only): one test user per role.
+if (app.Configuration.GetValue<bool>("Seed:Enabled"))
+{
+    using var scope = app.Services.CreateScope();
+    await TestUserSeeder.SeedAsync(
+        scope.ServiceProvider,
+        app.Configuration["Seed:TestUserPassword"],
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("TestUserSeeder"));
+}
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
+
+// Lets the integration tests (WebApplicationFactory<Program>) reach the top-level Program class.
+public partial class Program { }

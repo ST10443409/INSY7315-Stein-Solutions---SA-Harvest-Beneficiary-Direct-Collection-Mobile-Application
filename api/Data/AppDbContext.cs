@@ -26,6 +26,7 @@ namespace api.Data;
 ///     the beneficiary cache is replaced on every fetch, and a collection must never be rejected because the
 ///     CBO list hasn't been pulled yet.
 ///   * Not modelled: Room's "sync_payloads" (a demo table of the current queue prototype).
+///   * "users" is server-only (login accounts); the device holds a JWT, not a user record.
 /// </summary>
 public class AppDbContext : DbContext
 {
@@ -42,11 +43,16 @@ public class AppDbContext : DbContext
 
     public DbSet<VettingDecision> VettingDecisions => Set<VettingDecision>();
 
+    /// <summary>Server-owned login accounts. No Room counterpart (see AppUser).</summary>
+    public DbSet<AppUser> Users => Set<AppUser>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<SyncStatus>().HaveConversion<UpperCaseEnumConverter<SyncStatus>>();
         configurationBuilder.Properties<DecisionOutcome>().HaveConversion<UpperCaseEnumConverter<DecisionOutcome>>();
         configurationBuilder.Properties<Tone>().HaveConversion<UpperCaseEnumConverter<Tone>>();
+        // UserRole names are already the wire values (CBO_COLLECTION, ...), so plain string conversion is exact.
+        configurationBuilder.Properties<UserRole>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -92,6 +98,14 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.FoodspaceRecordId).HasDatabaseName("ix_vetting_decisions_foodspace_record_id");
             e.HasIndex(x => x.SyncStatus).HasDatabaseName("ix_vetting_decisions_sync_status");
             e.HasIndex(x => x.OfficerId).HasDatabaseName("ix_vetting_decisions_officer_id");
+        });
+
+        modelBuilder.Entity<AppUser>(e =>
+        {
+            e.ToTable("users");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.HasIndex(x => x.Username).IsUnique().HasDatabaseName("ux_users_username");
         });
 
         ApplySnakeCaseNames(modelBuilder);

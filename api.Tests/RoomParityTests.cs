@@ -26,6 +26,9 @@ public class RoomParityTests
     // Room tables deliberately not modelled on the server (demo table of the old queue prototype).
     private static readonly HashSet<string> IgnoredRoomTables = new() { "sync_payloads" };
 
+    // Backend tables with no Room counterpart on purpose.
+    private static readonly HashSet<string> ServerOnlyTables = new() { "users" };
+
     private record KotlinField(string Name, string Type, bool Nullable);
 
     private record KotlinEntity(string Table, string ClassName, List<KotlinField> Fields);
@@ -150,6 +153,7 @@ public class RoomParityTests
 
         foreach (var entity in model.GetEntityTypes())
         {
+            if (ServerOnlyTables.Contains(entity.GetTableName()!)) continue;
             var room = rooms[entity.GetTableName()!];
             var roomFields = room.Fields.Select(f => Pascal(f.Name)).ToHashSet();
             foreach (var property in entity.GetProperties())
@@ -193,5 +197,26 @@ public class RoomParityTests
 
         Assert.Equal(expected, converter.ConvertToProvider(value));
         Assert.Equal(value, converter.ConvertFromProvider(expected));
+    }
+
+    [Fact]
+    public void UserRole_MatchesTheAndroidEnumVerbatim()
+    {
+        // Room root is .../client/data; UserRole.kt lives in .../client/auth.
+        var kotlin = Path.Combine(Directory.GetParent(RoomRoot())!.FullName, "auth", "UserRole.kt");
+        var text = File.ReadAllText(kotlin);
+        var androidValues = Regex.Match(text, @"enum class UserRole \{(?<v>[^}]*)\}").Groups["v"].Value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        // Exact strings (no case folding): this is the value in the JWT role claim and the login response.
+        Assert.Equal(androidValues, Enum.GetNames<UserRole>());
+    }
+
+    [Fact]
+    public void AppRolesConstants_EqualTheEnumNames()
+    {
+        Assert.Equal(nameof(UserRole.CBO_COLLECTION), AppRoles.CboCollection);
+        Assert.Equal(nameof(UserRole.VETTING), AppRoles.Vetting);
+        Assert.Equal(nameof(UserRole.ADMIN), AppRoles.Admin);
     }
 }

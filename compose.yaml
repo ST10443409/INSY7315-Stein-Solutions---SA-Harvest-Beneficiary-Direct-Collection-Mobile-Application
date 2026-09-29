@@ -20,13 +20,20 @@ services:
   api:
     build: ./api
     ports:
-      - "5064:8080"
+      # 5000 is where the Android app (10.0.2.2:5000 from the emulator) expects the API.
+      - "5000:8080"
     environment:
       # Inside the compose network the simulator and database are reachable by service name, not localhost.
       ExternalApi__BaseUrl: http://external-api-sim:8080
       ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-saharvest};Username=${POSTGRES_USER:-saharvest};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
       # Create/update the schema when the container starts (fine for dev; use a deliberate step in production).
       Database__MigrateOnStartup: "true"
+      # JWT: the signing key is a secret and has no default on purpose (see .env.example).
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env (see .env.example)}
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
+      # Dev only: create one test user per role (cbo_test_user, vetting_test_user, admin_test_user).
+      Seed__Enabled: "true"
+      Seed__TestUserPassword: ${SEED_TEST_PASSWORD:?Set SEED_TEST_PASSWORD in .env (see .env.example)}
     depends_on:
       db:
         condition: service_healthy

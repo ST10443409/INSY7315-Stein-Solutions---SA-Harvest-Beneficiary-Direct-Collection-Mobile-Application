@@ -1,24 +1,14 @@
-using Microsoft.AspNetCore.Mvc;
+using external_api_sim;
 
+// Simulator for the client's (Foodspace's) existing API. All endpoints are listed in ExternalApiEndpoints.cs.
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSingleton<SampleStore>();
+builder.Services.AddOpenApi();
+
 var app = builder.Build();
 
-app.MapPost("/api/external/sync", ([FromBody] SyncPayload payload, ILogger<Program> logger) =>
-{
-    logger.LogInformation("External API Simulator received payload with ID: {Id} at {Time}", payload.Id, DateTime.UtcNow);
-    
-    // Simulate some processing delay
-    Thread.Sleep(500);
-
-    return Results.Ok(new { Status = "Success", ReceivedId = payload.Id });
-});
-
-app.MapGet("/api/external/status", () => Results.Ok(new { Status = "Online" }));
+app.MapOpenApi(); // /openapi/v1.json: the endpoint list as a spec the client can import
+app.MapExternalApi();
 
 app.Run();
-
-public class SyncPayload
-{
-    public string Id { get; set; } = string.Empty;
-    public string Data { get; set; } = string.Empty;
-}

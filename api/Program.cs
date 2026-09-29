@@ -1,9 +1,18 @@
+using api.Data;
 using api.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Controller-based API: endpoints live in Controllers/.
 builder.Services.AddControllers();
+
+// PostgreSQL via EF Core. The connection string is never committed: it comes from
+// `dotnet user-secrets` locally, or the ConnectionStrings__Default env var (see compose.yaml).
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")
+        ?? throw new InvalidOperationException(
+            "Connection string 'ConnectionStrings:Default' is missing. See api/README.md.")));
 
 // Register the queue service as a singleton
 builder.Services.AddSingleton<IQueueService, QueueService>();
@@ -21,6 +30,13 @@ builder.Services.AddHttpClient("ExternalApi", client =>
 });
 
 var app = builder.Build();
+
+// Opt-in (Database:MigrateOnStartup=true, set in compose.yaml): apply pending migrations at start-up.
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    using var scope = app.Services.CreateScope();
+    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+}
 
 app.MapControllers();
 

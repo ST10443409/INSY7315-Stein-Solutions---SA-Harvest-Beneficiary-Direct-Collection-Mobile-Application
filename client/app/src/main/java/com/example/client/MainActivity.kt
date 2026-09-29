@@ -8,11 +8,13 @@ import com.example.client.data.AppDatabase
 import com.example.client.data.SyncPayload
 import com.example.client.network.RetrofitClient
 import com.example.client.network.SyncRequest
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private val TAG = "MainActivity"

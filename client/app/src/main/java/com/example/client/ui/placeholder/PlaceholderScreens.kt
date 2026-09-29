@@ -19,7 +19,6 @@ object ScreenTags {
     const val FORM2 = "screen_form2"
     const val ADMIN_DASHBOARD = "screen_admin_dashboard"
     const val SYNC_MONITOR = "screen_sync_monitor"
-    const val SIGNED_OUT = "screen_signed_out"
     const val OPEN_FORM1 = "button_open_form1"
     const val OPEN_FORM2 = "button_open_form2"
     const val OPEN_SYNC_MONITOR = "button_open_sync_monitor"
@@ -35,10 +34,6 @@ fun Form2PlaceholderScreen() = PlaceholderScreen("Form 2", ScreenTags.FORM2)
 
 @Composable
 fun SyncMonitorPlaceholderScreen() = PlaceholderScreen("Sync monitoring", ScreenTags.SYNC_MONITOR)
-
-// TODO(#27): route to the login screen once it exists.
-@Composable
-fun SignedOutPlaceholderScreen() = PlaceholderScreen("Not signed in", ScreenTags.SIGNED_OUT)
 
 @Composable
 fun AdminDashboardPlaceholderScreen(

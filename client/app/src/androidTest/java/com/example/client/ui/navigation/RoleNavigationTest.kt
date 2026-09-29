@@ -1,6 +1,9 @@
 package com.example.client.ui.navigation
 
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -29,10 +32,14 @@ class RoleNavigationTest {
 
     private lateinit var navController: NavHostController
 
+    private companion object {
+        const val LOGIN_SLOT = "login_slot"
+    }
+
     private fun launch(role: UserRole?) {
         composeRule.setContent {
             navController = rememberNavController()
-            if (role == null) AppRoot(null) else AppNavHost(role, navController)
+            if (role == null) AppRoot(null) { Text("login", Modifier.testTag(LOGIN_SLOT)) } else AppNavHost(role, navController)
         }
     }
 
@@ -152,10 +159,10 @@ class RoleNavigationTest {
     }
 
     @Test
-    fun noRole_showsSignedOutPlaceholder() {
+    fun noRole_showsLoginInsteadOfAnyRoleGraph() {
         launch(null)
 
-        composeRule.onNodeWithTag(ScreenTags.SIGNED_OUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(LOGIN_SLOT).assertIsDisplayed()
     }
 
     private fun pressBack() {

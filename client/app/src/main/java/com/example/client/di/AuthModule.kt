@@ -1,7 +1,9 @@
 package com.example.client.di
 
+import com.example.client.auth.EncryptedTokenStorage
 import com.example.client.auth.RoleProvider
-import com.example.client.auth.StubRoleProvider
+import com.example.client.auth.SessionManager
+import com.example.client.auth.TokenStorage
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -12,8 +14,11 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class AuthModule {
 
-    // TODO(#27): bind the real token-backed RoleProvider instead of the stub.
     @Binds
     @Singleton
-    abstract fun bindRoleProvider(impl: StubRoleProvider): RoleProvider
+    abstract fun bindTokenStorage(impl: EncryptedTokenStorage): TokenStorage
+
+    // The navigation shell's role comes from the real session now (was a stub, #26).
+    @Binds
+    abstract fun bindRoleProvider(impl: SessionManager): RoleProvider
 }

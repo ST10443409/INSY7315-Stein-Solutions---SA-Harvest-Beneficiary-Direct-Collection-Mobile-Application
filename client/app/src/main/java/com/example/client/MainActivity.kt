@@ -14,8 +14,9 @@ import androidx.lifecycle.lifecycleScope
 import com.example.client.auth.RoleProvider
 import com.example.client.data.AppDatabase
 import com.example.client.data.SyncPayload
-import com.example.client.network.RetrofitClient
+import com.example.client.network.SyncApiService
 import com.example.client.network.SyncRequest
+import com.example.client.ui.login.LoginRoute
 import com.example.client.ui.navigation.AppRoot
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,9 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var roleProvider: RoleProvider
 
+    @Inject
+    lateinit var syncApiService: SyncApiService
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -39,7 +43,7 @@ class MainActivity : AppCompatActivity() {
             val role by roleProvider.currentRole.collectAsState()
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot(role)
+                    AppRoot(role) { LoginRoute() }
                 }
             }
         }
@@ -71,7 +75,7 @@ class MainActivity : AppCompatActivity() {
             for (payload in unsyncedPayloads) {
                 try {
                     val request = SyncRequest(id = payload.id, data = payload.data)
-                    val response = RetrofitClient.instance.syncData(request)
+                    val response = syncApiService.syncData(request)
                     
                     if (response.isSuccessful) {
                         Log.d(TAG, "Successfully synced payload: ${payload.id}")

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and below. The auth token is bound to a device Keystore key and must not be backed up. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="auth_secure_prefs.xml" />
+    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__.xml" />
+</full-backup-content>

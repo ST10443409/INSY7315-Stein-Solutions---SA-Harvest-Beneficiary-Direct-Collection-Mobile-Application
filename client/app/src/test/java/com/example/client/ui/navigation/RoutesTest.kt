@@ -1,10 +1,7 @@
 package com.example.client.ui.navigation
 
-import com.example.client.auth.StubRoleProvider
 import com.example.client.auth.UserRole
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RoutesTest {
@@ -29,12 +26,5 @@ class RoutesTest {
         val graphs = UserRole.values().map { it.graphRoute() }
         assertEquals(graphs.size, graphs.toSet().size)
     }
-
-    @Test
-    fun stubRoleProvider_exposesTheStubRole() {
-        val provider = StubRoleProvider()
-        assertEquals(StubRoleProvider.STUB_ROLE, provider.currentRole.value)
-        assertNotNull(provider.currentRole.value)
-        assertTrue(UserRole.values().contains(provider.currentRole.value))
-    }
 }
+

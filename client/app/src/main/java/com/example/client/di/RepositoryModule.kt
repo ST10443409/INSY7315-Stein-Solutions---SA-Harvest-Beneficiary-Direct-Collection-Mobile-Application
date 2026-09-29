@@ -1,13 +1,18 @@
 package com.example.client.di
 
+import com.example.client.auth.AuthRepository
+import com.example.client.auth.AuthRepositoryImpl
+import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
-/**
- * Placeholder for repository bindings.
- * TODO: add `@Binds` entries mapping repository interfaces to their implementations.
- */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class RepositoryModule
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+}

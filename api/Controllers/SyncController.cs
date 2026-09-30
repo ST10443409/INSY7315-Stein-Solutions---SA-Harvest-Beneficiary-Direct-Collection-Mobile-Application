@@ -5,10 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace api.Controllers;
 
-[ApiController]
 [Authorize] // the Android client sends its bearer token; role scoping comes with #36/#52
-[Route("api/sync")]
-public class SyncController : ControllerBase
+public class SyncController : ApiControllerBase
 {
     private readonly IQueueService _queueService;
     private readonly ILogger<SyncController> _logger;

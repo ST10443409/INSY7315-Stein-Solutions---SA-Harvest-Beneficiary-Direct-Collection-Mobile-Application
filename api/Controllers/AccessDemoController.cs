@@ -9,10 +9,8 @@ namespace api.Controllers;
 /// [Authorize] for "any signed-in user" and [Authorize(Roles = ...)] for role-scoped endpoints.
 /// Delete once real endpoints use the pattern.
 /// </summary>
-[ApiController]
-[Route("api/access-demo")]
 [Authorize] // every action below requires a valid token; the role attributes narrow it further
-public class AccessDemoController : ControllerBase
+public class AccessDemoController : ApiControllerBase
 {
     [HttpGet("any")]
     public IActionResult AnyAuthenticatedUser() => Ok(new { access = "any authenticated user" });

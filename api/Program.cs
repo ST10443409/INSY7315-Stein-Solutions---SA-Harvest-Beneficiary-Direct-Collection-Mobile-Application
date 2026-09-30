@@ -1,18 +1,26 @@
 using System.Text;
 using api.Data;
+using api.Infrastructure;
 using api.Models;
 using api.Options;
 using api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controller-based API: endpoints live in Controllers/.
-builder.Services.AddControllers();
+// Controller-based API: endpoints live in Controllers/ and derive from ApiControllerBase, which fixes the
+// `api/[controller]` route convention. The transformer kebab-cases the token (AccessDemo -> access-demo).
+builder.Services.AddControllers(options =>
+        options.Conventions.Add(new RouteTokenTransformerConvention(new KebabCaseParameterTransformer())))
+    .AddEnvelopedValidationErrors(); // model-validation 400s use the standard { success, data, error } envelope
+
+// OpenAPI document, served at /openapi/v1.json in Development only (see below).
+builder.Services.AddOpenApi();
 
 // PostgreSQL via EF Core. The connection string is never committed: it comes from
 // `dotnet user-secrets` locally, or the ConnectionStrings__Default env var (see compose.yaml).
@@ -93,10 +101,19 @@ if (app.Configuration.GetValue<bool>("Seed:Enabled"))
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("TestUserSeeder"));
 }
 
+// Must stay first: catches whatever anything below it throws and returns the standard error envelope.
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseEnvelopedStatusCodes(); // bodyless 401/403/404 etc. get the envelope too
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi(); // GET /openapi/v1.json
+}
 
 app.Run();
 

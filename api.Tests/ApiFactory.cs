@@ -26,6 +26,9 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     private readonly string _dbName = Guid.NewGuid().ToString();
 
+    /// <summary>Subclasses that replace the database with something unusable turn this off.</summary>
+    protected virtual bool SeedUsers => true;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Default", "Host=unused");
@@ -43,13 +46,16 @@ public class ApiFactory : WebApplicationFactory<Program>
                          && d.ServiceType.GetGenericArguments().Contains(typeof(AppDbContext))).ToList())
                 services.Remove(d);
             services.AddDbContext<AppDbContext>(o => o.UseInMemoryDatabase(_dbName));
+
+            // Test-only endpoint (FaultController) for exercising the exception middleware.
+            services.AddControllers().AddApplicationPart(typeof(FaultController).Assembly);
         });
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
         var host = base.CreateHost(builder);
-        Seed(host.Services);
+        if (SeedUsers) Seed(host.Services);
         return host;
     }
 

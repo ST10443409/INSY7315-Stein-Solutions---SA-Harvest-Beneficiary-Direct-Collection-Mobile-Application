@@ -3,13 +3,45 @@
 ASP.NET Core (.NET 10), controller-based. PostgreSQL through EF Core.
 
 ```
-Controllers/   HTTP endpoints
-Models/        Entities (mirror the Android Room entities)
-Data/          AppDbContext + converters
-DTOs/          Request/response shapes
-Services/      Queue and background worker
-Migrations/    EF Core migrations
+Controllers/     HTTP endpoints (all derive from ApiControllerBase)
+Infrastructure/  Exception middleware, route-token transformer, envelope wiring
+Models/          Entities (mirror the Android Room entities)
+Data/            AppDbContext + converters
+DTOs/            Request/response shapes, incl. the ApiResponse envelope
+Services/        Queue and background worker
+Migrations/      EF Core migrations
 ```
+
+## API conventions (read before adding a controller)
+
+**Routes.** Every controller derives from `ApiControllerBase`, which declares `[Route("api/[controller]")]`.
+`OrdersController` is served at `/api/orders`; multi-word names are kebab-cased (`AccessDemoController` ->
+`/api/access-demo`). Do not put a controller-level `[Route]` on your controller, only action templates
+(`[HttpGet("{id}")]`). `api.Tests` fails if a controller breaks this.
+
+**Response envelope.** New endpoints return `ApiResponse<T>` (`DTOs/ApiResponse.cs`):
+
+```jsonc
+// success                                  // failure
+{ "success": true,                          { "success": false,
+  "data": { ... },                            "data": null,
+  "error": null }                             "error": { "code": "NOT_FOUND", "message": "...", "traceId": "..." } }
+```
+
+Use `Success(data)` / `Failure(status, code, message)` from the base class. `error.code` is a stable
+UPPER_SNAKE_CASE value clients can branch on; `error.message` is user-safe; `error.details` (field -> messages)
+appears on `VALIDATION_FAILED`. Errors the framework produces are wrapped automatically: unhandled exceptions
+(`500 INTERNAL_ERROR`, logged with the same `traceId`, never a stack trace), model-validation failures
+(`400 VALIDATION_FAILED`), and bodyless `401`/`403`/`404` responses.
+
+The pre-existing `POST /api/auth/login`, `GET /api/auth/me` and `POST /api/sync` still return their original
+bare bodies because the Android client parses them as-is; move them onto the envelope together with the client.
+
+**Health.** `GET /api/health` (anonymous) returns `200` with `data.status = "ok"` when the API and database are
+reachable, or `503` with `data.status = "unhealthy"` when the database is not. It never exposes connection
+details or exception text.
+
+**OpenAPI.** In Development the document is at `/openapi/v1.json`; it is not served in other environments.
 
 ## Database configuration
 

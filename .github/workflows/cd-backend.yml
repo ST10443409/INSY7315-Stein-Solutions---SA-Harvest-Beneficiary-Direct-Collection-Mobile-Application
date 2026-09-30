@@ -1,34 +1,81 @@
-name: Backend CD (Docker Build)
+name: Backend CI/CD (Build, Test, Docker)
 
+# Runs only when backend code (or this workflow) changes; Android-only changes don't trigger it.
+# The two Room-related paths are here on purpose: api.Tests (RoomParityTests) reads the Kotlin entities
+# and UserRole.kt to make sure the backend models stay in sync with the app.
 on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'api/**'
+      - 'api.Tests/**'
+      - 'external-api-sim/**'
+      - 'compose.yaml'
+      - 'dotnet-tools.json'
+      - 'client/app/src/main/java/com/example/client/data/**'
+      - 'client/app/src/main/java/com/example/client/auth/UserRole.kt'
+      - '.github/workflows/cd-backend.yml'
   push:
     branches: [ "main" ]
     paths:
-      - 'Backend-ASPNET/**'
+      - 'api/**'
+      - 'api.Tests/**'
+      - 'external-api-sim/**'
+      - 'compose.yaml'
+      - 'dotnet-tools.json'
+      - 'client/app/src/main/java/com/example/client/data/**'
+      - 'client/app/src/main/java/com/example/client/auth/UserRole.kt'
+      - '.github/workflows/cd-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-push:
+  build-test-docker:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./Backend-ASPNET
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Setup .NET
+
+    - name: Set up .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
-        
+        dotnet-version: '10.0.x'
+
     - name: Restore dependencies
-      run: dotnet restore BeneficiaryBackend.sln
-      
+      run: |
+        dotnet restore api.Tests/api.Tests.csproj
+        dotnet restore external-api-sim/external-api-sim.csproj
+
     - name: Build
-      run: dotnet build BeneficiaryBackend.sln --no-restore --configuration Release
-      
-    - name: Build Docker Image
-      run: docker build -t beneficiary-backend:latest .
-      
-    # Note: Append Docker login and push commands here based on your target 
-    # registry (e.g., Azure Container Registry, AWS ECR, or Docker Hub).
+      run: |
+        dotnet build api.Tests/api.Tests.csproj --no-restore --configuration Release
+        dotnet build external-api-sim/external-api-sim.csproj --no-restore --configuration Release
+
+    # api.Tests boots the real API in memory (in-memory database, test-only JWT settings), so this needs
+    # no database and no secrets.
+    - name: Test
+      run: dotnet test api.Tests/api.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-test-results
+        path: test-results/
+        if-no-files-found: ignore
+        retention-days: 7
+
+    # Only proves the images build. Add registry login + push steps here when a deploy target exists
+    # (see CONTRIBUTING.md for the secrets that will need).
+    - name: Build API Docker image
+      run: docker build -t saharvest-api:ci ./api
+
+    - name: Build external API simulator Docker image
+      run: docker build -t saharvest-external-api-sim:ci ./external-api-sim

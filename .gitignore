@@ -84,6 +84,9 @@ outputs/
 *.ear
 *.nar
 
+# The Gradle wrapper jar must be committed, or ./gradlew cannot start (e.g. in CI).
+!gradle-wrapper.jar
+
 #############################################
 # Archives
 #############################################

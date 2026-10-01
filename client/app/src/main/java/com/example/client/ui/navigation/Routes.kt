@@ -27,6 +27,7 @@ object Routes {
     const val ADMIN_DECISION = "admin_decision/{id}"
     const val ADMIN_SYNC_MONITOR = "admin_sync_monitor"
     const val ADMIN_FAILED_SYNC = "admin_failed_sync"
+    const val ADMIN_FAILED_SYNC_RECORD = "admin_failed_sync_record/{form}/{id}"
     const val ADMIN_USER_ACTIVITY = "admin_user_activity"
 }
 
@@ -46,3 +47,6 @@ fun UserRole.startDestination(): String = when (this) {
 
 /** The concrete route for one record, from a route template such as [Routes.VETTING_RECORD]. The id is URL-encoded: Foodspace ids are not assumed to be URL-safe. */
 fun String.withRecordId(id: String): String = replace("{id}", android.net.Uri.encode(id))
+
+/** The concrete route for one failed-sync record, from [Routes.ADMIN_FAILED_SYNC_RECORD]: its kind (a SyncForm name) and its id. */
+fun String.withFailedSyncRecord(form: String, id: String): String = replace("{form}", form).withRecordId(id)

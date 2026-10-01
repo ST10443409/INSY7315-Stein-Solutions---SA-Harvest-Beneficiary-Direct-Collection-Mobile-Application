@@ -60,10 +60,13 @@ object SyncMonitorTags {
 
     /** One row of a form's card, e.g. `sync_monitor_form1_needs_attention`. */
     fun row(card: String, row: SyncRow) = "${card}_${row.name.lowercase()}"
+
+    /** The "N on the server" line of a form's card. */
+    fun total(card: String) = "${card}_total"
 }
 
 /** The states a form's records can be in on the server, in the order a card lists them. */
-enum class SyncRow { WAITING, RETRYING, NEEDS_ATTENTION, FORWARDED, DUPLICATES, SUPERSEDED }
+enum class SyncRow { WAITING, RETRYING, NEEDS_ATTENTION, FORWARDED, DUPLICATES, SUPERSEDED, DISMISSED }
 
 fun FormSyncCounts.count(row: SyncRow): Int = when (row) {
     SyncRow.WAITING -> waiting
@@ -72,16 +75,17 @@ fun FormSyncCounts.count(row: SyncRow): Int = when (row) {
     SyncRow.FORWARDED -> forwarded
     SyncRow.DUPLICATES -> duplicates
     SyncRow.SUPERSEDED -> superseded
+    SyncRow.DISMISSED -> dismissed
 }
 
 /** Something worth telling the Admin after a refresh; the counts already on screen stay. */
-enum class MonitorNotice { OFFLINE, DENIED, FAILED }
+enum class AdminNotice { OFFLINE, DENIED, FAILED }
 
 data class SyncMonitorUiState(
     val loading: Boolean = true,
     /** The last counts the server gave, kept while a refresh runs or fails. Null until the first answer. */
     val snapshot: SyncStatusSnapshot? = null,
-    val notice: MonitorNotice? = null
+    val notice: AdminNotice? = null
 )
 
 /** Loads the server's counts when the screen opens and whenever the Admin taps Refresh. */
@@ -107,9 +111,9 @@ class SyncMonitorViewModel @Inject constructor(
             val result = repository.load()
             _uiState.value = when (result) {
                 is SyncStatusResult.Loaded -> SyncMonitorUiState(loading = false, snapshot = result.snapshot, notice = null)
-                SyncStatusResult.Offline -> _uiState.value.copy(loading = false, notice = MonitorNotice.OFFLINE)
-                SyncStatusResult.Denied -> _uiState.value.copy(loading = false, notice = MonitorNotice.DENIED)
-                SyncStatusResult.Failed -> _uiState.value.copy(loading = false, notice = MonitorNotice.FAILED)
+                SyncStatusResult.Offline -> _uiState.value.copy(loading = false, notice = AdminNotice.OFFLINE)
+                SyncStatusResult.Denied -> _uiState.value.copy(loading = false, notice = AdminNotice.DENIED)
+                SyncStatusResult.Failed -> _uiState.value.copy(loading = false, notice = AdminNotice.FAILED)
             }
             running = false
         }
@@ -161,11 +165,11 @@ fun SyncMonitorScreen(
         } else {
             FormCard(
                 SyncMonitorTags.FORM1, stringResource(R.string.admin_sync_form1), snapshot.cboCollections,
-                rows = listOf(SyncRow.WAITING, SyncRow.RETRYING, SyncRow.NEEDS_ATTENTION, SyncRow.FORWARDED, SyncRow.DUPLICATES)
+                rows = listOf(SyncRow.WAITING, SyncRow.RETRYING, SyncRow.NEEDS_ATTENTION, SyncRow.FORWARDED, SyncRow.DUPLICATES, SyncRow.DISMISSED)
             )
             FormCard(
                 SyncMonitorTags.FORM2, stringResource(R.string.admin_sync_form2), snapshot.vettingDecisions,
-                rows = listOf(SyncRow.WAITING, SyncRow.RETRYING, SyncRow.NEEDS_ATTENTION, SyncRow.FORWARDED, SyncRow.SUPERSEDED)
+                rows = listOf(SyncRow.WAITING, SyncRow.RETRYING, SyncRow.NEEDS_ATTENTION, SyncRow.FORWARDED, SyncRow.SUPERSEDED, SyncRow.DISMISSED)
             )
         }
     }
@@ -191,12 +195,12 @@ private fun RefreshButton(loading: Boolean, onRefresh: () -> Unit) {
 }
 
 @Composable
-private fun Notice(notice: MonitorNotice, hasCounts: Boolean) {
+private fun Notice(notice: AdminNotice, hasCounts: Boolean) {
     val message = stringResource(
         when (notice) {
-            MonitorNotice.OFFLINE -> if (hasCounts) R.string.admin_sync_notice_offline_kept else R.string.admin_sync_notice_offline
-            MonitorNotice.DENIED -> R.string.admin_sync_notice_denied
-            MonitorNotice.FAILED -> if (hasCounts) R.string.admin_sync_notice_failed_kept else R.string.admin_sync_notice_failed
+            AdminNotice.OFFLINE -> if (hasCounts) R.string.admin_sync_notice_offline_kept else R.string.admin_sync_notice_offline
+            AdminNotice.DENIED -> R.string.admin_sync_notice_denied
+            AdminNotice.FAILED -> if (hasCounts) R.string.admin_sync_notice_failed_kept else R.string.admin_sync_notice_failed
         }
     )
     Text(
@@ -226,7 +230,8 @@ private fun FormCard(tag: String, title: String, counts: FormSyncCounts, rows: L
             Text(title, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = SaColors.Ink)
             Text(
                 stringResource(R.string.admin_sync_total, counts.total),
-                fontFamily = Figtree, fontSize = 13.sp, color = SaColors.Muted
+                fontFamily = Figtree, fontSize = 13.sp, color = SaColors.Muted,
+                modifier = Modifier.testTag(SyncMonitorTags.total(tag))
             )
         }
         rows.forEach { StateRow(SyncMonitorTags.row(tag, it), it, counts.count(it)) }
@@ -263,6 +268,7 @@ private fun SyncRow.labelRes() = when (this) {
     SyncRow.FORWARDED -> R.string.admin_sync_forwarded
     SyncRow.DUPLICATES -> R.string.admin_sync_duplicates
     SyncRow.SUPERSEDED -> R.string.admin_sync_superseded
+    SyncRow.DISMISSED -> R.string.admin_sync_dismissed
 }
 
 private fun SyncRow.hintRes() = when (this) {
@@ -272,4 +278,5 @@ private fun SyncRow.hintRes() = when (this) {
     SyncRow.FORWARDED -> R.string.admin_sync_forwarded_hint
     SyncRow.DUPLICATES -> R.string.admin_sync_duplicates_hint
     SyncRow.SUPERSEDED -> R.string.admin_sync_superseded_hint
+    SyncRow.DISMISSED -> R.string.admin_sync_dismissed_hint
 }

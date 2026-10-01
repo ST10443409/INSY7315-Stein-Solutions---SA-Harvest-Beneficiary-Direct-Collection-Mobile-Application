@@ -16,7 +16,8 @@ data class FormSyncCounts(
     val needsAttention: Int,
     val forwarded: Int,
     val duplicates: Int,
-    val superseded: Int
+    val superseded: Int,
+    val dismissed: Int
 )
 
 /** What the server reported, and when it counted. */
@@ -74,5 +75,5 @@ class AdminSyncStatusRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun FormSyncCountsDto.toModel() = FormSyncCounts(total, waiting, retrying, needsAttention, forwarded, duplicates, superseded)
+    private fun FormSyncCountsDto.toModel() = FormSyncCounts(total, waiting, retrying, needsAttention, forwarded, duplicates, superseded, dismissed)
 }

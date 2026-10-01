@@ -23,6 +23,64 @@ namespace api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("api.Models.AdminAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Admin")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("admin");
+
+                    b.Property<string>("Form")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("form");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<int>("PreviousAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("previous_attempts");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("previous_status");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("RecordId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("record_id");
+
+                    b.Property<string>("ResultStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("result_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_admin_actions");
+
+                    b.HasIndex("Form", "RecordId")
+                        .HasDatabaseName("ix_admin_actions_form_record_id");
+
+                    b.ToTable("admin_actions", (string)null);
+                });
+
             modelBuilder.Entity("api.Models.AppUser", b =>
                 {
                     b.Property<Guid>("Id")

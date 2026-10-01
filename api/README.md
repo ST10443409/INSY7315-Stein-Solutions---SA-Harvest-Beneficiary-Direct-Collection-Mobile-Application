@@ -121,7 +121,7 @@ Records that reach this backend are forwarded to Foodspace by `FoodspaceApiClien
 
 - **Status:** `ForwardingStatus` (server-only) is `PENDING` -> `FORWARDED`, or `SYNCED_LOCAL_PENDING_FOODSPACE` when
   Foodspace did not accept the record. That state is retried with exponential backoff (`Foodspace:BaseDelaySeconds`,
-  `MaxAttempts`); when retries run out it stays there for an Admin to retry (#49/#50). `SyncStatus` is untouched, so a
+  `MaxAttempts`); when retries run out it stays there for an Admin to retry or dismiss (see "Admin oversight endpoints"). `SyncStatus` is untouched, so a
   collector's record is never marked failed because of Foodspace.
 - **Ingestion:** `POST /api/cbo-collection/sync` stores the record; the forwarding loop then picks it up within `PollIntervalSeconds`.
 - **Config** (section `Foodspace`): `BaseUrl` (falls back to `ExternalApi:BaseUrl`), `ApiKey` (**secret**, sent as `X-Api-Key`;
@@ -233,3 +233,36 @@ here (the audit trail), but Foodspace only ever hears the newest. An older decis
 even by a manual forward. "Newer" is by decision time, then by when the device created it, whoever made it. Decisions are
 forwarded oldest first, so Foodspace's last word is always the newest. Foodspace was assumed to want this; confirm it (see
 `docs/OPEN-DECISIONS.md`).
+
+## Admin oversight endpoints (#49, #50)
+
+All under `/api/admin`, `ADMIN` only (`AdminController`). Every record that reaches this backend is in exactly one `SyncState`,
+derived in one place (`SyncStates.Of`) from `ForwardingStatus`, whether a retry is scheduled, and whether it is a suspected duplicate:
+
+| State | Meaning |
+|---|---|
+| `WAITING` | Received, not yet sent to Foodspace |
+| `RETRYING` | Foodspace has not accepted it; an automatic retry is scheduled |
+| `NEEDS_ATTENTION` | Foodspace has not accepted it and no retry is scheduled (rejected, or retries used up) |
+| `FORWARDED` | Foodspace accepted it |
+| `DUPLICATE_HELD` | Form 1: looks like a collection already recorded; held, never sent until an Admin releases it |
+| `SUPERSEDED` | Form 2: a newer decision replaced it; history, never sent |
+| `DISMISSED` | An Admin chose not to send it; kept as the audit trail |
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/admin/sync-status` | Counts per state for both forms (#49). Counts only, no record data. |
+| `GET /api/admin/sync-status/attention?form=&page=&pageSize=` | The records that need an Admin (`NEEDS_ATTENTION` and `DUPLICATE_HELD`), oldest first, with the error and attempt count. `form` is `CBO_COLLECTION` or `VETTING_DECISION`. |
+| `GET /api/admin/sync-status/{id}?form=` | One record: the error detail, attempts, the record a duplicate matched, `canRetry` / `canDismiss`, and what has already been done to it. |
+| `POST /api/admin/sync-status/{id}/retry?form=` | Sends it to Foodspace now and returns where it ended up (`record.state`). |
+| `POST /api/admin/sync-status/{id}/dismiss?form=` | Body `{ "reason": "..." }` (required, 500 characters at most). Marks it as never to be sent. |
+
+- **Retry** starts the record's attempt count again, so if Foodspace is still failing it gets a fresh automatic-retry budget instead of staying at
+  "retries used up". It is allowed unless Foodspace already has the record or a newer decision replaced it (409). On a `DUPLICATE_HELD`
+  record it means "this is a real collection, send it": the record is released and then retried like any other. A dismissed record can be
+  brought back the same way. A retry that Foodspace rejects again is still a `200`: the answer is in `record.state` and `record.error`.
+- **Dismiss** is only for a record that needs attention or a held duplicate (409 otherwise): a record that is still retrying will sort itself out.
+- **`form`** is only needed if a collection and a decision somehow share an id (ids are chosen by devices): without it that id answers 409.
+- **Accountability:** every retry and dismissal is a row in `admin_actions` (who, which record, when, previous and resulting status,
+  previous attempt count, the reason) and a log line. Rows are only added. The record's `history` shows them, newest first.
+- **Not here: editing a record before resubmitting.** See `docs/decisions/0002-failed-sync-resolution.md` for why, and what would be needed.

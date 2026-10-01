@@ -44,9 +44,88 @@
     <string name="admin_sync_superseded">Replaced decisions</string>
     <string name="admin_sync_superseded_hint">A newer decision exists for the same beneficiary. Kept as history, never sent.</string>
 
+    <string name="admin_sync_dismissed">Dismissed</string>
+    <string name="admin_sync_dismissed_hint">An Admin chose not to send it. Kept as a record, never sent.</string>
+
     <string name="admin_sync_notice_offline">You are offline. The counts come from the server, so connect and tap Refresh.</string>
     <string name="admin_sync_notice_offline_kept">You are offline. Showing the counts from the last refresh.</string>
     <string name="admin_sync_notice_denied">The server did not accept this account for the sync overview. Sign in again as an Admin.</string>
     <string name="admin_sync_notice_failed">Could not load the counts just now. Try again in a moment.</string>
     <string name="admin_sync_notice_failed_kept">Could not refresh just now. Showing the counts from the last refresh.</string>
+
+    <!-- Failed syncs (#50) -->
+    <string name="admin_failed_summary">%1$d need attention</string>
+    <string name="admin_failed_refresh">Refresh</string>
+    <string name="admin_failed_refreshing">Refreshing…</string>
+    <string name="admin_failed_loading">Loading the records that need attention…</string>
+    <string name="admin_failed_empty_title">Nothing needs attention</string>
+    <string name="admin_failed_empty_body">Every record that reached the server has been sent to Foodspace, is waiting its turn, or is being retried automatically.</string>
+    <string name="admin_failed_form1">Form 1 · CBO collection</string>
+    <string name="admin_failed_form2">Form 2 · Vetting decision</string>
+    <string name="admin_failed_attempts">%1$d attempts</string>
+    <string name="admin_failed_attempts_one">1 attempt</string>
+    <string name="admin_failed_submitted_by">by %1$s</string>
+    <string name="admin_failed_no_error">No error recorded</string>
+
+    <string name="admin_failed_notice_offline">You are offline. This list comes from the server, so connect and tap Refresh.</string>
+    <string name="admin_failed_notice_offline_kept">You are offline. Showing what was loaded last.</string>
+    <string name="admin_failed_notice_denied">The server did not accept this account for failed syncs. Sign in again as an Admin.</string>
+    <string name="admin_failed_notice_failed">Could not load this just now. Try again in a moment.</string>
+    <string name="admin_failed_notice_failed_kept">Could not refresh just now. Showing what was loaded last.</string>
+
+    <string name="admin_failed_detail_title">Record details</string>
+    <string name="admin_failed_section_what">What happened</string>
+    <string name="admin_failed_section_duplicate">Looks like a copy of</string>
+    <string name="admin_failed_section_actions">What you can do</string>
+    <string name="admin_failed_section_history">What has been done</string>
+    <string name="admin_failed_fact_received">Received</string>
+    <string name="admin_failed_fact_submitted_by">Submitted by</string>
+    <string name="admin_failed_fact_attempts">Attempts</string>
+    <string name="admin_failed_fact_last">Last attempt</string>
+    <string name="admin_failed_fact_next">Next automatic retry</string>
+    <string name="admin_failed_fact_error">Foodspace said</string>
+    <string name="admin_failed_not_recorded">Not recorded</string>
+
+    <string name="admin_failed_retry">Retry now</string>
+    <string name="admin_failed_retry_busy">Retrying…</string>
+    <string name="admin_failed_retry_hint">Sends the record to Foodspace again, right now. If Foodspace is still failing, the server goes back to retrying by itself.</string>
+    <string name="admin_failed_release">Not a duplicate, send it</string>
+    <string name="admin_failed_release_hint">Sends this record to Foodspace as a real collection. The record it looks like stays as it is.</string>
+    <string name="admin_failed_dismiss">Dismiss…</string>
+    <string name="admin_failed_dismiss_hint">Stops this record from ever being sent. It is kept, with your reason, as a record of what was decided.</string>
+    <string name="admin_failed_dismiss_reason_label">Why will this never be sent?</string>
+    <string name="admin_failed_dismiss_reason_placeholder">For example: already entered directly in Foodspace</string>
+    <string name="admin_failed_dismiss_confirm">Dismiss this record</string>
+    <string name="admin_failed_dismiss_cancel">Cancel</string>
+    <string name="admin_failed_nothing_to_do">There is nothing to do here. Foodspace already has this record, or it was replaced by a newer decision.</string>
+
+    <string name="admin_failed_outcome_sent">Sent to Foodspace. It no longer needs attention.</string>
+    <string name="admin_failed_outcome_retrying">Foodspace is still not answering. The server will keep trying by itself.</string>
+    <string name="admin_failed_outcome_rejected">Foodspace refused it again. It still needs attention.</string>
+    <string name="admin_failed_outcome_superseded">A newer decision replaced this one, so it was not sent.</string>
+    <string name="admin_failed_outcome_dismissed">Dismissed. It will not be sent.</string>
+    <string name="admin_failed_outcome_other">Updated.</string>
+
+    <string name="admin_failed_history_retry">Retried</string>
+    <string name="admin_failed_history_dismiss">Dismissed</string>
+    <string name="admin_failed_history_entry">%1$s by %2$s</string>
+    <string name="admin_failed_history_result_forwarded">sent to Foodspace</string>
+    <string name="admin_failed_history_result_failing">still not accepted</string>
+    <string name="admin_failed_history_result_dismissed">dismissed</string>
+    <string name="admin_failed_history_result_other">updated</string>
+
+    <string name="admin_failed_state_label_needs_attention">Needs attention</string>
+    <string name="admin_failed_state_label_duplicate_held">Held duplicate</string>
+    <string name="admin_failed_state_label_forwarded">Sent to Foodspace</string>
+    <string name="admin_failed_state_label_retrying">Retrying</string>
+    <string name="admin_failed_state_label_waiting">Waiting</string>
+    <string name="admin_failed_state_label_superseded">Replaced</string>
+    <string name="admin_failed_state_label_dismissed">Dismissed</string>
+    <string name="admin_failed_state_label_unknown">Unknown</string>
+
+    <string name="admin_failed_notice_conflict">That is not possible for this record any more. The details below are up to date.</string>
+    <string name="admin_failed_notice_not_found">This record could not be found on the server.</string>
+    <string name="admin_failed_notice_invalid">The server did not accept that. Check what you entered and try again.</string>
+    <string name="admin_failed_notice_action_offline">You are offline, so nothing was changed. Connect and try again.</string>
+    <string name="admin_failed_notice_action_failed">Could not do that just now, so nothing was changed. Try again in a moment.</string>
 </resources>

@@ -52,6 +52,9 @@ public static class ApiErrorCodes
     public const string Unauthorized = "UNAUTHORIZED";
     public const string Forbidden = "FORBIDDEN";
     public const string NotFound = "NOT_FOUND";
+
+    /// <summary>The record is not in a state that allows the request (e.g. retrying a record Foodspace already has).</summary>
+    public const string Conflict = "CONFLICT";
     public const string Unhealthy = "SERVICE_UNAVAILABLE";
 
     /// <summary>Foodspace could not be reached and there is no stored copy of what was asked for.</summary>

@@ -45,6 +45,13 @@ note number. Case and extra whitespace are ignored. The rule lives in `CboCollec
 | Blank delivery notes should never match | One condition in `For`. |
 | Donor identity needs an id | New field on the record and form, which is a Room + API schema change (migration on both sides). |
 
+**Also assumed (#50): what an Admin does with a flagged duplicate.** It is held, never sent on its own. The Admin sees the
+record it was matched against (donor, delivery note, whether Foodspace has it, when it arrived) and either **releases** it
+("not a duplicate, send it": the *Retry* action, after which it is an ordinary record) or **dismisses** it with a reason
+(a confirmed duplicate: kept as history, never sent). Question 3 above is the one that can change this: if reviewers need
+more on screen than that (the times, the collector), it is one field on `DuplicateOfSummary` plus the detail screen; if a
+second person must approve a release, that is a new state, not a change to these two actions.
+
 **Caution:** changing the rule only affects records received afterwards. `duplicate_key` is stored per record, so an
 existing database needs a one-off backfill migration if old records must follow the new rule. Decide before real data is collected.
 

@@ -222,11 +222,11 @@ class FakeVettingSyncTrigger : VettingSyncTrigger {
 }
 
 fun sampleCounts(
-    waiting: Int = 0, retrying: Int = 0, needsAttention: Int = 0, forwarded: Int = 0, duplicates: Int = 0, superseded: Int = 0
+    waiting: Int = 0, retrying: Int = 0, needsAttention: Int = 0, forwarded: Int = 0, duplicates: Int = 0, superseded: Int = 0, dismissed: Int = 0
 ) = FormSyncCounts(
-    total = waiting + retrying + needsAttention + forwarded + duplicates + superseded,
+    total = waiting + retrying + needsAttention + forwarded + duplicates + superseded + dismissed,
     waiting = waiting, retrying = retrying, needsAttention = needsAttention,
-    forwarded = forwarded, duplicates = duplicates, superseded = superseded
+    forwarded = forwarded, duplicates = duplicates, superseded = superseded, dismissed = dismissed
 )
 
 fun sampleSyncSnapshot(

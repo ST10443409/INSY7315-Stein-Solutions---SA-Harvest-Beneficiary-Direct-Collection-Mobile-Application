@@ -76,17 +76,17 @@ class SyncMonitorViewModelTest {
 
         repository.result = SyncStatusResult.Offline
         vm.refresh()
-        assertEquals(MonitorNotice.OFFLINE, vm.uiState.value.notice)
+        assertEquals(AdminNotice.OFFLINE, vm.uiState.value.notice)
         assertEquals(sampleSyncSnapshot(), vm.uiState.value.snapshot)
 
         repository.result = SyncStatusResult.Failed
         vm.refresh()
-        assertEquals(MonitorNotice.FAILED, vm.uiState.value.notice)
+        assertEquals(AdminNotice.FAILED, vm.uiState.value.notice)
         assertEquals(sampleSyncSnapshot(), vm.uiState.value.snapshot)
 
         repository.result = SyncStatusResult.Denied
         vm.refresh()
-        assertEquals(MonitorNotice.DENIED, vm.uiState.value.notice)
+        assertEquals(AdminNotice.DENIED, vm.uiState.value.notice)
         assertEquals(sampleSyncSnapshot(), vm.uiState.value.snapshot)
     }
 
@@ -94,7 +94,7 @@ class SyncMonitorViewModelTest {
     fun aSuccessfulRefresh_clearsTheNotice() = runTest {
         repository.result = SyncStatusResult.Offline
         val vm = SyncMonitorViewModel(repository)
-        assertEquals(MonitorNotice.OFFLINE, vm.uiState.value.notice)
+        assertEquals(AdminNotice.OFFLINE, vm.uiState.value.notice)
         assertNull(vm.uiState.value.snapshot)
 
         repository.result = SyncStatusResult.Loaded(sampleSyncSnapshot())

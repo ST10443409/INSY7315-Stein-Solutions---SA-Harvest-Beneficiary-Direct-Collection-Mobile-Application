@@ -8,10 +8,18 @@ namespace api.Services.Foodspace;
 public interface ICboCollectionForwarder
 {
     /// <summary>
-    /// Forwards one collection now, whatever its schedule (used right after ingestion, and for an Admin's
-    /// manual retry). Returns the resulting status, or null if there is no such collection.
+    /// Forwards one collection now, whatever its schedule (used right after ingestion). Returns the resulting status, or
+    /// null if there is no such collection.
     /// </summary>
     Task<ForwardingStatus?> ForwardAsync(string collectionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// An Admin's manual retry (#50): forwards the collection now AND starts its attempt count again, so if Foodspace is
+    /// still failing it gets a fresh automatic-retry budget instead of staying stuck at "retries used up". Also releases a
+    /// held suspected duplicate: the Admin has decided it is a real collection. Returns the resulting status, or null if
+    /// there is no such collection.
+    /// </summary>
+    Task<ForwardingStatus?> RetryAsync(string collectionId, CancellationToken cancellationToken = default);
 
     /// <summary>Forwards every collection that is due (new, or a scheduled retry whose time has come). Returns how many were attempted.</summary>
     Task<int> ForwardDueAsync(CancellationToken cancellationToken = default);
@@ -54,15 +62,26 @@ public class CboCollectionForwarder : ICboCollectionForwarder
         return collection.ForwardingStatus;
     }
 
+    public async Task<ForwardingStatus?> RetryAsync(string collectionId, CancellationToken cancellationToken = default)
+    {
+        var collection = await _db.CboCollections.Include(c => c.ProductLines)
+            .SingleOrDefaultAsync(c => c.Id == collectionId, cancellationToken);
+        if (collection is null) return null;
+
+        collection.SyncAttempts = 0;
+        await AttemptAsync(collection, cancellationToken);
+        return collection.ForwardingStatus;
+    }
+
     public async Task<int> ForwardDueAsync(CancellationToken cancellationToken = default)
     {
         var now = _time.GetUtcNow();
         var due = await _db.CboCollections.Include(c => c.ProductLines)
-            .Where(c => c.DuplicateOfId == null // suspected duplicates wait for Admin review, they are never auto-forwarded
-                        && (c.ForwardingStatus == ForwardingStatus.Pending
-                            || (c.ForwardingStatus == ForwardingStatus.SyncedLocalPendingFoodspace
-                                && c.NextForwardAttemptAt != null
-                                && c.NextForwardAttemptAt <= now)))
+            .Where(c => (c.ForwardingStatus == ForwardingStatus.Pending
+                         && c.DuplicateOfId == null) // a suspected duplicate is held for an Admin and never auto-forwarded...
+                        || (c.ForwardingStatus == ForwardingStatus.SyncedLocalPendingFoodspace // ...but once released it retries like any other
+                            && c.NextForwardAttemptAt != null
+                            && c.NextForwardAttemptAt <= now))
             .OrderBy(c => c.ReceivedAt)
             .Take(_options.BatchSize)
             .ToListAsync(cancellationToken);

@@ -250,7 +250,8 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task EmptyBatch_Is400_WithTheErrorEnvelope()
     {
-        var response = (await ClientFor("cbo_test_user")).PostAsJsonAsync(Path, new { records = Array.Empty<object>() }).Result;
+        var client = await ClientFor("cbo_test_user");
+        var response = await client.PostAsJsonAsync(Path, new { records = Array.Empty<object>() });
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

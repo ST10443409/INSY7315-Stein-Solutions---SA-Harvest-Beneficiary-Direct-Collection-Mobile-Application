@@ -138,8 +138,7 @@ fun Form1Screen(
 ) = CBOCollectorTheme {
     if (state.submitted) {
         SuccessContent(onStartNew)
-        return@CBOCollectorTheme
-    }
+    } else {
     val form = state.form
     val errors = state.errors
 
@@ -381,6 +380,7 @@ fun Form1Screen(
             onConfirm = onConfirmAddProduct,
             onDismiss = onDismissAddProduct
         )
+    }
     }
 }
 

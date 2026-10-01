@@ -217,19 +217,18 @@ fun MySubmissionsScreen(state: SubmissionsUiState, onBack: () -> Unit) = CBOColl
                 fontFamily = Figtree, fontSize = 14.5.sp, lineHeight = 23.sp, color = SaColors.Muted,
                 modifier = Modifier.testTag(SubmissionsTags.EMPTY)
             )
-            return@Column
-        }
+        } else {
+            StatusPanel(state)
 
-        StatusPanel(state)
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag(SubmissionsTags.LIST),
-            contentPadding = PaddingValues(top = 18.dp, bottom = 26.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(state.items, key = { it.id }) { SubmissionRow(it) }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(SubmissionsTags.LIST),
+                contentPadding = PaddingValues(top = 18.dp, bottom = 26.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(state.items, key = { it.id }) { SubmissionRow(it) }
+            }
         }
     }
 }

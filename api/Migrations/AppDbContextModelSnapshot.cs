@@ -190,6 +190,10 @@ namespace api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_forward_attempt_at");
 
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
+
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")

@@ -4,6 +4,9 @@ import com.example.client.data.local.dao.CboCollectionDao
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.local.entity.SyncStatus
+import com.example.client.network.ApiEnvelope
+import com.example.client.network.CboSyncRequest
+import com.example.client.network.CboSyncResponse
 import com.example.client.network.SyncApiService
 import com.example.client.network.SyncRequest
 import com.example.client.network.SyncResponse
@@ -60,6 +63,11 @@ class CboCollectionRepositoryTest {
     private class UnreachableSyncApi : SyncApiService {
         var calls = 0
         override suspend fun syncData(request: SyncRequest): Response<SyncResponse> {
+            calls++
+            throw IOException("Network unreachable")
+        }
+
+        override suspend fun syncCboCollections(request: CboSyncRequest): Response<ApiEnvelope<CboSyncResponse>> {
             calls++
             throw IOException("Network unreachable")
         }

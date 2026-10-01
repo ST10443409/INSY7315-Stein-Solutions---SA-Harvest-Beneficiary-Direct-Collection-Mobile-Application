@@ -17,7 +17,7 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun login(username: String, password: String): LoginResult = try {
         val response = api.login(LoginRequest(username, password))
         when {
-            response.isSuccessful -> startSession(response.body()?.token, response.body()?.role, response.body()?.cboId)
+            response.isSuccessful -> startSession(response.body()?.token, response.body()?.role, response.body()?.cboId, username.trim())
             response.code() == 400 || response.code() == 401 -> LoginResult.InvalidCredentials
             else -> LoginResult.ServerError
         }
@@ -29,11 +29,11 @@ class AuthRepositoryImpl @Inject constructor(
         LoginResult.ServerError
     }
 
-    private fun startSession(token: String?, roleName: String?, cboId: String?): LoginResult {
+    private fun startSession(token: String?, roleName: String?, cboId: String?, username: String): LoginResult {
         val role = UserRole.values().firstOrNull { it.name.equals(roleName, ignoreCase = true) }
         // A token without a usable role would leave the user with nowhere to route; treat as a bad response.
         if (token.isNullOrBlank() || role == null) return LoginResult.ServerError
-        sessionManager.startSession(token, role, cboId?.takeIf { it.isNotBlank() })
+        sessionManager.startSession(token, role, cboId?.takeIf { it.isNotBlank() }, username.takeIf { it.isNotEmpty() })
         return LoginResult.Success
     }
 }

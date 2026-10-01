@@ -4,6 +4,7 @@ import com.example.client.network.AuthApiService
 import com.example.client.network.AuthInterceptor
 import com.example.client.network.SessionAuthenticator
 import com.example.client.network.SyncApiService
+import com.example.client.network.VettingApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -56,4 +57,9 @@ object NetworkModule {
     @Singleton
     fun provideAuthApiService(retrofit: Retrofit): AuthApiService =
         retrofit.create(AuthApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideVettingApiService(retrofit: Retrofit): VettingApiService =
+        retrofit.create(VettingApiService::class.java)
 }

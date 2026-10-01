@@ -37,6 +37,9 @@ android {
     sourceSets {
         // Room exports its schemas here; the migration test replays old versions from them.
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        // Fakes and sample data shared by the JVM tests and the instrumented tests.
+        getByName("test").java.srcDir("src/sharedTest/java")
+        getByName("androidTest").java.srcDir("src/sharedTest/java")
     }
     composeOptions {
         // Must match the Kotlin version (1.9.22): https://developer.android.com/jetpack/androidx/releases/compose-kotlin

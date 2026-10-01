@@ -129,4 +129,14 @@ class AuthRepositoryImplTest {
         assertEquals(LoginResult.Success, repository.login("agent", "s3cret"))
         assertNull(sessionManager.cboId())
     }
+
+    @Test
+    fun theUsernameTheOfficerSignedInWith_isKeptWithTheSession_trimmed() = runBlocking {
+        server.enqueue(json("""{"token":"jwt-abc","role":"VETTING"}"""))
+
+        assertEquals(LoginResult.Success, repository.login("  vetting_test_user ", "s3cret"))
+
+        assertEquals("vetting_test_user", sessionManager.username())
+        assertEquals("vetting_test_user", storage.load()?.username)
+    }
 }

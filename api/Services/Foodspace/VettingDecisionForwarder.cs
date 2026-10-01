@@ -8,10 +8,17 @@ namespace api.Services.Foodspace;
 public interface IVettingDecisionForwarder
 {
     /// <summary>
-    /// Forwards one decision now, whatever its schedule (an Admin's manual retry). Returns the resulting status, or null
-    /// if there is no such decision. A decision that has been superseded is not sent, even manually.
+    /// Forwards one decision now, whatever its schedule. Returns the resulting status, or null if there is no such
+    /// decision. A decision that has been superseded is not sent, even manually.
     /// </summary>
     Task<ForwardingStatus?> ForwardAsync(string decisionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// An Admin's manual retry (#50): like <see cref="ForwardAsync"/>, and it also starts the decision's attempt count
+    /// again, so if Foodspace is still failing it gets a fresh automatic-retry budget. A decision that has been
+    /// superseded is still not sent. Returns the resulting status, or null if there is no such decision.
+    /// </summary>
+    Task<ForwardingStatus?> RetryAsync(string decisionId, CancellationToken cancellationToken = default);
 
     /// <summary>Forwards every decision that is due (new, or a scheduled retry whose time has come). Returns how many were looked at.</summary>
     Task<int> ForwardDueAsync(CancellationToken cancellationToken = default);
@@ -55,6 +62,16 @@ public class VettingDecisionForwarder : IVettingDecisionForwarder
         var decision = await _db.VettingDecisions.SingleOrDefaultAsync(d => d.Id == decisionId, cancellationToken);
         if (decision is null) return null;
 
+        await AttemptAsync(decision, cancellationToken);
+        return decision.ForwardingStatus;
+    }
+
+    public async Task<ForwardingStatus?> RetryAsync(string decisionId, CancellationToken cancellationToken = default)
+    {
+        var decision = await _db.VettingDecisions.SingleOrDefaultAsync(d => d.Id == decisionId, cancellationToken);
+        if (decision is null) return null;
+
+        decision.SyncAttempts = 0;
         await AttemptAsync(decision, cancellationToken);
         return decision.ForwardingStatus;
     }

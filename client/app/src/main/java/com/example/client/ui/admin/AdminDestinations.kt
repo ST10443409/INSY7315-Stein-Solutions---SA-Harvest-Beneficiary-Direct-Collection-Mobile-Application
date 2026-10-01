@@ -26,7 +26,7 @@ enum class AdminDestination(
     SYNC_MONITOR(AdminGroup.OVERSIGHT, Routes.ADMIN_SYNC_MONITOR, R.string.admin_sync_title, R.string.admin_sync_desc, available = true),
 
     /** Failed-sync resolution (#50). */
-    FAILED_SYNC(AdminGroup.OVERSIGHT, Routes.ADMIN_FAILED_SYNC, R.string.admin_failed_title, R.string.admin_failed_desc, available = false),
+    FAILED_SYNC(AdminGroup.OVERSIGHT, Routes.ADMIN_FAILED_SYNC, R.string.admin_failed_title, R.string.admin_failed_desc, available = true),
 
     /** User activity oversight (#51). */
     USER_ACTIVITY(AdminGroup.OVERSIGHT, Routes.ADMIN_USER_ACTIVITY, R.string.admin_activity_title, R.string.admin_activity_desc, available = false);

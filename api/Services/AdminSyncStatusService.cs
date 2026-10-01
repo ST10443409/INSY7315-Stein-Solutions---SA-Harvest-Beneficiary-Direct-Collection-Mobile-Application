@@ -11,7 +11,7 @@ public interface IAdminSyncStatusService
 }
 
 /// <summary>
-/// Counts the records this backend holds by where they stand with Foodspace, for the Admin sync monitor (#49). Counts only:
+/// Counts the records this backend holds by <see cref="SyncState"/>, for the Admin sync monitor (#49). Counts only:
 /// no record data leaves here. The groups are decided in one query per form so the numbers always add up.
 /// </summary>
 public class AdminSyncStatusService : IAdminSyncStatusService
@@ -44,16 +44,20 @@ public class AdminSyncStatusService : IAdminSyncStatusService
 
     private static FormSyncCounts Tally(IReadOnlyList<Bucket> buckets)
     {
-        int Sum(Func<Bucket, bool> where) => buckets.Where(where).Sum(b => b.Count);
+        // The state of every bucket comes from the one definition (SyncStates.Of), so this and the failed-sync list agree.
+        var byState = buckets
+            .GroupBy(b => SyncStates.Of(b.Status, b.HasRetry, b.IsDuplicate))
+            .ToDictionary(g => g.Key, g => g.Sum(b => b.Count));
+        int Of(SyncState state) => byState.GetValueOrDefault(state);
 
-        // A suspected duplicate is its own state whatever its forwarding status says; everything else falls into one other state.
         return new FormSyncCounts(
-            Total: Sum(_ => true),
-            Waiting: Sum(b => !b.IsDuplicate && b.Status == ForwardingStatus.Pending),
-            Retrying: Sum(b => !b.IsDuplicate && b.Status == ForwardingStatus.SyncedLocalPendingFoodspace && b.HasRetry),
-            NeedsAttention: Sum(b => !b.IsDuplicate && b.Status == ForwardingStatus.SyncedLocalPendingFoodspace && !b.HasRetry),
-            Forwarded: Sum(b => !b.IsDuplicate && b.Status == ForwardingStatus.Forwarded),
-            Duplicates: Sum(b => b.IsDuplicate),
-            Superseded: Sum(b => !b.IsDuplicate && b.Status == ForwardingStatus.Superseded));
+            Total: buckets.Sum(b => b.Count),
+            Waiting: Of(SyncState.Waiting),
+            Retrying: Of(SyncState.Retrying),
+            NeedsAttention: Of(SyncState.NeedsAttention),
+            Forwarded: Of(SyncState.Forwarded),
+            Duplicates: Of(SyncState.DuplicateHeld),
+            Superseded: Of(SyncState.Superseded),
+            Dismissed: Of(SyncState.Dismissed));
     }
 }

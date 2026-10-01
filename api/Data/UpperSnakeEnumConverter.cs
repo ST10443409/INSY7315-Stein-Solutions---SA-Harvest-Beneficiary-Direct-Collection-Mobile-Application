@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace api.Data;
@@ -15,8 +14,7 @@ public class UpperSnakeEnumConverter<TEnum> : ValueConverter<TEnum, string>
     {
     }
 
-    private static string ToWire(TEnum value) =>
-        Regex.Replace(value.ToString(), "([a-z0-9])([A-Z])", "$1_$2").ToUpperInvariant();
+    private static string ToWire(TEnum value) => EnumWire.Of(value);
 
     private static TEnum Parse(string wire) =>
         Enum.GetValues<TEnum>().Single(v => ToWire(v) == wire);

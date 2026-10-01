@@ -61,8 +61,8 @@ class SyncMonitorScreenTest {
     fun theTotals_areShown() {
         show(SyncMonitorUiState(loading = false, snapshot = sampleSyncSnapshot()))
 
-        composeRule.onNodeWithTag(SyncMonitorTags.FORM1).assertTextContains(text(R.string.admin_sync_total, 20))
-        composeRule.onNodeWithTag(SyncMonitorTags.FORM2).performScrollTo().assertTextContains(text(R.string.admin_sync_total, 10))
+        composeRule.onNodeWithTag(SyncMonitorTags.total(SyncMonitorTags.FORM1)).assertTextContains(text(R.string.admin_sync_total, 20))
+        composeRule.onNodeWithTag(SyncMonitorTags.total(SyncMonitorTags.FORM2)).performScrollTo().assertTextContains(text(R.string.admin_sync_total, 10))
     }
 
     @Test
@@ -85,7 +85,7 @@ class SyncMonitorScreenTest {
 
     @Test
     fun offlineWithNothingLoaded_explainsWhy_andRefreshIsStillAvailable() {
-        show(SyncMonitorUiState(loading = false, snapshot = null, notice = MonitorNotice.OFFLINE))
+        show(SyncMonitorUiState(loading = false, snapshot = null, notice = AdminNotice.OFFLINE))
 
         composeRule.onNodeWithTag(SyncMonitorTags.NOTICE).assertTextContains(text(R.string.admin_sync_notice_offline))
         composeRule.onNodeWithTag(SyncMonitorTags.REFRESH).assertIsEnabled()
@@ -93,7 +93,7 @@ class SyncMonitorScreenTest {
 
     @Test
     fun aFailedRefresh_keepsTheEarlierCountsOnScreen() {
-        show(SyncMonitorUiState(loading = false, snapshot = sampleSyncSnapshot(), notice = MonitorNotice.FAILED))
+        show(SyncMonitorUiState(loading = false, snapshot = sampleSyncSnapshot(), notice = AdminNotice.FAILED))
 
         composeRule.onNodeWithTag(SyncMonitorTags.NOTICE).assertTextContains(text(R.string.admin_sync_notice_failed_kept))
         row(SyncMonitorTags.FORM1, SyncRow.FORWARDED).assertTextContains("10")

@@ -2,6 +2,8 @@ package com.example.client.di
 
 import com.example.client.auth.AuthRepository
 import com.example.client.auth.AuthRepositoryImpl
+import com.example.client.data.repository.AdminSyncResolutionRepository
+import com.example.client.data.repository.AdminSyncResolutionRepositoryImpl
 import com.example.client.data.repository.AdminSyncStatusRepository
 import com.example.client.data.repository.AdminSyncStatusRepositoryImpl
 import com.example.client.data.repository.CboCollectionRepository
@@ -50,6 +52,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRecordsMetaStore(impl: PrefsRecordsMetaStore): RecordsMetaStore
+
+    @Binds
+    @Singleton
+    abstract fun bindAdminSyncResolutionRepository(impl: AdminSyncResolutionRepositoryImpl): AdminSyncResolutionRepository
 
     @Binds
     @Singleton

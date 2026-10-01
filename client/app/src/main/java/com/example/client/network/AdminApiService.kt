@@ -1,7 +1,11 @@
 package com.example.client.network
 
 import retrofit2.Response
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * How many records of one form are in each state on the server (backend #49). The states do not overlap, so they add up to
@@ -14,7 +18,8 @@ data class FormSyncCountsDto(
     val needsAttention: Int = 0,
     val forwarded: Int = 0,
     val duplicates: Int = 0,
-    val superseded: Int = 0
+    val superseded: Int = 0,
+    val dismissed: Int = 0
 )
 
 /** `GET /api/admin/sync-status`. [generatedAt] is ISO-8601, when the server took the counts. */
@@ -24,8 +29,94 @@ data class AdminSyncStatusDto(
     val generatedAt: String? = null
 )
 
+// Failed-sync resolution (backend #50). [form] is CBO_COLLECTION or VETTING_DECISION and [state] a server SyncState name
+// (NEEDS_ATTENTION, DUPLICATE_HELD, ...); both stay text here and are read into enums by the repository, so a value a newer
+// server adds cannot break parsing. Timestamps are ISO-8601.
+
+data class SyncAttentionItemDto(
+    val id: String = "",
+    val form: String = "",
+    val state: String = "",
+    val label: String = "",
+    val receivedAt: String? = null,
+    val submittedBy: String? = null,
+    val syncAttempts: Int = 0,
+    val lastAttemptAt: String? = null,
+    val error: String? = null
+)
+
+data class SyncAttentionPageDto(
+    val items: List<SyncAttentionItemDto> = emptyList(),
+    val page: Int = 1,
+    val pageSize: Int = 0,
+    val totalCount: Int = 0,
+    val hasMore: Boolean = false
+)
+
+data class DuplicateOfDto(
+    val id: String = "",
+    val label: String = "",
+    val state: String = "",
+    val receivedAt: String? = null
+)
+
+data class AdminActionEntryDto(
+    val at: String? = null,
+    val admin: String = "",
+    val action: String = "",
+    val reason: String? = null,
+    val resultStatus: String = ""
+)
+
+data class SyncRecordDetailDto(
+    val id: String = "",
+    val form: String = "",
+    val state: String = "",
+    val label: String = "",
+    val receivedAt: String? = null,
+    val submittedBy: String? = null,
+    val syncAttempts: Int = 0,
+    val lastAttemptAt: String? = null,
+    val nextAttemptAt: String? = null,
+    val error: String? = null,
+    val duplicateOf: DuplicateOfDto? = null,
+    val canRetry: Boolean = false,
+    val canDismiss: Boolean = false,
+    val history: List<AdminActionEntryDto> = emptyList()
+)
+
+/** The answer to a retry or a dismissal: the state the record was in, and the record as it is now. */
+data class ResolutionDto(val previousState: String = "", val record: SyncRecordDetailDto = SyncRecordDetailDto())
+
+data class DismissRequestDto(val reason: String)
+
 /** Admin-only endpoints (backend `AdminController`); any other role gets 403. */
 interface AdminApiService {
     @GET("/api/admin/sync-status")
     suspend fun getSyncStatus(): Response<ApiEnvelope<AdminSyncStatusDto>>
+
+    @GET("/api/admin/sync-status/attention")
+    suspend fun getAttention(
+        @Query("page") page: Int,
+        @Query("pageSize") pageSize: Int
+    ): Response<ApiEnvelope<SyncAttentionPageDto>>
+
+    @GET("/api/admin/sync-status/{id}")
+    suspend fun getSyncRecord(
+        @Path("id") id: String,
+        @Query("form") form: String
+    ): Response<ApiEnvelope<SyncRecordDetailDto>>
+
+    @POST("/api/admin/sync-status/{id}/retry")
+    suspend fun retrySync(
+        @Path("id") id: String,
+        @Query("form") form: String
+    ): Response<ApiEnvelope<ResolutionDto>>
+
+    @POST("/api/admin/sync-status/{id}/dismiss")
+    suspend fun dismissSync(
+        @Path("id") id: String,
+        @Query("form") form: String,
+        @Body request: DismissRequestDto
+    ): Response<ApiEnvelope<ResolutionDto>>
 }

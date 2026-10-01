@@ -1,6 +1,7 @@
 package com.example.client.ui.navigation
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -16,6 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.client.auth.UserRole
+import com.example.client.data.repository.SyncForm
 import com.example.client.ui.placeholder.Form1PlaceholderScreen
 import com.example.client.ui.placeholder.Form2PlaceholderScreen
 import com.example.client.ui.admin.AdminDestination
@@ -40,6 +42,8 @@ class RoleNavigationTest {
     private companion object {
         const val LOGIN_SLOT = "login_slot"
         const val SYNC_MONITOR_SLOT = "sync_monitor_slot"
+        const val FAILED_LIST_SLOT = "failed_list_slot"
+        const val FAILED_RECORD_SLOT = "failed_record_slot"
     }
 
     private fun launch(role: UserRole?) {
@@ -49,7 +53,13 @@ class RoleNavigationTest {
                 role, navController,
                 screens = CboScreens(form1 = { Form1PlaceholderScreen() }, syncBadge = {}, mySubmissions = {}),
                 vetting = VettingScreens(list = { Form2PlaceholderScreen() }, detail = { _, _ -> }, decision = { }),
-                admin = AdminScreens(syncMonitor = { Text("sync monitor", Modifier.testTag(SYNC_MONITOR_SLOT)) })
+                admin = AdminScreens(
+                    syncMonitor = { Text("sync monitor", Modifier.testTag(SYNC_MONITOR_SLOT)) },
+                    failedSyncList = { _, onOpen ->
+                        Text("failed syncs", Modifier.testTag(FAILED_LIST_SLOT).clickable { onOpen(SyncForm.VETTING_DECISION, "record-1") })
+                    },
+                    failedSyncRecord = { Text("failed sync record", Modifier.testTag(FAILED_RECORD_SLOT)) }
+                )
             )
         }
     }
@@ -58,7 +68,7 @@ class RoleNavigationTest {
 
     private val adminRoutes = listOf(
         Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1, Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION,
-        Routes.ADMIN_SYNC_MONITOR, Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_USER_ACTIVITY
+        Routes.ADMIN_SYNC_MONITOR, Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_FAILED_SYNC_RECORD, Routes.ADMIN_USER_ACTIVITY
     )
 
     // NavGraph.findNode only checks direct children, so walk nested graphs explicitly.
@@ -72,7 +82,7 @@ class RoleNavigationTest {
             Routes.VETTING_GRAPH, Routes.VETTING_FORM2, Routes.VETTING_RECORD, Routes.VETTING_DECISION,
             Routes.ADMIN_GRAPH, Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1,
             Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION, Routes.ADMIN_SYNC_MONITOR,
-            Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_USER_ACTIVITY
+            Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_FAILED_SYNC_RECORD, Routes.ADMIN_USER_ACTIVITY
         )
         composeRule.runOnUiThread {
             everyRoute.forEach { route ->
@@ -160,6 +170,24 @@ class RoleNavigationTest {
 
         composeRule.onNodeWithTag(AdminTags.entry(AdminDestination.SYNC_MONITOR)).performScrollTo().performClick()
         composeRule.onNodeWithTag(SYNC_MONITOR_SLOT).assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
+    }
+
+    @Test
+    fun admin_canOpenFailedSyncs_thenARecord_andComeBackStepByStep() {
+        launch(UserRole.ADMIN)
+
+        composeRule.onNodeWithTag(AdminTags.entry(AdminDestination.FAILED_SYNC)).performScrollTo().performClick()
+        composeRule.onNodeWithTag(FAILED_LIST_SLOT).assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag(FAILED_RECORD_SLOT).assertIsDisplayed()
+        composeRule.runOnUiThread {
+            assertEquals("record-1", navController.currentBackStackEntry?.arguments?.getString("id"))
+            assertEquals("VETTING_DECISION", navController.currentBackStackEntry?.arguments?.getString("form"))
+        }
+
+        pressBack()
+        composeRule.onNodeWithTag(FAILED_LIST_SLOT).assertIsDisplayed()
         pressBack()
         composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
     }

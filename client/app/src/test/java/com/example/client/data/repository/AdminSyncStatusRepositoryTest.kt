@@ -4,6 +4,7 @@ import com.example.client.data.parseIsoInstantMillis
 import com.example.client.network.AdminApiService
 import com.example.client.network.AdminSyncStatusDto
 import com.example.client.network.ApiEnvelope
+import com.example.client.network.DismissRequestDto
 import com.example.client.network.FormSyncCountsDto
 import com.google.gson.JsonParseException
 import kotlinx.coroutines.test.runTest
@@ -19,6 +20,12 @@ class AdminSyncStatusRepositoryTest {
 
     private class FakeApi(var handler: suspend () -> Response<ApiEnvelope<AdminSyncStatusDto>>) : AdminApiService {
         override suspend fun getSyncStatus() = handler()
+
+        // The failed-sync endpoints are covered by AdminSyncResolutionRepositoryTest.
+        override suspend fun getAttention(page: Int, pageSize: Int) = throw NotImplementedError()
+        override suspend fun getSyncRecord(id: String, form: String) = throw NotImplementedError()
+        override suspend fun retrySync(id: String, form: String) = throw NotImplementedError()
+        override suspend fun dismissSync(id: String, form: String, request: DismissRequestDto) = throw NotImplementedError()
     }
 
     private fun repository(handler: suspend () -> Response<ApiEnvelope<AdminSyncStatusDto>>) = AdminSyncStatusRepositoryImpl(FakeApi(handler))
@@ -27,7 +34,7 @@ class AdminSyncStatusRepositoryTest {
         Response.error(code, """{"success":false}""".toResponseBody("application/json".toMediaType()))
 
     private val dto = AdminSyncStatusDto(
-        cboCollections = FormSyncCountsDto(total = 20, waiting = 2, retrying = 1, needsAttention = 3, forwarded = 10, duplicates = 4),
+        cboCollections = FormSyncCountsDto(total = 21, waiting = 2, retrying = 1, needsAttention = 3, forwarded = 10, duplicates = 4, dismissed = 1),
         vettingDecisions = FormSyncCountsDto(total = 10, waiting = 1, forwarded = 7, superseded = 2),
         generatedAt = "2026-10-01T10:00:00+00:00"
     )
@@ -37,8 +44,8 @@ class AdminSyncStatusRepositoryTest {
         val result = repository { Response.success(ApiEnvelope(success = true, data = dto)) }.load(now = { 5L })
 
         val snapshot = (result as SyncStatusResult.Loaded).snapshot
-        assertEquals(FormSyncCounts(20, 2, 1, 3, 10, 4, 0), snapshot.cboCollections)
-        assertEquals(FormSyncCounts(10, 1, 0, 0, 7, 0, 2), snapshot.vettingDecisions)
+        assertEquals(FormSyncCounts(21, 2, 1, 3, 10, 4, 0, 1), snapshot.cboCollections)
+        assertEquals(FormSyncCounts(10, 1, 0, 0, 7, 0, 2, 0), snapshot.vettingDecisions)
         assertEquals(parseIsoInstantMillis("2026-10-01T10:00:00+00:00"), snapshot.takenAtMillis)
     }
 
@@ -77,7 +84,7 @@ class AdminSyncStatusRepositoryTest {
         val result = repository { Response.success(ApiEnvelope(success = true, data = dto)) }.load() as SyncStatusResult.Loaded
 
         listOf(result.snapshot.cboCollections, result.snapshot.vettingDecisions).forEach {
-            assertTrue(it.total == it.waiting + it.retrying + it.needsAttention + it.forwarded + it.duplicates + it.superseded)
+            assertTrue(it.total == it.waiting + it.retrying + it.needsAttention + it.forwarded + it.duplicates + it.superseded + it.dismissed)
         }
     }
 }

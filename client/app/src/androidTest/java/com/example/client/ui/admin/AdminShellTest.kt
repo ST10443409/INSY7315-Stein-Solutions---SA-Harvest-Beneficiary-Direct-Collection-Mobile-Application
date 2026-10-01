@@ -60,10 +60,10 @@ class AdminShellTest {
 
     @Test
     fun aPlaceholderSection_isLabelled_andSaysWhatItWillShow() {
-        composeRule.setContent { AdminSectionScreen(AdminDestination.FAILED_SYNC, onBack = {}) }
+        composeRule.setContent { AdminSectionScreen(AdminDestination.USER_ACTIVITY, onBack = {}) }
 
-        composeRule.onNodeWithTag(AdminTags.section(AdminDestination.FAILED_SYNC)).assertIsDisplayed()
+        composeRule.onNodeWithTag(AdminTags.section(AdminDestination.USER_ACTIVITY)).assertIsDisplayed()
         composeRule.onNodeWithTag(AdminTags.SECTION_COMING_SOON).assertTextContains(text(R.string.admin_coming_soon_title))
-        composeRule.onNodeWithTag(AdminTags.SECTION_COMING_SOON).assertTextContains(text(AdminDestination.FAILED_SYNC.description))
+        composeRule.onNodeWithTag(AdminTags.SECTION_COMING_SOON).assertTextContains(text(AdminDestination.USER_ACTIVITY.description))
     }
 }

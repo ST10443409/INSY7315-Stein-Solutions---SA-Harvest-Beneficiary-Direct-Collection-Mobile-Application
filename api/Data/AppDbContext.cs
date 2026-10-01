@@ -28,6 +28,7 @@ namespace api.Data;
 ///     CBO list hasn't been pulled yet.
 ///   * Not modelled: Room's "sync_payloads" (a demo table of the current queue prototype).
 ///   * "users" is server-only (login accounts); the device holds a JWT, not a user record.
+///   * "admin_actions" is server-only (the audit trail of Admin retries and dismissals, #50).
 /// </summary>
 public class AppDbContext : DbContext
 {
@@ -47,10 +48,15 @@ public class AppDbContext : DbContext
     /// <summary>Server-owned login accounts. No Room counterpart (see AppUser).</summary>
     public DbSet<AppUser> Users => Set<AppUser>();
 
+    /// <summary>Server-only audit trail of what Admins did to records that would not sync (#50).</summary>
+    public DbSet<AdminAction> AdminActions => Set<AdminAction>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<SyncStatus>().HaveConversion<UpperCaseEnumConverter<SyncStatus>>();
         configurationBuilder.Properties<ForwardingStatus>().HaveConversion<UpperSnakeEnumConverter<ForwardingStatus>>();
+        configurationBuilder.Properties<SyncForm>().HaveConversion<UpperSnakeEnumConverter<SyncForm>>();
+        configurationBuilder.Properties<AdminActionType>().HaveConversion<UpperSnakeEnumConverter<AdminActionType>>();
         configurationBuilder.Properties<DecisionOutcome>().HaveConversion<UpperCaseEnumConverter<DecisionOutcome>>();
         configurationBuilder.Properties<Tone>().HaveConversion<UpperCaseEnumConverter<Tone>>();
         // UserRole names are already the wire values (CBO_COLLECTION, ...), so plain string conversion is exact.
@@ -114,6 +120,14 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.HasIndex(x => x.Username).IsUnique().HasDatabaseName("ux_users_username");
+        });
+
+        modelBuilder.Entity<AdminAction>(e =>
+        {
+            e.ToTable("admin_actions");
+            e.HasKey(x => x.Id);
+            // "What has been done to this record": the history shown with it.
+            e.HasIndex(x => new { x.Form, x.RecordId }).HasDatabaseName("ix_admin_actions_form_record_id");
         });
 
         ApplySnakeCaseNames(modelBuilder);

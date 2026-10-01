@@ -6,6 +6,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.example.client.auth.UserRole
+import com.example.client.data.repository.SyncForm
+import com.example.client.ui.admin.FailedSyncDetailRoute
+import com.example.client.ui.admin.FailedSyncListRoute
 import com.example.client.ui.admin.SyncMonitorRoute
 import com.example.client.ui.cbo.Form1Route
 import com.example.client.ui.cbo.MySubmissionsRoute
@@ -78,5 +81,8 @@ class VettingScreens(
 
 /** The Admin oversight screens the Admin graph hosts. As with [CboScreens], navigation tests substitute plain composables. */
 class AdminScreens(
-    val syncMonitor: @Composable (onBack: () -> Unit) -> Unit = { SyncMonitorRoute(onBack = it) }
+    val syncMonitor: @Composable (onBack: () -> Unit) -> Unit = { SyncMonitorRoute(onBack = it) },
+    val failedSyncList: @Composable (onBack: () -> Unit, onOpen: (SyncForm, String) -> Unit) -> Unit =
+        { onBack, onOpen -> FailedSyncListRoute(onBack = onBack, onOpen = onOpen) },
+    val failedSyncRecord: @Composable (onBack: () -> Unit) -> Unit = { FailedSyncDetailRoute(onBack = it) }
 )

@@ -93,7 +93,7 @@ public class AdminSyncStatusEndpointTests : IDisposable
         var data = await Data();
 
         foreach (var form in new[] { "cboCollections", "vettingDecisions" })
-            foreach (var name in new[] { "total", "waiting", "retrying", "needsAttention", "forwarded", "duplicates", "superseded" })
+            foreach (var name in new[] { "total", "waiting", "retrying", "needsAttention", "forwarded", "duplicates", "superseded", "dismissed" })
                 Assert.Equal(0, Count(data.GetProperty(form), name));
     }
 
@@ -156,7 +156,7 @@ public class AdminSyncStatusEndpointTests : IDisposable
         foreach (var form in new[] { "cboCollections", "vettingDecisions" })
         {
             var f = data.GetProperty(form);
-            var parts = new[] { "waiting", "retrying", "needsAttention", "forwarded", "duplicates", "superseded" }.Sum(n => Count(f, n));
+            var parts = new[] { "waiting", "retrying", "needsAttention", "forwarded", "duplicates", "superseded", "dismissed" }.Sum(n => Count(f, n));
             Assert.Equal(Count(f, "total"), parts);
         }
     }

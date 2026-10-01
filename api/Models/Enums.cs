@@ -37,7 +37,13 @@ public enum ForwardingStatus
     /// Vetting decisions only. A newer decision on the same beneficiary exists, so this one is history and is never sent
     /// to Foodspace (Foodspace only ever sees the officer's latest word). Kept on our side as the audit trail.
     /// </summary>
-    Superseded
+    Superseded,
+
+    /// <summary>
+    /// An Admin chose not to send it (#50): a rejected record they dealt with outside the app, or a suspected duplicate they
+    /// confirmed. Never sent, kept as the audit trail.
+    /// </summary>
+    Dismissed
 }
 
 public enum DecisionOutcome

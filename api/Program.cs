@@ -107,6 +107,7 @@ builder.Services.AddScoped<IVettingDecisionForwarder, VettingDecisionForwarder>(
 builder.Services.AddScoped<IVettingDecisionIngestionService, VettingDecisionIngestionService>();
 builder.Services.AddScoped<IVettingRecordsService, VettingRecordsService>();
 builder.Services.AddScoped<IAdminSyncStatusService, AdminSyncStatusService>();
+builder.Services.AddScoped<IAdminSyncResolutionService, AdminSyncResolutionService>();
 builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 
 // Responses are compressed (gzip/brotli) when the client asks, which matters most for the vetting record pages on poor

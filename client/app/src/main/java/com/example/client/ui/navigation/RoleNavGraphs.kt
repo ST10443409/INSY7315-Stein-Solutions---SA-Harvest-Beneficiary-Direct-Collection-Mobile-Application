@@ -14,6 +14,8 @@ import androidx.navigation.navigation
 import com.example.client.ui.admin.AdminDashboardScreen
 import com.example.client.ui.admin.AdminDestination
 import com.example.client.ui.admin.AdminSectionScreen
+import com.example.client.ui.admin.FAILED_SYNC_FORM_ARG
+import com.example.client.ui.admin.FAILED_SYNC_ID_ARG
 import com.example.client.ui.vetting.VETTING_RECORD_ARG
 
 // One nested graph per role. A graph only declares the destinations that role may
@@ -52,7 +54,20 @@ fun NavGraphBuilder.adminGraph(
         composable(Routes.ADMIN_FORM1) { form1() }
         form2Destinations(navController, vetting, Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION)
         composable(Routes.ADMIN_SYNC_MONITOR) { admin.syncMonitor { navController.popBackStack() } }
-        // The other oversight sections (#50, #51): a labelled "coming soon" screen each until its issue lands, then the real one.
+        composable(Routes.ADMIN_FAILED_SYNC) {
+            admin.failedSyncList(
+                { navController.popBackStack() },
+                { form, id -> navController.navigate(Routes.ADMIN_FAILED_SYNC_RECORD.withFailedSyncRecord(form.name, id)) }
+            )
+        }
+        composable(
+            Routes.ADMIN_FAILED_SYNC_RECORD,
+            arguments = listOf(
+                navArgument(FAILED_SYNC_FORM_ARG) { type = NavType.StringType },
+                navArgument(FAILED_SYNC_ID_ARG) { type = NavType.StringType }
+            )
+        ) { admin.failedSyncRecord { navController.popBackStack() } }
+        // The remaining oversight section (#51): a labelled "coming soon" screen until its issue lands, then the real one.
         AdminDestination.placeholders.forEach { destination ->
             composable(destination.route) { AdminSectionScreen(destination, onBack = { navController.popBackStack() }) }
         }

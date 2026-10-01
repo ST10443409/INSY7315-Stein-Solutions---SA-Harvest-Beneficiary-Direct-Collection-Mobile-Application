@@ -30,6 +30,10 @@ namespace api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CboId")
+                        .HasColumnType("text")
+                        .HasColumnName("cbo_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -216,6 +220,10 @@ namespace api.Migrations
                     b.Property<string>("SyncError")
                         .HasColumnType("text")
                         .HasColumnName("sync_error");
+
+                    b.Property<string>("SyncErrorCode")
+                        .HasColumnType("text")
+                        .HasColumnName("sync_error_code");
 
                     b.Property<string>("SyncStatus")
                         .IsRequired()

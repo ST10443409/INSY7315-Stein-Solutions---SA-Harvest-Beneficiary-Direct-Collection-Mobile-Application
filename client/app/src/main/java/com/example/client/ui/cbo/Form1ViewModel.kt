@@ -2,10 +2,11 @@ package com.example.client.ui.cbo
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.client.auth.SessionManager
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.repository.CboCollectionRepository
-import com.example.client.sync.SyncScheduler
+import com.example.client.sync.CboSyncTrigger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,7 +70,8 @@ data class Form1UiState(
 @HiltViewModel
 class Form1ViewModel @Inject constructor(
     private val repository: CboCollectionRepository,
-    private val syncScheduler: SyncScheduler
+    private val syncTrigger: CboSyncTrigger,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(Form1UiState(form = Form1FormState(arrivalTime = nowTime())))
@@ -146,7 +148,7 @@ class Form1ViewModel @Inject constructor(
         val form = state.form
         val now = System.currentTimeMillis()
         val collection = CboCollectionEntity(
-            cboId = DEFAULT_CBO_ID,
+            cboId = sessionManager.cboId() ?: UNASSIGNED_CBO_ID,
             arrivalTime = form.arrivalTime,
             departureTime = form.departureTime,
             donorName = form.donorName.trim(),
@@ -175,7 +177,7 @@ class Form1ViewModel @Inject constructor(
             try {
                 repository.save(collection, lines)
                 // Queued, not awaited: it waits for a network if there is none, and the save never depends on it.
-                syncScheduler.syncCboCollectionsNow()
+                syncTrigger.syncCboCollectionsNow()
                 _uiState.update { it.copy(isSaving = false, submitted = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, saveFailed = true) }
@@ -191,7 +193,10 @@ class Form1ViewModel @Inject constructor(
     private fun nowTime(): String = SimpleDateFormat("HH:mm", Locale.US).format(Date())
 
     companion object {
-        // TODO(#34): the session carries no CBO id yet; replace with the signed-in collector's CBO.
-        const val DEFAULT_CBO_ID = "unassigned"
+        /**
+         * Stored when the signed-in user has no CBO (an Admin, or a session from before CBOs were issued). The server
+         * stamps a collector's own CBO on every record it receives, so this never survives sync for a collector.
+         */
+        const val UNASSIGNED_CBO_ID = "unassigned"
     }
 }

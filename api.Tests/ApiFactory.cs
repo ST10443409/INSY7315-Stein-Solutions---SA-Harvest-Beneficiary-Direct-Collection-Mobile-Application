@@ -21,6 +21,8 @@ public class ApiFactory : WebApplicationFactory<Program>
     public const string Issuer = "test-issuer";
     public const string Audience = "test-audience";
     public const string Password = "correct-test-password";
+    public const string CboId = "cbo-test-001";
+    public const string OtherCboId = "cbo-test-002";
 
     public string? SigningKeyOverride { get; init; }
 
@@ -66,14 +68,15 @@ public class ApiFactory : WebApplicationFactory<Program>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AppUser>>();
 
-        void Add(string username, UserRole role, bool active = true)
+        void Add(string username, UserRole role, bool active = true, string? cboId = null)
         {
-            var user = new AppUser { Id = Guid.NewGuid(), Username = username, PasswordHash = "x", Role = role, IsActive = active };
+            var user = new AppUser { Id = Guid.NewGuid(), Username = username, PasswordHash = "x", Role = role, IsActive = active, CboId = cboId };
             user.PasswordHash = hasher.HashPassword(user, Password);
             db.Users.Add(user);
         }
 
-        Add("cbo_test_user", UserRole.CBO_COLLECTION);
+        Add("cbo_test_user", UserRole.CBO_COLLECTION, cboId: CboId);
+        Add("cbo_other_user", UserRole.CBO_COLLECTION, cboId: OtherCboId);
         Add("vetting_test_user", UserRole.VETTING);
         Add("admin_test_user", UserRole.ADMIN);
         Add("disabled_user", UserRole.ADMIN, active: false);

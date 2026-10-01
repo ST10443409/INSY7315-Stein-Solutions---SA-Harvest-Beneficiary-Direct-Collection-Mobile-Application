@@ -2,16 +2,18 @@ package com.example.client.ui.cbo
 
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.SyncStatus
+import com.example.client.network.CboSyncErrorCodes
 import com.example.client.sync.CboSyncProcessor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SubmissionsTest {
 
-    private fun record(id: String, status: SyncStatus, retryCount: Int = 0) = CboCollectionEntity(
+    private fun record(id: String, status: SyncStatus, retryCount: Int = 0, errorCode: String? = null) = CboCollectionEntity(
         id = id, cboId = "cbo", arrivalTime = "09:00", departureTime = null, donorName = "Donor $id",
         donorSigned = true, cboSigned = true, deliveryNote = "", noteAttached = false, collectNotes = "",
-        shots = listOf(true), latitude = null, longitude = null, syncStatus = status, retryCount = retryCount
+        shots = listOf(true), latitude = null, longitude = null, syncStatus = status, retryCount = retryCount, syncErrorCode = errorCode
     )
 
     @Test
@@ -26,6 +28,40 @@ class SubmissionsTest {
         val exhausted = record("d", SyncStatus.FAILED, CboSyncProcessor.MAX_RETRIES).toSubmissionItem()
 
         assertEquals(SubmissionDisplay.FAILED_FINAL, exhausted.display)
+    }
+
+    @Test
+    fun aDuplicate_isShownAsADuplicate_evenThoughItIsNeverRetried() {
+        val duplicate = record("e", SyncStatus.FAILED, CboSyncProcessor.MAX_RETRIES, CboSyncErrorCodes.DUPLICATE_DETECTED)
+
+        assertEquals(SubmissionDisplay.FAILED_DUPLICATE, duplicate.toSubmissionItem().display)
+    }
+
+    @Test
+    fun aRejectedRecord_isToldApartFromOneThatSimplyRanOutOfRetries() {
+        val rejected = record("f", SyncStatus.FAILED, CboSyncProcessor.MAX_RETRIES, CboSyncErrorCodes.VALIDATION_FAILED)
+        val ranOut = record("g", SyncStatus.FAILED, CboSyncProcessor.MAX_RETRIES, "SERVER_ERROR")
+
+        assertEquals(SubmissionDisplay.FAILED_REJECTED, rejected.toSubmissionItem().display)
+        assertEquals(SubmissionDisplay.FAILED_FINAL, ranOut.toSubmissionItem().display)
+    }
+
+    @Test
+    fun aRecordStillHavingRetries_isNeverShownAsRejected() {
+        val retrying = record("h", SyncStatus.FAILED, 1, "SERVER_ERROR")
+
+        assertEquals(SubmissionDisplay.FAILED_WILL_RETRY, retrying.toSubmissionItem().display)
+    }
+
+    @Test
+    fun everyFailureKindCountsAsNeedingAttention() {
+        val failures = listOf(
+            SubmissionDisplay.FAILED_WILL_RETRY, SubmissionDisplay.FAILED_FINAL,
+            SubmissionDisplay.FAILED_DUPLICATE, SubmissionDisplay.FAILED_REJECTED
+        )
+
+        assertTrue(failures.all { it.isFailed })
+        assertTrue(listOf(SubmissionDisplay.PENDING, SubmissionDisplay.SYNCED).none { it.isFailed })
     }
 
     @Test

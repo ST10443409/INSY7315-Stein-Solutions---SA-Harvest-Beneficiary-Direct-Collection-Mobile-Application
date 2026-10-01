@@ -6,6 +6,7 @@ import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.network.ApiEnvelope
+import com.example.client.network.CboSyncErrorCodes
 import com.example.client.network.CboSyncRecordResult
 import com.example.client.network.CboSyncRequest
 import com.example.client.network.CboSyncResponse
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
@@ -51,12 +53,24 @@ class CboSyncProcessorTest {
         }
 
         override suspend fun markSynced(ids: List<String>, now: Long) {
-            rows.value = rows.value.map { if (it.id in ids) it.copy(syncStatus = SyncStatus.SYNCED) else it }
+            rows.value = rows.value.map {
+                if (it.id in ids) it.copy(syncStatus = SyncStatus.SYNCED, syncErrorCode = null) else it
+            }
         }
 
-        override suspend fun markFailed(ids: List<String>, now: Long) {
+        override suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long) {
             rows.value = rows.value.map {
-                if (it.id in ids) it.copy(syncStatus = SyncStatus.FAILED, retryCount = it.retryCount + 1) else it
+                if (it.id in ids) {
+                    it.copy(syncStatus = SyncStatus.FAILED, retryCount = it.retryCount + 1, syncErrorCode = errorCode)
+                } else it
+            }
+        }
+
+        override suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long) {
+            rows.value = rows.value.map {
+                if (it.id in ids) {
+                    it.copy(syncStatus = SyncStatus.FAILED, retryCount = maxRetries, syncErrorCode = errorCode)
+                } else it
             }
         }
     }
@@ -118,13 +132,141 @@ class CboSyncProcessorTest {
     @Test
     fun partialBatch_onlyFailedRecordsBecomeFailed() = runTest {
         dao.rows.value = listOf(record("good"), record("bad"))
-        api.handler = { ok(CboSyncRecordResult("good", true), CboSyncRecordResult("bad", false, error = "invalid kg")) }
+        api.handler = {
+            ok(
+                CboSyncRecordResult("good", true),
+                CboSyncRecordResult("bad", false, error = "try later", errorCode = "SERVER_ERROR", retryable = true)
+            )
+        }
 
         processor.syncPending()
 
         assertEquals(SyncStatus.SYNCED, dao.get("good").syncStatus)
         assertEquals(SyncStatus.FAILED, dao.get("bad").syncStatus)
         assertEquals(1, dao.get("bad").retryCount)
+        assertEquals("SERVER_ERROR", dao.get("bad").syncErrorCode)
+    }
+
+    @Test
+    fun nonRetryableFailure_isRejectedForGood_andKeepsItsErrorCode() = runTest {
+        dao.rows.value = listOf(record("bad"))
+        api.handler = {
+            ok(CboSyncRecordResult("bad", false, error = "invalid kg", errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false))
+        }
+
+        processor.syncPending()
+
+        val bad = dao.get("bad")
+        assertEquals(SyncStatus.FAILED, bad.syncStatus)
+        assertEquals(CboSyncErrorCodes.VALIDATION_FAILED, bad.syncErrorCode)
+        assertEquals(CboSyncProcessor.MAX_RETRIES, bad.retryCount) // no retries left
+        assertTrue(dao.getSyncable(CboSyncProcessor.MAX_RETRIES).isEmpty())
+    }
+
+    @Test
+    fun nonRetryableFailure_isNeverSentAgain() = runTest {
+        dao.rows.value = listOf(record("bad"))
+        api.handler = { ok(CboSyncRecordResult("bad", false, errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false)) }
+
+        processor.syncPending()
+        processor.syncPending()
+        processor.syncPending()
+
+        assertEquals(1, api.requests.size)
+    }
+
+    @Test
+    fun nonRetryableFailure_doesNotAskForAnotherRun() = runTest {
+        dao.rows.value = listOf(record("bad"))
+        api.handler = { ok(CboSyncRecordResult("bad", false, errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false)) }
+
+        assertEquals(SyncRunResult.DONE, processor.syncPending())
+    }
+
+    @Test
+    fun duplicateDetected_isNotRetried_andIsTellingableApartFromAValidationFailure() = runTest {
+        dao.rows.value = listOf(record("dup"), record("invalid"))
+        api.handler = {
+            ok(
+                CboSyncRecordResult("dup", false, errorCode = CboSyncErrorCodes.DUPLICATE_DETECTED, retryable = false),
+                CboSyncRecordResult("invalid", false, errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false)
+            )
+        }
+
+        processor.syncPending()
+
+        assertEquals(CboSyncErrorCodes.DUPLICATE_DETECTED, dao.get("dup").syncErrorCode)
+        assertEquals(CboSyncErrorCodes.VALIDATION_FAILED, dao.get("invalid").syncErrorCode)
+        assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("dup").retryCount)
+        assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("invalid").retryCount)
+    }
+
+    @Test
+    fun mixedBatch_eachRecordIsHandledOnItsOwn() = runTest {
+        dao.rows.value = listOf(record("ok"), record("again"), record("dup"), record("lost"))
+        api.handler = {
+            ok(
+                CboSyncRecordResult("ok", true, alreadyReceived = true),
+                CboSyncRecordResult("again", false, errorCode = "SERVER_ERROR", retryable = true),
+                CboSyncRecordResult("dup", false, errorCode = CboSyncErrorCodes.DUPLICATE_DETECTED, retryable = false)
+                // "lost" is not mentioned at all
+            )
+        }
+
+        processor.syncPending()
+
+        assertEquals(SyncStatus.SYNCED, dao.get("ok").syncStatus)
+        assertEquals(1, dao.get("again").retryCount)
+        assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("dup").retryCount)
+        assertEquals(1, dao.get("lost").retryCount) // unknown outcome: one retry used, still retryable
+        assertEquals(null, dao.get("lost").syncErrorCode)
+    }
+
+    @Test
+    fun retryableFailure_withRetriesLeft_asksForARetryLater() = runTest {
+        dao.rows.value = listOf(record("a"))
+        api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
+
+        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending())
+    }
+
+    @Test
+    fun retryableFailure_onTheLastRetry_doesNotAskForAnother() = runTest {
+        dao.rows.value = listOf(record("a", SyncStatus.FAILED, retryCount = CboSyncProcessor.MAX_RETRIES - 1))
+        api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
+
+        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("a").retryCount)
+    }
+
+    @Test
+    fun recordsKeepRetrying_untilTheServerAccepts_thenTheErrorCodeIsCleared() = runTest {
+        dao.rows.value = listOf(record("a"))
+        var calls = 0
+        api.handler = { req ->
+            calls++
+            if (calls < 3) ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true))
+            else ok(*req.records.map { CboSyncRecordResult(it.id, true) }.toTypedArray())
+        }
+
+        processor.syncPending()
+        processor.syncPending()
+        assertEquals(2, dao.get("a").retryCount)
+        processor.syncPending()
+
+        assertEquals(SyncStatus.SYNCED, dao.get("a").syncStatus)
+        assertEquals(null, dao.get("a").syncErrorCode)
+    }
+
+    @Test
+    fun retryableFailure_stopsAfterMaxRetries() = runTest {
+        dao.rows.value = listOf(record("a"))
+        api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
+
+        repeat(CboSyncProcessor.MAX_RETRIES + 3) { processor.syncPending() }
+
+        assertEquals(CboSyncProcessor.MAX_RETRIES, api.requests.size)
+        assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("a").retryCount)
     }
 
     @Test

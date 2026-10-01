@@ -10,10 +10,10 @@ class LoginRequest(val username: String, val password: String) {
 }
 
 /**
- * Response body of `POST /api/auth/login`: the JWT plus the role it was issued for.
+ * Response body of `POST /api/auth/login`: the JWT, the role it was issued for, and the user's CBO (collectors only).
  * Contract assumed until the backend endpoint (#30) lands; confirm role naming there.
  */
-class LoginResponse(val token: String?, val role: String?) {
+class LoginResponse(val token: String?, val role: String?, val cboId: String? = null) {
     override fun toString() = "LoginResponse(role=$role)"
 }
 

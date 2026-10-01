@@ -29,8 +29,12 @@ data class CboCollectionEntity(
     
     // Offline-first bookkeeping fields
     val syncStatus: SyncStatus = SyncStatus.PENDING,
-    // Number of failed sync attempts reported by the server for this record.
+    // Number of failed sync attempts reported by the server for this record. At or above the sync
+    // processor's MAX_RETRIES the record is no longer retried automatically.
     val retryCount: Int = 0,
+    // Error code the server gave for the last failed attempt (e.g. DUPLICATE_DETECTED), so the UI can say why.
+    // Null while the record is pending or synced, and when the failure had no code (e.g. no usable response).
+    val syncErrorCode: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

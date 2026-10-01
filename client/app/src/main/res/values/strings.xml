@@ -71,6 +71,10 @@
     <string name="submissions_hint_synced">Safely received by the server.</string>
     <string name="submissions_hint_failed_retry">Could not sync. Will try again automatically.</string>
     <string name="submissions_hint_failed_final">Could not sync after several tries. Ask your admin for help. Your data is still saved on this device.</string>
+    <string name="submissions_status_duplicate">Duplicate</string>
+    <string name="submissions_status_rejected">Rejected</string>
+    <string name="submissions_hint_duplicate">The server already has this collection (same donor, date and delivery note). It was kept for admin review, so there is nothing to resend. Your data is still saved on this device.</string>
+    <string name="submissions_hint_rejected">The server refused this record, so sending it again will not help. Ask your admin for help. Your data is still saved on this device.</string>
     <string name="submissions_panel_failed">%1$d need attention. Your data is still saved on this device.</string>
     <string name="submissions_panel_pending">%1$d waiting to sync. They send by themselves as soon as you have signal.</string>
     <string name="submissions_panel_synced">Everything on this device is on the server.</string>

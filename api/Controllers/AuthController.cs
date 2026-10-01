@@ -31,7 +31,7 @@ public class AuthController : ApiControllerBase
         }
 
         var issued = _tokenService.CreateToken(user);
-        return Ok(new LoginResponse(issued.Token, user.Role.ToString(), issued.ExpiresAt));
+        return Ok(new LoginResponse(issued.Token, user.Role.ToString(), issued.ExpiresAt, user.CboId));
     }
 
     /// <summary>Who the presented token belongs to. Any authenticated user; handy for checking a token.</summary>

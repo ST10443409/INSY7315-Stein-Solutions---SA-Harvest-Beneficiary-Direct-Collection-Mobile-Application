@@ -30,6 +30,13 @@ public class CboCollection : ForwardedEntity
     /// </summary>
     public int RetryCount { get; set; }
 
+    /// <summary>
+    /// Room: syncErrorCode. The error code the device last got for this record (e.g. DUPLICATE_DETECTED,
+    /// VALIDATION_FAILED), so it can tell the collector why the record did not sync. Device bookkeeping, kept here only
+    /// so the two schemas stay identical; the sync endpoint does not read or write it.
+    /// </summary>
+    public string? SyncErrorCode { get; set; }
+
     // Server-only: who submitted it (username from the JWT once #30 lands). For Admin activity oversight (#51).
     public string? SubmittedBy { get; set; }
 

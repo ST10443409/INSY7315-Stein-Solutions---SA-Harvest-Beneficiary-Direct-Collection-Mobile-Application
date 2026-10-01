@@ -9,7 +9,7 @@ public interface ICboCollectionIngestionService
 {
     /// <summary>Validates and stores a batch. Always returns one result per submitted record, in the same order.</summary>
     Task<IReadOnlyList<CboCollectionSyncResult>> IngestAsync(
-        IReadOnlyList<CboCollectionSyncItemDto> records, string? submittedBy, CancellationToken cancellationToken = default);
+        IReadOnlyList<CboCollectionSyncItemDto> records, string? submittedBy, string? enforcedCboId = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -42,8 +42,17 @@ public class CboCollectionIngestionService : ICboCollectionIngestionService
     }
 
     public async Task<IReadOnlyList<CboCollectionSyncResult>> IngestAsync(
-        IReadOnlyList<CboCollectionSyncItemDto> records, string? submittedBy, CancellationToken cancellationToken = default)
+        IReadOnlyList<CboCollectionSyncItemDto> records, string? submittedBy, string? enforcedCboId = null, CancellationToken cancellationToken = default)
     {
+        // A collector's CBO comes from their account (the JWT), not from the request: whatever the device sent is replaced
+        // before validation and before the duplicate key is computed, so records from a device that does not know its
+        // CBO yet (or sends the wrong one) are still stored, and matched, under the right CBO.
+        if (!string.IsNullOrWhiteSpace(enforcedCboId))
+        {
+            foreach (var record in records)
+                if (record is not null) record.CboId = enforcedCboId;
+        }
+
         var results = new CboCollectionSyncResult?[records.Count];
         var toStore = new List<(int Index, CboCollection Entity)>();
 

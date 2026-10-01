@@ -88,4 +88,38 @@ class SessionManagerTest {
 
         assertFalse(manager.sessionExpired.value)
     }
+
+    @Test
+    fun cboId_isPublished_persisted_andRestoredAfterProcessRestart() {
+        val storage = FakeTokenStorage()
+        SessionManager(storage).startSession("jwt-1", UserRole.CBO_COLLECTION, "cbo-7")
+
+        val restarted = SessionManager(storage)
+
+        assertEquals("cbo-7", restarted.cboId())
+        assertEquals("cbo-7", storage.load()?.cboId)
+    }
+
+    @Test
+    fun cboId_isNull_forUsersWithoutOne_andWhenSignedOut() {
+        val manager = SessionManager(FakeTokenStorage())
+        assertNull(manager.cboId())
+
+        manager.startSession("jwt-1", UserRole.ADMIN)
+        assertNull(manager.cboId())
+
+        manager.startSession("jwt-2", UserRole.CBO_COLLECTION, "cbo-7")
+        manager.endSession()
+        assertNull(manager.cboId())
+    }
+
+    @Test
+    fun aNewSession_replacesThePreviousUsersCbo() {
+        val manager = SessionManager(FakeTokenStorage())
+        manager.startSession("jwt-1", UserRole.CBO_COLLECTION, "cbo-7")
+
+        manager.startSession("jwt-2", UserRole.ADMIN)
+
+        assertNull(manager.cboId())
+    }
 }

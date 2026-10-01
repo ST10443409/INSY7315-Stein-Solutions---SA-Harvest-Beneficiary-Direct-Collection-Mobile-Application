@@ -16,6 +16,14 @@ public class AppUser
 
     public UserRole Role { get; set; }
 
+    /// <summary>
+    /// The CBO this user collects for (matches <c>cbo_collections.cbo_id</c>). Set for CBO_COLLECTION users; null for
+    /// Vetting and Admin users. It is carried in the JWT, and the sync endpoint stamps it on every record the user
+    /// submits, so a collector can neither forget nor fake their CBO. No FK: like the collections, it must not
+    /// depend on the CBO list having been pulled.
+    /// </summary>
+    public string? CboId { get; set; }
+
     /// <summary>Deactivated users cannot sign in; their record is kept for audit.</summary>
     public bool IsActive { get; set; } = true;
 

@@ -53,7 +53,8 @@ class CboCollectionRepositoryTest {
 
         override suspend fun markSynced(ids: List<String>, now: Long) = Unit
 
-        override suspend fun markFailed(ids: List<String>, now: Long) = Unit
+        override suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long) = Unit
+        override suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long) = Unit
 
         override fun observeCountByStatus(status: SyncStatus): Flow<Int> =
             collections.map { list -> list.count { it.syncStatus == status } }

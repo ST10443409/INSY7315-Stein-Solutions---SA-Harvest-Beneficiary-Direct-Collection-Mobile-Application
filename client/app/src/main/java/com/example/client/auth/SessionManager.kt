@@ -29,9 +29,12 @@ class SessionManager @Inject constructor(
     /** The bearer token for outgoing requests, or null when signed out. */
     fun token(): String? = session.value?.token
 
+    /** The CBO the signed-in user collects for, or null when signed out or the user has none. */
+    fun cboId(): String? = session.value?.cboId
+
     @Synchronized
-    fun startSession(token: String, userRole: UserRole) {
-        val newSession = Session(token, userRole)
+    fun startSession(token: String, userRole: UserRole, cboId: String? = null) {
+        val newSession = Session(token, userRole, cboId)
         storage.save(newSession)
         expired.value = false
         session.value = newSession

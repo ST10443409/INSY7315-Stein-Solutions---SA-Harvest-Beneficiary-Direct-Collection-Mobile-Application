@@ -9,30 +9,23 @@ enum class AdminGroup { WORKFLOWS, OVERSIGHT }
 
 /**
  * Everything the Admin dashboard can open, in display order. This is the one definition: the dashboard renders it, the
- * Admin graph registers a route for each, and a test checks the two agree. [available] is false for a section whose
- * screen has not been built yet (it shows a labelled "coming soon" screen instead).
+ * Admin graph registers a route for each, and a test checks the two agree.
  */
 enum class AdminDestination(
     val group: AdminGroup,
     val route: String,
     @StringRes val title: Int,
-    @StringRes val description: Int,
-    val available: Boolean
+    @StringRes val description: Int
 ) {
-    FORM1(AdminGroup.WORKFLOWS, Routes.ADMIN_FORM1, R.string.admin_form1_title, R.string.admin_form1_desc, available = true),
-    FORM2(AdminGroup.WORKFLOWS, Routes.ADMIN_FORM2, R.string.admin_form2_title, R.string.admin_form2_desc, available = true),
+    FORM1(AdminGroup.WORKFLOWS, Routes.ADMIN_FORM1, R.string.admin_form1_title, R.string.admin_form1_desc),
+    FORM2(AdminGroup.WORKFLOWS, Routes.ADMIN_FORM2, R.string.admin_form2_title, R.string.admin_form2_desc),
 
     /** Sync status monitoring (#49). */
-    SYNC_MONITOR(AdminGroup.OVERSIGHT, Routes.ADMIN_SYNC_MONITOR, R.string.admin_sync_title, R.string.admin_sync_desc, available = true),
+    SYNC_MONITOR(AdminGroup.OVERSIGHT, Routes.ADMIN_SYNC_MONITOR, R.string.admin_sync_title, R.string.admin_sync_desc),
 
     /** Failed-sync resolution (#50). */
-    FAILED_SYNC(AdminGroup.OVERSIGHT, Routes.ADMIN_FAILED_SYNC, R.string.admin_failed_title, R.string.admin_failed_desc, available = true),
+    FAILED_SYNC(AdminGroup.OVERSIGHT, Routes.ADMIN_FAILED_SYNC, R.string.admin_failed_title, R.string.admin_failed_desc),
 
     /** User activity oversight (#51). */
-    USER_ACTIVITY(AdminGroup.OVERSIGHT, Routes.ADMIN_USER_ACTIVITY, R.string.admin_activity_title, R.string.admin_activity_desc, available = false);
-
-    companion object {
-        /** The destinations whose screen is only a placeholder so far. */
-        val placeholders: List<AdminDestination> get() = values().filterNot { it.available }
-    }
+    USER_ACTIVITY(AdminGroup.OVERSIGHT, Routes.ADMIN_USER_ACTIVITY, R.string.admin_activity_title, R.string.admin_activity_desc)
 }

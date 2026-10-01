@@ -44,6 +44,7 @@ class RoleNavigationTest {
         const val SYNC_MONITOR_SLOT = "sync_monitor_slot"
         const val FAILED_LIST_SLOT = "failed_list_slot"
         const val FAILED_RECORD_SLOT = "failed_record_slot"
+        const val USER_ACTIVITY_SLOT = "user_activity_slot"
     }
 
     private fun launch(role: UserRole?) {
@@ -58,7 +59,8 @@ class RoleNavigationTest {
                     failedSyncList = { _, onOpen ->
                         Text("failed syncs", Modifier.testTag(FAILED_LIST_SLOT).clickable { onOpen(SyncForm.VETTING_DECISION, "record-1") })
                     },
-                    failedSyncRecord = { Text("failed sync record", Modifier.testTag(FAILED_RECORD_SLOT)) }
+                    failedSyncRecord = { Text("failed sync record", Modifier.testTag(FAILED_RECORD_SLOT)) },
+                    userActivity = { Text("user activity", Modifier.testTag(USER_ACTIVITY_SLOT)) }
                 )
             )
         }
@@ -152,16 +154,13 @@ class RoleNavigationTest {
     }
 
     @Test
-    fun admin_canOpenEachOversightSection_seeItLabelled_andComeBack() {
+    fun admin_canOpenUserActivity_andComeBack() {
         launch(UserRole.ADMIN)
 
-        AdminDestination.placeholders.forEach { destination ->
-            composeRule.onNodeWithTag(AdminTags.entry(destination)).performScrollTo().performClick()
-            composeRule.onNodeWithTag(AdminTags.section(destination)).assertIsDisplayed()
-            composeRule.onNodeWithTag(AdminTags.SECTION_COMING_SOON).assertIsDisplayed()
-            pressBack()
-            composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
-        }
+        composeRule.onNodeWithTag(AdminTags.entry(AdminDestination.USER_ACTIVITY)).performScrollTo().performClick()
+        composeRule.onNodeWithTag(USER_ACTIVITY_SLOT).assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
     }
 
     @Test

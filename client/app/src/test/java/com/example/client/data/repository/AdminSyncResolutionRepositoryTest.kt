@@ -11,6 +11,7 @@ import com.example.client.network.ResolutionDto
 import com.example.client.network.SyncAttentionItemDto
 import com.example.client.network.SyncAttentionPageDto
 import com.example.client.network.SyncRecordDetailDto
+import com.example.client.network.UserActivityPageDto
 import com.google.gson.JsonParseException
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
@@ -56,6 +57,9 @@ class AdminSyncResolutionRepositoryTest {
             dismissRequests += Triple(id, form, request.reason)
             return dismiss()
         }
+
+        override suspend fun getUserActivity(user: String?, role: String?, from: String?, to: String?, page: Int, pageSize: Int):
+            Response<ApiEnvelope<UserActivityPageDto>> = throw NotImplementedError()
     }
 
     private val api = FakeApi()

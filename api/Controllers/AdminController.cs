@@ -16,11 +16,74 @@ public class AdminController : ApiControllerBase
 
     private readonly IAdminSyncStatusService _syncStatus;
     private readonly IAdminSyncResolutionService _resolution;
+    private readonly IAdminUserActivityService _activity;
+    private readonly TimeProvider _time;
 
-    public AdminController(IAdminSyncStatusService syncStatus, IAdminSyncResolutionService resolution)
+    /// <summary>With no dates, activity covers this many South African days up to and including today.</summary>
+    public const int DefaultActivityDays = 7;
+
+    public AdminController(
+        IAdminSyncStatusService syncStatus, IAdminSyncResolutionService resolution, IAdminUserActivityService activity, TimeProvider time)
     {
         _syncStatus = syncStatus;
         _resolution = resolution;
+        _activity = activity;
+        _time = time;
+    }
+
+    /// <summary>
+    /// Who submitted or vetted what, and when (#51): Form 1 collections and Form 2 decisions, newest first, each with the
+    /// acting user, their role, the time and a record reference. Read-only. Filters, all optional:
+    /// <c>user</c> (username), <c>role</c> (<c>CBO_COLLECTION</c>, <c>VETTING</c>, <c>ADMIN</c>), and <c>from</c> / <c>to</c>
+    /// (<c>yyyy-MM-dd</c>, South African days, <c>to</c> inclusive). With neither date, only the last
+    /// <see cref="DefaultActivityDays"/> days are returned (the answer's <c>from</c> / <c>to</c> show what was applied), so the
+    /// whole history is never returned by default; paged like the other lists.
+    /// </summary>
+    [HttpGet("user-activity")]
+    public async Task<ActionResult<ApiResponse<UserActivityResponse>>> UserActivity(
+        [FromQuery] string? user = null, [FromQuery] string? role = null, [FromQuery] string? from = null, [FromQuery] string? to = null,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = DefaultPageSize, CancellationToken cancellationToken = default)
+    {
+        var problems = new Dictionary<string, string[]>();
+        if (page < 1) problems["page"] = new[] { "page must be 1 or more." };
+        if (pageSize is < 1 or > MaxPageSize) problems["pageSize"] = new[] { $"pageSize must be between 1 and {MaxPageSize}." };
+
+        UserRole? parsedRole = null;
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            if (Enum.TryParse<UserRole>(role.Trim(), ignoreCase: true, out var r) && Enum.IsDefined(r)) parsedRole = r;
+            else problems["role"] = new[] { $"role must be one of: {string.Join(", ", Enum.GetNames<UserRole>())}." };
+        }
+
+        var parsedFrom = ParseDate(from, "from", problems);
+        var parsedTo = ParseDate(to, "to", problems);
+        if (parsedFrom is { } f && parsedTo is { } t && f > t) problems["to"] = new[] { "to must be on or after from." };
+
+        if (problems.Count > 0)
+        {
+            return StatusCode(StatusCodes.Status400BadRequest,
+                ApiResponse.Fail(ApiErrorCodes.ValidationFailed, "The request is not valid.", HttpContext.TraceIdentifier, problems));
+        }
+
+        if (parsedFrom is null && parsedTo is null)
+        {
+            var today = DateOnly.FromDateTime(_time.GetUtcNow().ToOffset(SyncRecordInfo.SouthAfrica).DateTime);
+            parsedFrom = today.AddDays(-(DefaultActivityDays - 1));
+            parsedTo = today;
+        }
+
+        return Success(await _activity.GetAsync(new UserActivityQuery(user, parsedRole, parsedFrom, parsedTo, page, pageSize), cancellationToken));
+    }
+
+    private static DateOnly? ParseDate(string? raw, string name, Dictionary<string, string[]> problems)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        // Years 2000 to 2100: far inside what a date can hold, so the end-of-day arithmetic can never overflow.
+        if (DateOnly.TryParseExact(raw.Trim(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date)
+            && date.Year is >= 2000 and <= 2100)
+            return date;
+        problems[name] = new[] { $"{name} must be a date like 2026-09-20." };
+        return null;
     }
 
     /// <summary>

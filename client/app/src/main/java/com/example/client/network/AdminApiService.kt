@@ -90,6 +90,30 @@ data class ResolutionDto(val previousState: String = "", val record: SyncRecordD
 
 data class DismissRequestDto(val reason: String)
 
+// User activity (backend #51). [form] is CBO_COLLECTION or VETTING_DECISION and [role] a UserRole name; [at] is when the
+// work was done (the device's clock) and [receivedAt] when the server heard about it, both ISO-8601.
+
+data class UserActivityItemDto(
+    val id: String = "",
+    val form: String = "",
+    val user: String? = null,
+    val role: String? = null,
+    val at: String? = null,
+    val receivedAt: String? = null,
+    val label: String = ""
+)
+
+/** One page of activity, newest first. [from] and [to] (`yyyy-MM-dd`) are the dates the server applied, including its default window. */
+data class UserActivityPageDto(
+    val items: List<UserActivityItemDto> = emptyList(),
+    val page: Int = 1,
+    val pageSize: Int = 0,
+    val totalCount: Int = 0,
+    val hasMore: Boolean = false,
+    val from: String? = null,
+    val to: String? = null
+)
+
 /** Admin-only endpoints (backend `AdminController`); any other role gets 403. */
 interface AdminApiService {
     @GET("/api/admin/sync-status")
@@ -119,4 +143,15 @@ interface AdminApiService {
         @Query("form") form: String,
         @Body request: DismissRequestDto
     ): Response<ApiEnvelope<ResolutionDto>>
+
+    /** Every filter is optional: a null one is left out of the request. */
+    @GET("/api/admin/user-activity")
+    suspend fun getUserActivity(
+        @Query("user") user: String?,
+        @Query("role") role: String?,
+        @Query("from") from: String?,
+        @Query("to") to: String?,
+        @Query("page") page: Int,
+        @Query("pageSize") pageSize: Int
+    ): Response<ApiEnvelope<UserActivityPageDto>>
 }

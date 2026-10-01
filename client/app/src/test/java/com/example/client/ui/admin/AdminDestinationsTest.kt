@@ -2,7 +2,6 @@ package com.example.client.ui.admin
 
 import com.example.client.ui.navigation.Routes
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,19 +32,6 @@ class AdminDestinationsTest {
             setOf(Routes.ADMIN_FORM1, Routes.ADMIN_FORM2, Routes.ADMIN_SYNC_MONITOR, Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_USER_ACTIVITY),
             routes.toSet()
         )
-    }
-
-    @Test
-    fun theWorkflowsAndTheSyncSectionsAreBuilt_andTheRestIsAPlaceholderUntilItsIssueLands() {
-        assertTrue(AdminDestination.FORM1.available)
-        assertTrue(AdminDestination.FORM2.available)
-        assertTrue(AdminDestination.SYNC_MONITOR.available)
-        assertTrue(AdminDestination.FAILED_SYNC.available)
-        assertEquals(
-            listOf(AdminDestination.USER_ACTIVITY),
-            AdminDestination.placeholders
-        )
-        assertFalse(AdminDestination.placeholders.any { it.available })
     }
 
     @Test

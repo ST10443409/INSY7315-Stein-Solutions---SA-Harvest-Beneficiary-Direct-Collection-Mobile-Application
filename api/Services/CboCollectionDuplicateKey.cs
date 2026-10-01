@@ -20,11 +20,9 @@ namespace api.Services;
 /// </summary>
 public static class CboCollectionDuplicateKey
 {
-    private static readonly TimeSpan SouthAfrica = TimeSpan.FromHours(2);
-
     public static string For(CboCollectionSyncItemDto r)
     {
-        var date = DateTimeOffset.FromUnixTimeMilliseconds(r.CreatedAt).ToOffset(SouthAfrica).ToString("yyyy-MM-dd");
+        var date = DateTimeOffset.FromUnixTimeMilliseconds(r.CreatedAt).ToOffset(SyncRecordInfo.SouthAfrica).ToString("yyyy-MM-dd");
         var composite = string.Join('|', Normalize(r.CboId), Normalize(r.DonorName), date, Normalize(r.DeliveryNote));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(composite))).ToLowerInvariant();
     }

@@ -201,19 +201,9 @@ public class AdminSyncResolutionService : IAdminSyncResolutionService
     private static SyncState StateOf(ForwardedEntity record) =>
         SyncStates.Of(record.ForwardingStatus, record.NextForwardAttemptAt != null, record is CboCollection { DuplicateOfId: not null });
 
-    private static string LabelOf(ForwardedEntity record) => record switch
-    {
-        CboCollection c => $"{c.DonorName} · delivery note {c.DeliveryNote}",
-        VettingDecision d => $"{d.Outcome} · beneficiary {d.FoodspaceRecordId}",
-        _ => record.Id
-    };
+    private static string LabelOf(ForwardedEntity record) => SyncRecordInfo.LabelOf(record);
 
-    private static string? SubmitterOf(ForwardedEntity record) => record switch
-    {
-        CboCollection c => c.SubmittedBy,
-        VettingDecision d => d.OfficerId,
-        _ => null
-    };
+    private static string? SubmitterOf(ForwardedEntity record) => SyncRecordInfo.SubmitterOf(record);
 
     private static SyncAttentionItem ToItem(ForwardedEntity record, SyncForm form) => new(
         record.Id, EnumWire.Of(form), EnumWire.Of(StateOf(record)), LabelOf(record), record.ReceivedAt, SubmitterOf(record),

@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.client.auth.UserRole
+import com.example.client.ui.placeholder.Form1PlaceholderScreen
 import com.example.client.ui.placeholder.ScreenTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -39,7 +40,10 @@ class RoleNavigationTest {
     private fun launch(role: UserRole?) {
         composeRule.setContent {
             navController = rememberNavController()
-            if (role == null) AppRoot(null) { Text("login", Modifier.testTag(LOGIN_SLOT)) } else AppNavHost(role, navController)
+            if (role == null) AppRoot(null, login = { Text("login", Modifier.testTag(LOGIN_SLOT)) }) else AppNavHost(
+                role, navController,
+                screens = CboScreens(form1 = { Form1PlaceholderScreen() }, syncBadge = {}, mySubmissions = {})
+            )
         }
     }
 
@@ -52,7 +56,7 @@ class RoleNavigationTest {
 
     private fun assertOnlyReachable(allowed: List<String>) {
         val everyRoute = listOf(
-            Routes.CBO_GRAPH, Routes.CBO_FORM1,
+            Routes.CBO_GRAPH, Routes.CBO_FORM1, Routes.CBO_SUBMISSIONS,
             Routes.VETTING_GRAPH, Routes.VETTING_FORM2,
             Routes.ADMIN_GRAPH, Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1,
             Routes.ADMIN_FORM2, Routes.ADMIN_SYNC_MONITOR
@@ -71,7 +75,7 @@ class RoleNavigationTest {
         launch(UserRole.CBO_COLLECTION)
 
         composeRule.onNodeWithTag(ScreenTags.FORM1).assertIsDisplayed()
-        assertOnlyReachable(routesOf(Routes.CBO_GRAPH, Routes.CBO_FORM1))
+        assertOnlyReachable(routesOf(Routes.CBO_GRAPH, Routes.CBO_FORM1, Routes.CBO_SUBMISSIONS))
         composeRule.runOnUiThread {
             assertEquals(Routes.CBO_FORM1, navController.currentDestination?.route)
             assertThrows(IllegalArgumentException::class.java) {

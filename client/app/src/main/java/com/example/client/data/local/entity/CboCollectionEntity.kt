@@ -29,6 +29,8 @@ data class CboCollectionEntity(
     
     // Offline-first bookkeeping fields
     val syncStatus: SyncStatus = SyncStatus.PENDING,
+    // Number of failed sync attempts reported by the server for this record.
+    val retryCount: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

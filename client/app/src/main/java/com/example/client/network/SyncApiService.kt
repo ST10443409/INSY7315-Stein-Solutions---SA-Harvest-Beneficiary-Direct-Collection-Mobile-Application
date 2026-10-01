@@ -10,4 +10,7 @@ data class SyncResponse(val status: String, val receivedId: String)
 interface SyncApiService {
     @POST("/api/sync")
     suspend fun syncData(@Body request: SyncRequest): Response<SyncResponse>
+
+    @POST("/api/cbo-collection/sync")
+    suspend fun syncCboCollections(@Body request: CboSyncRequest): Response<ApiEnvelope<CboSyncResponse>>
 }

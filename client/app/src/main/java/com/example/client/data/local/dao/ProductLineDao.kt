@@ -20,6 +20,12 @@ interface ProductLineDao {
     @Query("SELECT * FROM product_lines WHERE syncStatus = :status")
     fun getBySyncStatus(status: SyncStatus): Flow<List<ProductLineEntity>>
     
+    @Query("SELECT * FROM product_lines WHERE collectionId IN (:collectionIds)")
+    suspend fun getForCollections(collectionIds: List<String>): List<ProductLineEntity>
+
+    @Query("UPDATE product_lines SET syncStatus = :status, updatedAt = :now WHERE collectionId IN (:collectionIds)")
+    suspend fun setStatusForCollections(collectionIds: List<String>, status: SyncStatus, now: Long)
+
     @Query("SELECT * FROM product_lines WHERE collectionId = :collectionId")
     fun getByCollectionId(collectionId: String): Flow<List<ProductLineEntity>>
 }

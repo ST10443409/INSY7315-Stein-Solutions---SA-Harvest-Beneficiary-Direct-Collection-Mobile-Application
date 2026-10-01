@@ -4,6 +4,7 @@ using external_api_sim;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<SampleStore>();
+builder.Services.AddSingleton<SimulatedFaults>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();

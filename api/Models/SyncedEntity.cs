@@ -28,11 +28,17 @@ public abstract class ForwardedEntity : SyncedEntity
     /// <summary>When this backend received the record. Set by the database (now()).</summary>
     public DateTimeOffset ReceivedAt { get; set; }
 
+    /// <summary>Where the record stands with Foodspace. See <see cref="Models.ForwardingStatus"/>.</summary>
+    public ForwardingStatus ForwardingStatus { get; set; } = ForwardingStatus.Pending;
+
+    /// <summary>When the next automatic forwarding retry is due; null when none is scheduled (retries exhausted, or not retryable).</summary>
+    public DateTimeOffset? NextForwardAttemptAt { get; set; }
+
     /// <summary>How many times forwarding to Foodspace has been attempted.</summary>
     public int SyncAttempts { get; set; }
 
     public DateTimeOffset? LastSyncAttemptAt { get; set; }
 
-    /// <summary>Last forwarding error, shown to Admins when SyncStatus is Failed.</summary>
+    /// <summary>Last forwarding error (never contains record data), shown to Admins while the record is not Forwarded.</summary>
     public string? SyncError { get; set; }
 }

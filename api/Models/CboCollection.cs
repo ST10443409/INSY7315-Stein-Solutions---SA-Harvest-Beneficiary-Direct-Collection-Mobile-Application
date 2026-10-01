@@ -24,8 +24,28 @@ public class CboCollection : ForwardedEntity
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 
+    /// <summary>
+    /// Room: retryCount. How many times the device's sync attempts for this record failed. Device bookkeeping,
+    /// kept here only so the two schemas stay identical; the sync endpoint does not read or write it.
+    /// </summary>
+    public int RetryCount { get; set; }
+
     // Server-only: who submitted it (username from the JWT once #30 lands). For Admin activity oversight (#51).
     public string? SubmittedBy { get; set; }
+
+    /// <summary>
+    /// SERVER-ONLY. Fingerprint of the real-world collection (CBO + donor + collection date + delivery note), computed by
+    /// <see cref="api.Services.CboCollectionDuplicateKey"/>. Distinct from <see cref="SyncedEntity.Id"/>: two different
+    /// client ids can describe the same visit. A partial unique index allows only ONE original per key.
+    /// </summary>
+    public string? DuplicateKey { get; set; }
+
+    /// <summary>
+    /// SERVER-ONLY. Null for an original. For a suspected duplicate submission (different client id, same
+    /// <see cref="DuplicateKey"/>) the id of the original it matched. The duplicate is kept, untouched, for Admin
+    /// review (#49/#50), is never merged into the original, and is not forwarded to Foodspace.
+    /// </summary>
+    public string? DuplicateOfId { get; set; }
 
     public List<ProductLine> ProductLines { get; set; } = new();
 }

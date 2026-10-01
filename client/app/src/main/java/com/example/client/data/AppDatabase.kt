@@ -29,7 +29,7 @@ import com.example.client.data.local.dao.VettingDecisionDao
         FoodspaceBeneficiaryRecord::class,
         VettingDecision::class
     ], 
-    version = 1, 
+    version = 2, 
     exportSchema = true
 )
 @TypeConverters(Converters::class)

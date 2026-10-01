@@ -16,6 +16,7 @@ import com.example.client.data.AppDatabase
 import com.example.client.data.SyncPayload
 import com.example.client.network.SyncApiService
 import com.example.client.network.SyncRequest
+import com.example.client.sync.SyncScheduler
 import com.example.client.ui.login.LoginRoute
 import com.example.client.ui.navigation.AppRoot
 import dagger.hilt.android.AndroidEntryPoint
@@ -35,6 +36,15 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var syncApiService: SyncApiService
+
+    @Inject
+    lateinit var syncScheduler: SyncScheduler
+
+    override fun onStart() {
+        super.onStart()
+        // Back in the foreground: send anything still waiting to sync.
+        syncScheduler.syncCboCollectionsNow()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

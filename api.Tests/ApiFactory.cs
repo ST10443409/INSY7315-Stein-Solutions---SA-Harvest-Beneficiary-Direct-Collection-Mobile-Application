@@ -36,6 +36,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Audience", Audience);
         builder.UseSetting("Jwt:SigningKey", SigningKeyOverride ?? SigningKey);
         builder.UseSetting("Jwt:ExpiryMinutes", "60");
+        builder.UseSetting("Foodspace:ForwardingEnabled", "false"); // tests must not call out to Foodspace
 
         builder.ConfigureServices(services =>
         {

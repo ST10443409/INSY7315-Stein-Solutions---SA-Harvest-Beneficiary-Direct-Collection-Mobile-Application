@@ -14,8 +14,13 @@ public class VettingController : ApiControllerBase
     public const int MaxPageSize = 100;
 
     private readonly IVettingRecordsService _records;
+    private readonly IVettingDecisionIngestionService _decisions;
 
-    public VettingController(IVettingRecordsService records) => _records = records;
+    public VettingController(IVettingRecordsService records, IVettingDecisionIngestionService decisions)
+    {
+        _records = records;
+        _decisions = decisions;
+    }
 
     /// <summary>
     /// The beneficiary records a vetting officer reviews, one page at a time, ordered by id. Only the fields the app's
@@ -45,5 +50,31 @@ public class VettingController : ApiControllerBase
         }
 
         return Success(new VettingRecordsResponse(p.Items, p.Page, p.PageSize, p.TotalCount, p.HasMore, p.FetchedAt, p.Stale));
+    }
+
+    /// <summary>
+    /// Receives a batch of vetting decisions from the Android app, the same shape as <c>POST /api/cbo-collection/sync</c>:
+    /// replies 200 with one result per record, in order (<c>clientId</c>, <c>success</c>, and for failures <c>error</c>,
+    /// <c>errorCode</c>, <c>retryable</c>), so the app updates each decision's sync status individually. Only a request
+    /// that is unusable as a whole (no records, too many) is a 400. Idempotent on each decision's id. The officer recorded
+    /// is the signed-in user, whatever the device sent. See <see cref="VettingDecisionIngestionService"/>.
+    /// </summary>
+    [HttpPost("sync")]
+    public async Task<ActionResult<ApiResponse<VettingSyncResponse>>> Sync(
+        [FromBody] VettingDecisionSyncRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Records is null || request.Records.Count == 0)
+            return Failure(StatusCodes.Status400BadRequest, ApiErrorCodes.ValidationFailed, "records must contain at least one record.");
+        if (request.Records.Count > VettingDecisionSyncValidator.MaxBatchSize)
+            return Failure(StatusCodes.Status400BadRequest, ApiErrorCodes.ValidationFailed,
+                $"A batch can hold at most {VettingDecisionSyncValidator.MaxBatchSize} records.");
+
+        // The officer is the account that signed in, not what the request body claims.
+        var officer = User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(officer))
+            return Failure(StatusCodes.Status403Forbidden, ApiErrorCodes.Forbidden, "The signed-in user could not be identified.");
+
+        var results = await _decisions.IngestAsync(request.Records, officer, cancellationToken);
+        return Success(new VettingSyncResponse(results));
     }
 }

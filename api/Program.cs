@@ -103,6 +103,8 @@ builder.Services.AddHttpClient<IFoodspaceApiClient, FoodspaceApiClient>((sp, cli
 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All });
 builder.Services.AddScoped<ICboCollectionForwarder, CboCollectionForwarder>();
 builder.Services.AddScoped<ICboCollectionIngestionService, CboCollectionIngestionService>();
+builder.Services.AddScoped<IVettingDecisionForwarder, VettingDecisionForwarder>();
+builder.Services.AddScoped<IVettingDecisionIngestionService, VettingDecisionIngestionService>();
 builder.Services.AddScoped<IVettingRecordsService, VettingRecordsService>();
 builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 

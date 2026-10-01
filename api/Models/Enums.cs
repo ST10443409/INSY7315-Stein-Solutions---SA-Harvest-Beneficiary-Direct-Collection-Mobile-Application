@@ -31,7 +31,13 @@ public enum ForwardingStatus
     /// backoff; once retries run out it stays here, visible to Admins (#49/#50) for a manual retry. It is
     /// deliberately not a "failed" record: nothing is lost and the collector never has to re-enter anything.
     /// </summary>
-    SyncedLocalPendingFoodspace
+    SyncedLocalPendingFoodspace,
+
+    /// <summary>
+    /// Vetting decisions only. A newer decision on the same beneficiary exists, so this one is history and is never sent
+    /// to Foodspace (Foodspace only ever sees the officer's latest word). Kept on our side as the audit trail.
+    /// </summary>
+    Superseded
 }
 
 public enum DecisionOutcome

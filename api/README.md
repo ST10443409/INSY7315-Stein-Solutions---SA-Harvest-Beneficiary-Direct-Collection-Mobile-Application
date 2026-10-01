@@ -200,3 +200,36 @@ records are near-identical, so real data will compress less. The API compresses 
 OkHttp on Android does this automatically. It is not applied to HTTPS requests that reach Kestrel directly (the framework's
 BREACH precaution), only behind a TLS-terminating host or over plain HTTP. If Foodspace's `kitchenImages`, `facilityPhotos` or
 `certificates` hold image data rather than links, pages will be far larger: see `docs/OPEN-DECISIONS.md`.
+
+## Vetting decisions endpoint (#47)
+
+`POST /api/vetting/sync` (roles `VETTING` or `ADMIN`; a `CBO_COLLECTION` token gets `403`) takes `{ "records": [ ... up to 100 ... ] }`
+and answers `200 { success, data: { results: [ { clientId, success, alreadyReceived, error, errorCode, retryable } ] } }`, one result
+per decision in the same order. It is deliberately the same shape and rules as the CBO collection sync above (same result
+fields, same `VALIDATION_FAILED` = permanent / `SERVER_ERROR` = retryable codes, same `400` only for an unusable batch), so the
+app reads both with the same code.
+
+- **Fields:** the Room fields of `VettingDecision`: `id` (UUID), `foodspaceRecordId`, `outcome` (`APPROVE`, `REJECT` or `FLAG`,
+  exactly), `notes` (optional, up to 4000 characters), `decisionTimestamp`, `createdAt`, `updatedAt` (epoch ms). Device-only
+  fields (`syncStatus`) are ignored.
+- **The officer comes from the token.** Whatever `officerId` the device sends is replaced by the signed-in user's name, so a
+  decision cannot be recorded as somebody else.
+- **Idempotency:** the client id is the primary key. A resent id is a success with `alreadyReceived: true` and nothing is
+  written (first write wins). The exception: an id already stored for a *different* officer is refused (`VALIDATION_FAILED`),
+  because a UUID does not collide by accident and answering "received" would let a device discard a decision we never stored.
+- **The beneficiary is not checked against our cache.** The cache is replaced on every refresh and may be empty or minutes
+  behind, so refusing on it would permanently reject honest decisions. Foodspace is the authority: if it does not know the
+  beneficiary the decision is kept and stays "saved here, not yet in Foodspace" (below) for an Admin.
+
+### Forwarding decisions to Foodspace
+
+Stored decisions are forwarded by `VettingDecisionForwarder` on the same background loop as collections, to
+`POST /api/external/vetting-decisions`, with the same status and retry rules as collections (`ForwardingStatus`: `PENDING` →
+`FORWARDED`, or `SYNCED_LOCAL_PENDING_FOODSPACE` when Foodspace did not accept it, retried with exponential backoff, then left
+for an Admin). `SyncStatus` is never touched, so an officer's decision is never shown as failed because of Foodspace.
+
+**Only the latest decision per beneficiary is sent.** An officer who flags a record and later approves it keeps both decisions
+here (the audit trail), but Foodspace only ever hears the newest. An older decision is marked `SUPERSEDED` and never sent,
+even by a manual forward. "Newer" is by decision time, then by when the device created it, whoever made it. Decisions are
+forwarded oldest first, so Foodspace's last word is always the newest. Foodspace was assumed to want this; confirm it (see
+`docs/OPEN-DECISIONS.md`).

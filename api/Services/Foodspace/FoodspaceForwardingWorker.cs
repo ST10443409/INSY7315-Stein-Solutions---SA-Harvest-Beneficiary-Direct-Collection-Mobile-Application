@@ -32,23 +32,32 @@ public class FoodspaceForwardingWorker : BackgroundService
         using var timer = new PeriodicTimer(interval);
         do
         {
-            try
-            {
-                using var scope = _scopes.CreateScope();
-                var forwarder = scope.ServiceProvider.GetRequiredService<ICboCollectionForwarder>();
-                var attempted = await forwarder.ForwardDueAsync(stoppingToken);
-                if (attempted > 0) _logger.LogInformation("Foodspace forwarding attempted {Count} collection(s).", attempted);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                // E.g. the database is briefly unavailable. Next tick tries again.
-                _logger.LogError(ex, "Foodspace forwarding run failed.");
-            }
+            // Each kind of record runs on its own, so a failure forwarding one never holds up the other.
+            if (!await RunAsync("collection", sp => sp.GetRequiredService<ICboCollectionForwarder>().ForwardDueAsync(stoppingToken), stoppingToken)) break;
+            if (!await RunAsync("vetting decision", sp => sp.GetRequiredService<IVettingDecisionForwarder>().ForwardDueAsync(stoppingToken), stoppingToken)) break;
         } while (await WaitAsync(timer, stoppingToken));
+    }
+
+    /// <summary>Runs one forwarder. Returns false only when the service is shutting down.</summary>
+    private async Task<bool> RunAsync(string what, Func<IServiceProvider, Task<int>> forwardDue, CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var attempted = await forwardDue(scope.ServiceProvider);
+            if (attempted > 0) _logger.LogInformation("Foodspace forwarding attempted {Count} {What}(s).", attempted, what);
+            return true;
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // E.g. the database is briefly unavailable. Next tick tries again.
+            _logger.LogError(ex, "Foodspace forwarding of {What}s failed.", what);
+            return true;
+        }
     }
 
     private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken token)

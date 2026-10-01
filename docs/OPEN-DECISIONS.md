@@ -68,3 +68,22 @@ by `province`. The backend therefore caches the full list (`Foodspace:Beneficiar
 | Foodspace can page / filter by status | `IFoodspaceApiClient.GetBeneficiariesAsync` asks for less; the cache and endpoint contract stay the same. |
 | Foodspace exposes a change timestamp and removals | Add an optional `since` to `GET /api/vetting/records` and have the refresh fetch only changes. |
 | Images are inline | Stop caching/serving them in the list; fetch them on demand from the detail view. This changes the Room entity and the endpoint. |
+
+## 4. What should Foodspace hear when an officer changes their mind? (#47)
+
+**Assumed:** only the officer's latest decision on a beneficiary is sent. Earlier ones stay on our side as history, marked
+`SUPERSEDED`, and are never forwarded. Decisions are sent oldest first, so Foodspace's last word is always the newest.
+
+**Ask the Foodspace team:**
+1. Do they want every decision (a history), or only the current one? Does their endpoint treat a second decision on the same
+   beneficiary as a replacement, or as an additional record?
+2. What does their `vetting-decisions` endpoint return for a beneficiary it no longer has (we assume `4xx`, which we treat as
+   permanent: the decision is kept and waits for an Admin)?
+3. Is the officer identified by username, or do they need an id (the app and backend only have the username today)?
+
+**What changes with each answer**
+| Answer | Change |
+|---|---|
+| Foodspace wants the full history | Remove the supersede check in `VettingDecisionForwarder.AttemptAsync`; keep sending oldest first. |
+| Foodspace needs an officer id, not a username | Map it in `FoodspaceVettingDecisionMapper` (and store the id on the user). |
+| Foodspace removes beneficiaries once vetted | A later decision on one will be rejected permanently; the Admin tooling (#49/#50) is where those are cleared. |

@@ -36,6 +36,9 @@ public interface IFoodspaceApiClient
     /// <summary>Sends a collection (with its product lines) to Foodspace. Never throws for Foodspace-side problems.</summary>
     Task<FoodspaceResult> SubmitCboCollectionAsync(CboCollection collection, CancellationToken cancellationToken = default);
 
+    /// <summary>Sends a vetting officer's decision to Foodspace. Never throws for Foodspace-side problems.</summary>
+    Task<FoodspaceResult> SubmitVettingDecisionAsync(VettingDecision decision, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Reads the beneficiary records a vetting officer reviews. Only the fields of <see cref="FoodspaceBeneficiaryRecord"/>
     /// are kept; anything else Foodspace sends is dropped. One unreadable record never fails the whole read.
@@ -49,6 +52,7 @@ public class FoodspaceApiClient : IFoodspaceApiClient
 {
     public const string CboCollectionsPath = "api/external/cbo-collections";
     public const string BeneficiariesPath = "api/external/beneficiaries";
+    public const string VettingDecisionsPath = "api/external/vetting-decisions";
 
     // Foodspace sends camelCase; reading into FoodspaceBeneficiaryRecord is what keeps the response lean, because
     // a field that is not on that class (and so not in the Android entity) is simply not read.
@@ -65,19 +69,28 @@ public class FoodspaceApiClient : IFoodspaceApiClient
         _logger = logger;
     }
 
-    public async Task<FoodspaceResult> SubmitCboCollectionAsync(CboCollection collection, CancellationToken cancellationToken = default)
-    {
-        var payload = FoodspaceCboCollectionMapper.ToFoodspace(collection);
+    public Task<FoodspaceResult> SubmitCboCollectionAsync(CboCollection collection, CancellationToken cancellationToken = default) =>
+        PostAsync(CboCollectionsPath, FoodspaceCboCollectionMapper.ToFoodspace(collection), "collection", collection.Id, cancellationToken);
 
-        // Payloads hold donor names, so they are only logged when explicitly switched on.
+    public Task<FoodspaceResult> SubmitVettingDecisionAsync(VettingDecision decision, CancellationToken cancellationToken = default) =>
+        PostAsync(VettingDecisionsPath, FoodspaceVettingDecisionMapper.ToFoodspace(decision), "vetting decision", decision.Id, cancellationToken);
+
+    /// <summary>
+    /// POSTs one record and sorts the answer into success / transient / permanent. Never throws for Foodspace-side
+    /// problems, and the response body is never stored or logged.
+    /// </summary>
+    private async Task<FoodspaceResult> PostAsync<TPayload>(
+        string path, TPayload payload, string what, string id, CancellationToken cancellationToken)
+    {
+        // Payloads hold donor names and officers' notes, so they are only logged when explicitly switched on.
         if (_options.LogPayloads && _logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Foodspace request for {Id}: {Payload}", collection.Id, JsonSerializer.Serialize(payload));
+            _logger.LogDebug("Foodspace request for {What} {Id}: {Payload}", what, id, JsonSerializer.Serialize(payload));
 
         try
         {
-            using var response = await _http.PostAsJsonAsync(CboCollectionsPath, payload, cancellationToken);
+            using var response = await _http.PostAsJsonAsync(path, payload, cancellationToken);
             var status = (int)response.StatusCode;
-            _logger.LogInformation("Foodspace answered {Status} for collection {Id}", status, collection.Id);
+            _logger.LogInformation("Foodspace answered {Status} for {What} {Id}", status, what, id);
 
             if (response.IsSuccessStatusCode) return FoodspaceResult.Ok;
 
@@ -89,13 +102,13 @@ public class FoodspaceApiClient : IFoodspaceApiClient
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogWarning("Foodspace unreachable for collection {Id}: {Reason}", collection.Id, ex.Message);
+            _logger.LogWarning("Foodspace unreachable for {What} {Id}: {Reason}", what, id, ex.Message);
             return new FoodspaceResult(FoodspaceOutcome.Transient, "Foodspace could not be reached");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // Not our shutdown: the HttpClient timeout fired.
-            _logger.LogWarning("Foodspace timed out for collection {Id}", collection.Id);
+            _logger.LogWarning("Foodspace timed out for {What} {Id}", what, id);
             return new FoodspaceResult(FoodspaceOutcome.Transient, "Foodspace timed out");
         }
     }

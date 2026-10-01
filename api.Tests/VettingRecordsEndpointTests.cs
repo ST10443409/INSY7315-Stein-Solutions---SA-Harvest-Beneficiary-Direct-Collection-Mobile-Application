@@ -50,6 +50,9 @@ public class VettingRecordsEndpointTests
             return Respond();
         }
 
+        public Task<FoodspaceResult> SubmitVettingDecisionAsync(VettingDecision decision, CancellationToken cancellationToken = default) =>
+            Task.FromResult(FoodspaceResult.Ok);
+
         public Task<FoodspaceResult> SubmitCboCollectionAsync(CboCollection collection, CancellationToken cancellationToken = default) =>
             Task.FromResult(FoodspaceResult.Ok);
     }

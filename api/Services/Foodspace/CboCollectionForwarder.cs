@@ -107,7 +107,6 @@ public class CboCollectionForwarder : ICboCollectionForwarder
     /// <summary>Base delay doubled for every failed attempt so far, capped.</summary>
     public TimeSpan BackoffFor(int attempts)
     {
-        var seconds = _options.BaseDelaySeconds * Math.Pow(2, Math.Max(0, attempts - 1));
-        return TimeSpan.FromSeconds(Math.Min(seconds, _options.MaxDelaySeconds));
+        return ForwardingBackoff.For(_options, attempts);
     }
 }

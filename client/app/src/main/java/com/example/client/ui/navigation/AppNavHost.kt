@@ -9,6 +9,9 @@ import com.example.client.auth.UserRole
 import com.example.client.ui.cbo.Form1Route
 import com.example.client.ui.cbo.MySubmissionsRoute
 import com.example.client.ui.cbo.SyncStatusBadgeRoute
+import com.example.client.ui.vetting.BeneficiaryDetailRoute
+import com.example.client.ui.vetting.DecisionRoute
+import com.example.client.ui.vetting.VettingListRoute
 
 /**
  * Root of the navigation shell. Shows [login] while there is no role (signed out, or the
@@ -19,12 +22,13 @@ import com.example.client.ui.cbo.SyncStatusBadgeRoute
 fun AppRoot(
     role: UserRole?,
     screens: CboScreens = CboScreens(),
+    vetting: VettingScreens = VettingScreens(),
     login: @Composable () -> Unit
 ) {
     if (role == null) {
         login()
     } else {
-        key(role) { AppNavHost(role, screens = screens) }
+        key(role) { AppNavHost(role, screens = screens, vetting = vetting) }
     }
 }
 
@@ -46,13 +50,25 @@ class CboScreens(
 fun AppNavHost(
     role: UserRole,
     navController: NavHostController = rememberNavController(),
-    screens: CboScreens = CboScreens()
+    screens: CboScreens = CboScreens(),
+    vetting: VettingScreens = VettingScreens()
 ) {
     NavHost(navController = navController, startDestination = role.graphRoute()) {
         when (role) {
             UserRole.CBO_COLLECTION -> cboCollectionGraph(navController, screens)
-            UserRole.VETTING -> vettingGraph()
-            UserRole.ADMIN -> adminGraph(navController, screens.form1)
+            UserRole.VETTING -> vettingGraph(navController, vetting)
+            UserRole.ADMIN -> adminGraph(navController, screens.form1, vetting)
         }
     }
 }
+
+/**
+ * The Form 2 (Vetting) screens the nav graphs host. As with [CboScreens], the defaults are the real Hilt-backed screens
+ * and navigation tests substitute plain composables.
+ */
+class VettingScreens(
+    val list: @Composable (onOpen: (String) -> Unit) -> Unit = { VettingListRoute(onOpen = it) },
+    val detail: @Composable (onBack: () -> Unit, onRecordDecision: (String) -> Unit) -> Unit =
+        { onBack, onRecordDecision -> BeneficiaryDetailRoute(onBack = onBack, onRecordDecision = onRecordDecision) },
+    val decision: @Composable (onBack: () -> Unit) -> Unit = { DecisionRoute(onBack = it) }
+)

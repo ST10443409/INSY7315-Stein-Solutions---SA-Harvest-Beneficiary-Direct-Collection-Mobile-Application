@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Accordion -->
+    <string name="accordion_expanded">Expanded</string>
+    <string name="accordion_collapsed">Collapsed</string>
+
+    <!-- Vetting list -->
+    <string name="vetting_title">Vetting</string>
+    <string name="vetting_sync">Sync</string>
+    <string name="vetting_syncing">Syncing…</string>
+    <string name="vetting_list_summary">%1$d records · %2$d decided</string>
+    <string name="vetting_updated">updated %1$s</string>
+    <string name="vetting_age_now">just now</string>
+    <string name="vetting_age_minutes">%1$d min ago</string>
+    <string name="vetting_age_hours">%1$d h ago</string>
+    <string name="vetting_age_days">%1$d d ago</string>
+    <string name="vetting_loading">Fetching records…</string>
+    <string name="vetting_empty_title">No records on this device yet</string>
+    <string name="vetting_empty_body">Connect to the internet and tap Sync to download the records you need to review. Once they are on this device you can work through them without a connection.</string>
+    <string name="vetting_notice_offline">You are offline. Showing the records saved on this device.</string>
+    <string name="vetting_notice_unavailable">The records could not be refreshed right now. Showing the records saved on this device.</string>
+    <string name="vetting_notice_failed">Could not sync just now. Try again in a moment. Showing the records saved on this device.</string>
+    <string name="vetting_notice_stale">These records may be out of date: the server could not reach Foodspace to refresh them.</string>
+
+    <!-- Decision state, as a badge or in a sentence -->
+    <string name="vetting_decision_none">Not decided</string>
+    <string name="vetting_outcome_approve">Approved</string>
+    <string name="vetting_outcome_reject">Rejected</string>
+    <string name="vetting_outcome_flag">Flagged</string>
+
+    <!-- Record detail -->
+    <string name="vetting_detail_not_found">This record is no longer on this device. Go back to the list and sync to refresh it.</string>
+    <string name="vetting_expand_all">Expand all</string>
+    <string name="vetting_collapse_all">Collapse all</string>
+    <string name="vetting_no_decision_yet">No decision recorded yet.</string>
+    <string name="vetting_current_decision">Your decision:</string>
+    <string name="vetting_record_decision">Record decision</string>
+    <string name="vetting_change_decision">Change decision</string>
+    <string name="vetting_not_provided">Not provided</string>
+    <string name="vetting_none_selected">None selected</string>
+    <string name="vetting_not_recorded">Not recorded</string>
+    <string name="vetting_no_file">No file uploaded</string>
+    <string name="vetting_file_attached">Attached</string>
+    <string name="vetting_yes">Yes</string>
+    <string name="vetting_no">No</string>
+    <string name="vetting_open_maps">Open in maps</string>
+    <plurals name="vetting_field_count">
+        <item quantity="one">%1$d field</item>
+        <item quantity="other">%1$d fields</item>
+    </plurals>
+
+    <!-- Decision capture -->
+    <string name="vetting_decision_title">Record decision</string>
+    <string name="vetting_choose_title">Your decision</string>
+    <string name="vetting_option_approve">Approve</string>
+    <string name="vetting_option_reject">Reject</string>
+    <string name="vetting_option_flag">Flag</string>
+    <string name="vetting_hint_approve">This organisation meets the requirements.</string>
+    <string name="vetting_hint_reject">This organisation does not meet the requirements.</string>
+    <string name="vetting_hint_flag">Needs a second look or more information before a decision.</string>
+    <string name="vetting_err_choose">Choose approve, reject or flag.</string>
+    <string name="vetting_notes_label">Notes</string>
+    <string name="vetting_notes_placeholder">Why did you decide this? (optional)</string>
+    <string name="vetting_save_decision">Save decision</string>
+    <string name="vetting_saving">Saving…</string>
+    <string name="vetting_save_failed">Could not save on this device. Please try again.</string>
+    <string name="vetting_saved_title">Decision saved</string>
+    <string name="vetting_saved_body">Saved on this device. It will be sent when you are online.</string>
+    <string name="vetting_back_to_record">Back to record</string>
+    <string name="vetting_previous_decision">Your last decision on this record: %1$s. Saving a new one replaces it as the current decision.</string>
+
+    <!-- Accordion sections -->
+    <string name="vetting_section_organisation">Organisation &amp; contact</string>
+    <string name="vetting_section_location">Location</string>
+    <string name="vetting_section_programmes">Programmes &amp; services</string>
+    <string name="vetting_section_staffing">Staffing</string>
+    <string name="vetting_section_registration">Registration</string>
+    <string name="vetting_section_demographics">Beneficiary demographics</string>
+    <string name="vetting_section_feeding">Feeding operation</string>
+    <string name="vetting_section_facilities">Facilities &amp; hygiene</string>
+    <string name="vetting_section_access">Access &amp; security</string>
+    <string name="vetting_section_capacity">Capacity notes</string>
+    <string name="vetting_section_documents">Documents</string>
+
+    <!-- Fields: the labels of the Foodspace application form, in order -->
+    <string name="vetting_field_legal">Organisation Legal Name</string>
+    <string name="vetting_field_contact">Contact\'s Name and Surname</string>
+    <string name="vetting_field_email">Contact\'s Email Address</string>
+    <string name="vetting_field_phone">Contact\'s Phone Number</string>
+    <string name="vetting_field_web">Website</string>
+    <string name="vetting_field_addr">Organisation Address</string>
+    <string name="vetting_field_addr2">Organisation Address 2</string>
+    <string name="vetting_field_prov">Organisation Province</string>
+    <string name="vetting_field_w3w">What3Words</string>
+    <string name="vetting_field_focus">Core Business / Focus Areas</string>
+    <string name="vetting_field_target">Target Population</string>
+    <string name="vetting_field_progs">Programmes &amp; Services</string>
+    <string name="vetting_field_chan">Distribution Channel</string>
+    <string name="vetting_field_ftf">Full-Time Females</string>
+    <string name="vetting_field_ftm">Full-Time Males</string>
+    <string name="vetting_field_vol">Number of Volunteers</string>
+    <string name="vetting_field_npo">Registered NPO?</string>
+    <string name="vetting_field_npoDoc">NPO Certificate Upload</string>
+    <string name="vetting_field_dsd">Registered with DSD?</string>
+    <string name="vetting_field_pboDoc">PBO Certificate Upload</string>
+    <string name="vetting_field_race">Race</string>
+    <string name="vetting_field_gender">Gender</string>
+    <string name="vetting_field_age">Age Groups</string>
+    <string name="vetting_field_freq">Feeding Frequency</string>
+    <string name="vetting_field_served">Total Number of People Served</string>
+    <string name="vetting_field_servedF">Number of Females Served</string>
+    <string name="vetting_field_servedM">Number of Males Served</string>
+    <string name="vetting_field_sAfr">No. of African Served</string>
+    <string name="vetting_field_sCol">No. of Coloured Served</string>
+    <string name="vetting_field_sInd">No. of Indian/Asian Served</string>
+    <string name="vetting_field_sWhi">No. of White Served</string>
+    <string name="vetting_field_rely">Reliance on SA Harvest</string>
+    <string name="vetting_field_trans">Transport Capacity</string>
+    <string name="vetting_field_meals">Meals Provided (B/L/D)</string>
+    <string name="vetting_field_days">Days of the Week</string>
+    <string name="vetting_field_lastFed">Feeding History (Last date fed by SA Harvest)</string>
+    <string name="vetting_field_storage">Food Storage</string>
+    <string name="vetting_field_kitchenPix">Kitchen / Food Storage Images</string>
+    <string name="vetting_field_clean">Kitchen Cleanliness / Organisation</string>
+    <string name="vetting_field_water">Access to Water / Cleaning Products</string>
+    <string name="vetting_field_toilets">Toilets &amp; Hygiene Facilities</string>
+    <string name="vetting_field_pest">Pest/Rodent Free</string>
+    <string name="vetting_field_infra">Infrastructure Checks</string>
+    <string name="vetting_field_access">Ease of Access for Delivery</string>
+    <string name="vetting_field_parking">Parking &amp; Security</string>
+    <string name="vetting_field_police">Proximity to Police Station</string>
+    <string name="vetting_field_comments">Additional Comments</string>
+    <string name="vetting_field_proposal">Proposal Writing Capabilities</string>
+    <string name="vetting_field_digital">Digital Capabilities</string>
+    <string name="vetting_field_facPix">Upload Fridge/Kitchen/Facility Photos</string>
+    <string name="vetting_field_sla">SLA?</string>
+    <string name="vetting_field_consent">Consent Form?</string>
+    <string name="vetting_field_policy">Policy Doc?</string>
+    <string name="vetting_field_certs">Upload Certificates (NPO/PBO)</string>
+</resources>

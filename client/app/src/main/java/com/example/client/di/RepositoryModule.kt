@@ -4,6 +4,12 @@ import com.example.client.auth.AuthRepository
 import com.example.client.auth.AuthRepositoryImpl
 import com.example.client.data.repository.CboCollectionRepository
 import com.example.client.data.repository.CboCollectionRepositoryImpl
+import com.example.client.data.repository.PrefsRecordsMetaStore
+import com.example.client.data.repository.RecordsMetaStore
+import com.example.client.data.repository.VettingRecordsRepository
+import com.example.client.data.repository.VettingRecordsRepositoryImpl
+import com.example.client.data.repository.VettingRepository
+import com.example.client.data.repository.VettingRepositoryImpl
 import com.example.client.sync.CboSyncTrigger
 import com.example.client.sync.SyncScheduler
 import dagger.Binds
@@ -26,4 +32,16 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindCboSyncTrigger(impl: SyncScheduler): CboSyncTrigger
+
+    @Binds
+    @Singleton
+    abstract fun bindVettingRecordsRepository(impl: VettingRecordsRepositoryImpl): VettingRecordsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindVettingRepository(impl: VettingRepositoryImpl): VettingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRecordsMetaStore(impl: PrefsRecordsMetaStore): RecordsMetaStore
 }

@@ -32,9 +32,12 @@ class SessionManager @Inject constructor(
     /** The CBO the signed-in user collects for, or null when signed out or the user has none. */
     fun cboId(): String? = session.value?.cboId
 
+    /** The username the signed-in user logged in with, or null when signed out (or the session predates it). */
+    fun username(): String? = session.value?.username
+
     @Synchronized
-    fun startSession(token: String, userRole: UserRole, cboId: String? = null) {
-        val newSession = Session(token, userRole, cboId)
+    fun startSession(token: String, userRole: UserRole, cboId: String? = null, username: String? = null) {
+        val newSession = Session(token, userRole, cboId, username)
         storage.save(newSession)
         expired.value = false
         session.value = newSession

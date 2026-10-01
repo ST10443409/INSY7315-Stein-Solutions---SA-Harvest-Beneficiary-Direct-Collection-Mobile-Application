@@ -23,16 +23,36 @@ public record FoodspaceResult(FoodspaceOutcome Outcome, string? Error = null)
     public static readonly FoodspaceResult Ok = new(FoodspaceOutcome.Success);
 }
 
+/// <summary>
+/// The outcome of reading beneficiary records. <see cref="Records"/> only holds the records that could be read;
+/// <see cref="Skipped"/> counts the ones Foodspace sent that were unusable (missing a required field, wrong type).
+/// <see cref="Error"/> is safe to store and show: it never contains record data.
+/// </summary>
+public record FoodspaceBeneficiariesResult(
+    FoodspaceOutcome Outcome, IReadOnlyList<FoodspaceBeneficiaryRecord> Records, int Skipped = 0, string? Error = null);
+
 public interface IFoodspaceApiClient
 {
     /// <summary>Sends a collection (with its product lines) to Foodspace. Never throws for Foodspace-side problems.</summary>
     Task<FoodspaceResult> SubmitCboCollectionAsync(CboCollection collection, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads the beneficiary records a vetting officer reviews. Only the fields of <see cref="FoodspaceBeneficiaryRecord"/>
+    /// are kept; anything else Foodspace sends is dropped. One unreadable record never fails the whole read.
+    /// Never throws for Foodspace-side problems.
+    /// </summary>
+    Task<FoodspaceBeneficiariesResult> GetBeneficiariesAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Typed HttpClient for the Foodspace API. Base address, auth and timeout are set where it is registered.</summary>
 public class FoodspaceApiClient : IFoodspaceApiClient
 {
     public const string CboCollectionsPath = "api/external/cbo-collections";
+    public const string BeneficiariesPath = "api/external/beneficiaries";
+
+    // Foodspace sends camelCase; reading into FoodspaceBeneficiaryRecord is what keeps the response lean, because
+    // a field that is not on that class (and so not in the Android entity) is simply not read.
+    private static readonly JsonSerializerOptions ReadOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
     private readonly FoodspaceOptions _options;
@@ -77,6 +97,61 @@ public class FoodspaceApiClient : IFoodspaceApiClient
             // Not our shutdown: the HttpClient timeout fired.
             _logger.LogWarning("Foodspace timed out for collection {Id}", collection.Id);
             return new FoodspaceResult(FoodspaceOutcome.Transient, "Foodspace timed out");
+        }
+    }
+
+    public async Task<FoodspaceBeneficiariesResult> GetBeneficiariesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await _http.GetAsync(BeneficiariesPath, cancellationToken);
+            var status = (int)response.StatusCode;
+            _logger.LogInformation("Foodspace answered {Status} for the beneficiary list", status);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = $"Foodspace answered {status} ({response.ReasonPhrase})";
+                return new FoodspaceBeneficiariesResult(
+                    IsTransient(status) ? FoodspaceOutcome.Transient : FoodspaceOutcome.Permanent, Array.Empty<FoodspaceBeneficiaryRecord>(), Error: error);
+            }
+
+            // Read each record on its own: one malformed beneficiary must not hide all the others from the officers.
+            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return new FoodspaceBeneficiariesResult(FoodspaceOutcome.Permanent, Array.Empty<FoodspaceBeneficiaryRecord>(), Error: "Foodspace sent an unexpected response");
+
+            var records = new List<FoodspaceBeneficiaryRecord>();
+            var skipped = 0;
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                try
+                {
+                    var record = element.Deserialize<FoodspaceBeneficiaryRecord>(ReadOptions);
+                    if (record is null || string.IsNullOrWhiteSpace(record.Id)) skipped++;
+                    else records.Add(record);
+                }
+                catch (JsonException)
+                {
+                    skipped++;
+                }
+            }
+
+            if (skipped > 0) _logger.LogWarning("Skipped {Skipped} unreadable beneficiary record(s) from Foodspace", skipped);
+            return new FoodspaceBeneficiariesResult(FoodspaceOutcome.Success, records, skipped);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning("Foodspace unreachable for the beneficiary list: {Reason}", ex.Message);
+            return new FoodspaceBeneficiariesResult(FoodspaceOutcome.Transient, Array.Empty<FoodspaceBeneficiaryRecord>(), Error: "Foodspace could not be reached");
+        }
+        catch (JsonException)
+        {
+            return new FoodspaceBeneficiariesResult(FoodspaceOutcome.Permanent, Array.Empty<FoodspaceBeneficiaryRecord>(), Error: "Foodspace sent an unreadable response");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Foodspace timed out for the beneficiary list");
+            return new FoodspaceBeneficiariesResult(FoodspaceOutcome.Transient, Array.Empty<FoodspaceBeneficiaryRecord>(), Error: "Foodspace timed out");
         }
     }
 

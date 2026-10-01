@@ -165,3 +165,38 @@ Two cases look alike and are handled differently:
 - **Database level:** `duplicate_key` (a SHA-256 of the rule's inputs, so no donor name in the index) has a partial unique
   index `WHERE duplicate_of_id IS NULL`: at most one original per real-world collection, even for simultaneous requests.
 - Re-sending a stored duplicate returns `DUPLICATE_DETECTED` again, so the app never mistakes it for a synced record.
+
+## Vetting records endpoint (#43)
+
+`GET /api/vetting/records` (roles `VETTING` or `ADMIN`; a `CBO_COLLECTION` token gets `403`) returns the beneficiary records a
+vetting officer reviews on Form 2, one page at a time:
+
+```
+GET /api/vetting/records?page=1&pageSize=50&province=Gauteng
+200 { success, data: { items: [ ... ], page, pageSize, totalCount, hasMore, fetchedAt, stale } }
+```
+
+- **Fields:** each item has exactly the fields of the Android `FoodspaceBeneficiaryRecord` entity and nothing else. Anything else
+  Foodspace sends is dropped when it is read, and a test compares the response field-for-field with the Kotlin entity.
+- **Paging:** `page` starts at 1; `pageSize` defaults to 50, at most 100 (otherwise `400 VALIDATION_FAILED` naming the field).
+  Records are ordered by id, so paging never skips or repeats a record. Keep asking for `page + 1` while `hasMore` is true.
+  A page past the end is empty, not an error. `province` filters case-insensitively and `totalCount` reflects it.
+- **Why a cache:** Foodspace's beneficiary endpoint can only filter by province; it cannot page or filter by date. Paging straight
+  through to it would download the whole set for every page of every officer. So the full list is fetched from Foodspace at
+  most once per `Foodspace:BeneficiaryCacheMinutes` (default 15), stored in `foodspace_beneficiary_records` (fetch-and-replace,
+  in one save), and pages are cut from there. A burst of officers syncing together asks Foodspace once.
+- **Foodspace down:** if the cache has expired and Foodspace cannot be reached, the last copy is still served with
+  `stale: true`. `fetchedAt` says how old it is, so the app can show "updated 40 min ago". Only when nothing has ever been
+  cached is the answer `503 FOODSPACE_UNAVAILABLE`. This is not an error the app should treat as "no records": an officer
+  who already has records on the device keeps them.
+- **Bad data from Foodspace:** one unreadable beneficiary is skipped (logged as a count, never its contents) without hiding the
+  rest. If everything sent is unreadable the cached list is kept instead of being replaced with nothing.
+- **Not built (needs Foodspace to confirm):** a `since` / delta mode. It needs Foodspace to expose a change timestamp and to
+  report removals; see `docs/OPEN-DECISIONS.md`.
+
+**Measured payload** (`APageOfFifty_IsSmall_AndMuchSmallerOverTheWireWhenCompressed`, which prints it): a page of 50 records is
+about **76 KB** of JSON (1.5 KB per record) and about **3.2 KB** gzipped. Treat the gzip figure as a best case: the test
+records are near-identical, so real data will compress less. The API compresses responses (gzip/brotli) when the client asks;
+OkHttp on Android does this automatically. It is not applied to HTTPS requests that reach Kestrel directly (the framework's
+BREACH precaution), only behind a TLS-terminating host or over plain HTTP. If Foodspace's `kitchenImages`, `facilityPhotos` or
+`certificates` hold image data rather than links, pages will be far larger: see `docs/OPEN-DECISIONS.md`.

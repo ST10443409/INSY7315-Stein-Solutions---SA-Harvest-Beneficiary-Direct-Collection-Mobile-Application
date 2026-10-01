@@ -40,6 +40,13 @@ public class FoodspaceOptions
     public int MaxDelaySeconds { get; set; } = 3600;
 
     /// <summary>
+    /// How long the cached beneficiary list (the vetting records) is served before it is fetched from Foodspace again.
+    /// Foodspace is only asked at most this often however many officers sync, and while it is down the cached copy is
+    /// still served (flagged stale).
+    /// </summary>
+    public int BeneficiaryCacheMinutes { get; set; } = 15;
+
+    /// <summary>
     /// Also log request payloads at Debug level. Off by default because payloads carry donor names;
     /// only turn it on locally, never in an environment with persistent logs.
     /// </summary>

@@ -47,3 +47,24 @@ note number. Case and extra whitespace are ignored. The rule lives in `CboCollec
 
 **Caution:** changing the rule only affects records received afterwards. `duplicate_key` is stored per record, so an
 existing database needs a one-off backfill migration if old records must follow the new rule. Decide before real data is collected.
+
+## 3. What can Foodspace's beneficiary endpoint actually do? (#43)
+
+**Assumed:** the simulator's behaviour: `GET /api/external/beneficiaries` returns the whole list as a JSON array and can only filter
+by `province`. The backend therefore caches the full list (`Foodspace:BeneficiaryCacheMinutes`) and does the paging itself.
+
+**Ask the Foodspace team:**
+1. Can the list be paged, and filtered by status (e.g. only records awaiting vetting) or by "changed since"? If yes, the
+   backend can ask for less and the cache can refresh by delta instead of by full replace.
+2. Does a record carry a last-modified timestamp, and how are records that leave the list reported (removed, or a status change)?
+   A delta mode (`since=`) is not safe to add without an answer, because a device would never learn a record was removed.
+3. Are `kitchenImages`, `facilityPhotos`, `npoCertificate`, `pboCertificate` and `certificates` links/identifiers, or inline
+   image data? The payload figures in `api/README.md` assume links. Inline images would make a page many megabytes.
+4. How many beneficiary records are awaiting vetting at a time (tens, thousands)? This sets whether a 15 minute full refresh is fine.
+
+**What changes with each answer**
+| Answer | Change |
+|---|---|
+| Foodspace can page / filter by status | `IFoodspaceApiClient.GetBeneficiariesAsync` asks for less; the cache and endpoint contract stay the same. |
+| Foodspace exposes a change timestamp and removals | Add an optional `since` to `GET /api/vetting/records` and have the refresh fetch only changes. |
+| Images are inline | Stop caching/serving them in the list; fetch them on demand from the detail view. This changes the Room entity and the endpoint. |

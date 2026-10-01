@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace api.Models;
 
 /// <summary>
@@ -89,5 +91,6 @@ public class FoodspaceBeneficiaryRecord
     public string? Certificates { get; set; }
 
     /// <summary>Server-only: when this row was last fetched from Foodspace. Set by the database (now()).</summary>
+    [JsonIgnore] // never part of the wire shape: not sent to the app, not read from Foodspace
     public DateTimeOffset FetchedAt { get; set; }
 }

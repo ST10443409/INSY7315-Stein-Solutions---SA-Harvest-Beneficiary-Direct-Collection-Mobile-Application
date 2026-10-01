@@ -98,12 +98,22 @@ builder.Services.AddHttpClient<IFoodspaceApiClient, FoodspaceApiClient>((sp, cli
     client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
     if (!string.IsNullOrWhiteSpace(options.ApiKey))
         client.DefaultRequestHeaders.Add(options.ApiKeyHeader, options.ApiKey);
-});
+})
+// The whole beneficiary list comes back in one response; ask for it compressed.
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All });
 builder.Services.AddScoped<ICboCollectionForwarder, CboCollectionForwarder>();
 builder.Services.AddScoped<ICboCollectionIngestionService, CboCollectionIngestionService>();
+builder.Services.AddScoped<IVettingRecordsService, VettingRecordsService>();
 builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 
+// Responses are compressed (gzip/brotli) when the client asks, which matters most for the vetting record pages on poor
+// connections. Not enabled for HTTPS requests that reach Kestrel directly (the framework default, a BREACH precaution);
+// behind a TLS-terminating host the app sees plain HTTP and compression applies.
+builder.Services.AddResponseCompression();
+
 var app = builder.Build();
+
+app.UseResponseCompression();
 
 // Opt-in (Database:MigrateOnStartup=true, set in compose.yaml): apply pending migrations at start-up.
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))

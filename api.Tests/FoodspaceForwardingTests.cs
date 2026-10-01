@@ -36,6 +36,9 @@ public class FoodspaceForwardingTests
     {
         public int Calls { get; private set; }
 
+        public Task<FoodspaceBeneficiariesResult> GetBeneficiariesAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException("not used by the forwarding tests");
+
         public Task<FoodspaceResult> SubmitCboCollectionAsync(CboCollection collection, CancellationToken ct = default)
         {
             Calls++;

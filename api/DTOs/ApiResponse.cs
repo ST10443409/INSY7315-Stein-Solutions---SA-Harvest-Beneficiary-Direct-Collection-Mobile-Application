@@ -53,6 +53,9 @@ public static class ApiErrorCodes
     public const string Forbidden = "FORBIDDEN";
     public const string NotFound = "NOT_FOUND";
     public const string Unhealthy = "SERVICE_UNAVAILABLE";
+
+    /// <summary>Foodspace could not be reached and there is no stored copy of what was asked for.</summary>
+    public const string FoodspaceUnavailable = "FOODSPACE_UNAVAILABLE";
     public const string InternalError = "INTERNAL_ERROR";
     public const string Unknown = "ERROR";
 

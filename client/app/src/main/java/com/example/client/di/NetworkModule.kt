@@ -1,5 +1,6 @@
 package com.example.client.di
 
+import com.example.client.network.AdminApiService
 import com.example.client.network.AuthApiService
 import com.example.client.network.AuthInterceptor
 import com.example.client.network.SessionAuthenticator
@@ -62,4 +63,9 @@ object NetworkModule {
     @Singleton
     fun provideVettingApiService(retrofit: Retrofit): VettingApiService =
         retrofit.create(VettingApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAdminApiService(retrofit: Retrofit): AdminApiService =
+        retrofit.create(AdminApiService::class.java)
 }

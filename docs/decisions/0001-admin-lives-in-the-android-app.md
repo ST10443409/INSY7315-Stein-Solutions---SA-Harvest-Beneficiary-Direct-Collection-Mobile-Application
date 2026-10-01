@@ -29,6 +29,6 @@ Role gating is by graph: only the `ADMIN` graph registers the Admin routes, so a
 |---|---|---|
 | Form 1 (as an Admin) | `admin_form1` | #33 (done) |
 | Form 2 (as an Admin) | `admin_form2` | #44 (done) |
-| Sync monitoring | `admin_sync_monitor` | #49 |
+| Sync monitoring | `admin_sync_monitor` | #49 (done) |
 | Failed-sync resolution | `admin_failed_sync` | #50 |
 | User activity | `admin_user_activity` | #51 |

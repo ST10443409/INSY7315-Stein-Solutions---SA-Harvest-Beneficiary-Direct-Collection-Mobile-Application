@@ -23,7 +23,7 @@ enum class AdminDestination(
     FORM2(AdminGroup.WORKFLOWS, Routes.ADMIN_FORM2, R.string.admin_form2_title, R.string.admin_form2_desc, available = true),
 
     /** Sync status monitoring (#49). */
-    SYNC_MONITOR(AdminGroup.OVERSIGHT, Routes.ADMIN_SYNC_MONITOR, R.string.admin_sync_title, R.string.admin_sync_desc, available = false),
+    SYNC_MONITOR(AdminGroup.OVERSIGHT, Routes.ADMIN_SYNC_MONITOR, R.string.admin_sync_title, R.string.admin_sync_desc, available = true),
 
     /** Failed-sync resolution (#50). */
     FAILED_SYNC(AdminGroup.OVERSIGHT, Routes.ADMIN_FAILED_SYNC, R.string.admin_failed_title, R.string.admin_failed_desc, available = false),

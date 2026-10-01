@@ -39,14 +39,20 @@ fun NavGraphBuilder.vettingGraph(navController: NavController, screens: VettingS
     }
 }
 
-fun NavGraphBuilder.adminGraph(navController: NavController, form1: @Composable () -> Unit, vetting: VettingScreens) {
+fun NavGraphBuilder.adminGraph(
+    navController: NavController,
+    form1: @Composable () -> Unit,
+    vetting: VettingScreens,
+    admin: AdminScreens = AdminScreens()
+) {
     navigation(startDestination = Routes.ADMIN_DASHBOARD, route = Routes.ADMIN_GRAPH) {
         composable(Routes.ADMIN_DASHBOARD) {
             AdminDashboardScreen(onOpen = { destination -> navController.navigate(destination.route) })
         }
         composable(Routes.ADMIN_FORM1) { form1() }
         form2Destinations(navController, vetting, Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION)
-        // The oversight sections (#49 to #51): a labelled "coming soon" screen each until its issue lands, then the real one.
+        composable(Routes.ADMIN_SYNC_MONITOR) { admin.syncMonitor { navController.popBackStack() } }
+        // The other oversight sections (#50, #51): a labelled "coming soon" screen each until its issue lands, then the real one.
         AdminDestination.placeholders.forEach { destination ->
             composable(destination.route) { AdminSectionScreen(destination, onBack = { navController.popBackStack() }) }
         }

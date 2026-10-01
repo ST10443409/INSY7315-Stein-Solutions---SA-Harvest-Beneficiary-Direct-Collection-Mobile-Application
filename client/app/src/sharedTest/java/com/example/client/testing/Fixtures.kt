@@ -7,9 +7,13 @@ import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.local.entity.FoodspaceBeneficiaryRecord
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.data.local.entity.VettingDecision
+import com.example.client.data.repository.AdminSyncStatusRepository
+import com.example.client.data.repository.FormSyncCounts
 import com.example.client.data.repository.RecordsMeta
 import com.example.client.data.repository.RecordsMetaStore
 import com.example.client.data.repository.RefreshOutcome
+import com.example.client.data.repository.SyncStatusResult
+import com.example.client.data.repository.SyncStatusSnapshot
 import com.example.client.data.repository.VettingRecordsRepository
 import com.example.client.data.repository.VettingRepository
 import com.example.client.sync.VettingSyncTrigger
@@ -214,5 +218,34 @@ class FakeVettingSyncTrigger : VettingSyncTrigger {
     var calls = 0
     override fun syncVettingDecisionsNow() {
         calls++
+    }
+}
+
+fun sampleCounts(
+    waiting: Int = 0, retrying: Int = 0, needsAttention: Int = 0, forwarded: Int = 0, duplicates: Int = 0, superseded: Int = 0
+) = FormSyncCounts(
+    total = waiting + retrying + needsAttention + forwarded + duplicates + superseded,
+    waiting = waiting, retrying = retrying, needsAttention = needsAttention,
+    forwarded = forwarded, duplicates = duplicates, superseded = superseded
+)
+
+fun sampleSyncSnapshot(
+    form1: FormSyncCounts = sampleCounts(waiting = 2, retrying = 1, needsAttention = 3, forwarded = 10, duplicates = 4),
+    form2: FormSyncCounts = sampleCounts(waiting = 1, needsAttention = 0, forwarded = 7, superseded = 2),
+    takenAtMillis: Long = 1_700_000_000_000L
+) = SyncStatusSnapshot(form1, form2, takenAtMillis)
+
+class FakeAdminSyncStatusRepository : AdminSyncStatusRepository {
+    /** What the next [load] returns. */
+    var result: SyncStatusResult = SyncStatusResult.Loaded(sampleSyncSnapshot())
+    var loadCalls = 0
+
+    /** When set, [load] waits for it, so a test can look at the screen while a refresh is running. */
+    var gate: CompletableDeferred<Unit>? = null
+
+    override suspend fun load(now: () -> Long): SyncStatusResult {
+        loadCalls++
+        gate?.await()
+        return result
     }
 }

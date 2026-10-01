@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.example.client.auth.UserRole
+import com.example.client.ui.admin.SyncMonitorRoute
 import com.example.client.ui.cbo.Form1Route
 import com.example.client.ui.cbo.MySubmissionsRoute
 import com.example.client.ui.cbo.SyncStatusBadgeRoute
@@ -23,12 +24,13 @@ fun AppRoot(
     role: UserRole?,
     screens: CboScreens = CboScreens(),
     vetting: VettingScreens = VettingScreens(),
+    admin: AdminScreens = AdminScreens(),
     login: @Composable () -> Unit
 ) {
     if (role == null) {
         login()
     } else {
-        key(role) { AppNavHost(role, screens = screens, vetting = vetting) }
+        key(role) { AppNavHost(role, screens = screens, vetting = vetting, admin = admin) }
     }
 }
 
@@ -51,13 +53,14 @@ fun AppNavHost(
     role: UserRole,
     navController: NavHostController = rememberNavController(),
     screens: CboScreens = CboScreens(),
-    vetting: VettingScreens = VettingScreens()
+    vetting: VettingScreens = VettingScreens(),
+    admin: AdminScreens = AdminScreens()
 ) {
     NavHost(navController = navController, startDestination = role.graphRoute()) {
         when (role) {
             UserRole.CBO_COLLECTION -> cboCollectionGraph(navController, screens)
             UserRole.VETTING -> vettingGraph(navController, vetting)
-            UserRole.ADMIN -> adminGraph(navController, screens.form1, vetting)
+            UserRole.ADMIN -> adminGraph(navController, screens.form1, vetting, admin)
         }
     }
 }
@@ -71,4 +74,9 @@ class VettingScreens(
     val detail: @Composable (onBack: () -> Unit, onRecordDecision: (String) -> Unit) -> Unit =
         { onBack, onRecordDecision -> BeneficiaryDetailRoute(onBack = onBack, onRecordDecision = onRecordDecision) },
     val decision: @Composable (onBack: () -> Unit) -> Unit = { DecisionRoute(onBack = it) }
+)
+
+/** The Admin oversight screens the Admin graph hosts. As with [CboScreens], navigation tests substitute plain composables. */
+class AdminScreens(
+    val syncMonitor: @Composable (onBack: () -> Unit) -> Unit = { SyncMonitorRoute(onBack = it) }
 )

@@ -39,6 +39,7 @@ class RoleNavigationTest {
 
     private companion object {
         const val LOGIN_SLOT = "login_slot"
+        const val SYNC_MONITOR_SLOT = "sync_monitor_slot"
     }
 
     private fun launch(role: UserRole?) {
@@ -47,7 +48,8 @@ class RoleNavigationTest {
             if (role == null) AppRoot(null, login = { Text("login", Modifier.testTag(LOGIN_SLOT)) }) else AppNavHost(
                 role, navController,
                 screens = CboScreens(form1 = { Form1PlaceholderScreen() }, syncBadge = {}, mySubmissions = {}),
-                vetting = VettingScreens(list = { Form2PlaceholderScreen() }, detail = { _, _ -> }, decision = { })
+                vetting = VettingScreens(list = { Form2PlaceholderScreen() }, detail = { _, _ -> }, decision = { }),
+                admin = AdminScreens(syncMonitor = { Text("sync monitor", Modifier.testTag(SYNC_MONITOR_SLOT)) })
             )
         }
     }
@@ -150,6 +152,16 @@ class RoleNavigationTest {
             pressBack()
             composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
         }
+    }
+
+    @Test
+    fun admin_canOpenTheSyncMonitor_andComeBack() {
+        launch(UserRole.ADMIN)
+
+        composeRule.onNodeWithTag(AdminTags.entry(AdminDestination.SYNC_MONITOR)).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SYNC_MONITOR_SLOT).assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
     }
 
     @Test

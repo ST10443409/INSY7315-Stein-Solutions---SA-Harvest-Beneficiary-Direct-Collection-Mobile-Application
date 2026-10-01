@@ -21,4 +21,32 @@
     <string name="admin_coming_soon_tag">Coming soon</string>
     <string name="admin_coming_soon_title">Not available yet</string>
     <string name="admin_coming_soon_body">This section is being built. Nothing here needs your attention yet.</string>
+
+
+    <!-- Sync monitoring (#49) -->
+    <string name="admin_sync_loading">Loading the latest counts…</string>
+    <string name="admin_sync_refresh">Refresh</string>
+    <string name="admin_sync_refreshing">Refreshing…</string>
+    <string name="admin_sync_form1">CBO collections (Form 1)</string>
+    <string name="admin_sync_form2">Vetting decisions (Form 2)</string>
+    <string name="admin_sync_total">%1$d on the server</string>
+
+    <string name="admin_sync_waiting">Waiting</string>
+    <string name="admin_sync_waiting_hint">Reached the server, not yet sent to Foodspace.</string>
+    <string name="admin_sync_retrying">Retrying</string>
+    <string name="admin_sync_retrying_hint">Foodspace has not accepted it yet. The server will try again by itself.</string>
+    <string name="admin_sync_needs_attention">Needs attention</string>
+    <string name="admin_sync_needs_attention_hint">Foodspace has not accepted it and the server has stopped trying.</string>
+    <string name="admin_sync_forwarded">Sent to Foodspace</string>
+    <string name="admin_sync_forwarded_hint">Foodspace accepted it.</string>
+    <string name="admin_sync_duplicates">Suspected duplicates</string>
+    <string name="admin_sync_duplicates_hint">Look like a collection already recorded. Held for review, never sent.</string>
+    <string name="admin_sync_superseded">Replaced decisions</string>
+    <string name="admin_sync_superseded_hint">A newer decision exists for the same beneficiary. Kept as history, never sent.</string>
+
+    <string name="admin_sync_notice_offline">You are offline. The counts come from the server, so connect and tap Refresh.</string>
+    <string name="admin_sync_notice_offline_kept">You are offline. Showing the counts from the last refresh.</string>
+    <string name="admin_sync_notice_denied">The server did not accept this account for the sync overview. Sign in again as an Admin.</string>
+    <string name="admin_sync_notice_failed">Could not load the counts just now. Try again in a moment.</string>
+    <string name="admin_sync_notice_failed_kept">Could not refresh just now. Showing the counts from the last refresh.</string>
 </resources>

@@ -36,11 +36,12 @@ class AdminDestinationsTest {
     }
 
     @Test
-    fun theWorkflowsAreAlreadyBuilt_andTheOversightSectionsArePlaceholdersUntilTheirIssuesLand() {
+    fun theWorkflowsAndTheSyncMonitorAreBuilt_andTheRestArePlaceholdersUntilTheirIssuesLand() {
         assertTrue(AdminDestination.FORM1.available)
         assertTrue(AdminDestination.FORM2.available)
+        assertTrue(AdminDestination.SYNC_MONITOR.available)
         assertEquals(
-            listOf(AdminDestination.SYNC_MONITOR, AdminDestination.FAILED_SYNC, AdminDestination.USER_ACTIVITY),
+            listOf(AdminDestination.FAILED_SYNC, AdminDestination.USER_ACTIVITY),
             AdminDestination.placeholders
         )
         assertFalse(AdminDestination.placeholders.any { it.available })

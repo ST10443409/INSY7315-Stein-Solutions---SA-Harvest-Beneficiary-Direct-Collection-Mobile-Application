@@ -205,7 +205,7 @@ private fun subtitleFor(state: VettingListUiState, now: () -> Long): String? {
 }
 
 @Composable
-private fun ageText(age: Age): String = when (age) {
+internal fun ageText(age: Age): String = when (age) {
     Age.JustNow -> stringResource(R.string.vetting_age_now)
     is Age.Minutes -> stringResource(R.string.vetting_age_minutes, age.n)
     is Age.Hours -> stringResource(R.string.vetting_age_hours, age.n)

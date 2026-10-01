@@ -610,6 +610,10 @@ namespace api.Migrations
                         .HasColumnName("received_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
+
                     b.Property<int>("SyncAttempts")
                         .HasColumnType("integer")
                         .HasColumnName("sync_attempts");
@@ -617,6 +621,10 @@ namespace api.Migrations
                     b.Property<string>("SyncError")
                         .HasColumnType("text")
                         .HasColumnName("sync_error");
+
+                    b.Property<string>("SyncErrorCode")
+                        .HasColumnType("text")
+                        .HasColumnName("sync_error_code");
 
                     b.Property<string>("SyncStatus")
                         .IsRequired()

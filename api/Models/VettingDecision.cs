@@ -17,4 +17,17 @@ public class VettingDecision : ForwardedEntity
 
     /// <summary>Epoch milliseconds (Room: Long).</summary>
     public long DecisionTimestamp { get; set; }
+
+    /// <summary>
+    /// Room: retryCount. How many times the device's sync attempts for this decision failed. Device bookkeeping, kept here
+    /// only so the two schemas stay identical; the sync endpoint does not read or write it.
+    /// </summary>
+    public int RetryCount { get; set; }
+
+    /// <summary>
+    /// Room: syncErrorCode. The error code the device last got for this decision (e.g. VALIDATION_FAILED), so it can tell
+    /// the officer why it did not sync. Device bookkeeping, like <see cref="RetryCount"/>; the sync endpoint does not read
+    /// or write it.
+    /// </summary>
+    public string? SyncErrorCode { get; set; }
 }

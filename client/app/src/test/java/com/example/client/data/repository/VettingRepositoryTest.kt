@@ -1,6 +1,6 @@
 package com.example.client.data.repository
 
-import com.example.client.data.local.dao.VettingDecisionDao
+import com.example.client.testing.FakeVettingDecisionDao
 import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.data.local.entity.VettingDecision
@@ -17,23 +17,7 @@ import org.junit.Test
 
 class VettingRepositoryTest {
 
-    private class FakeDao : VettingDecisionDao {
-        val rows = MutableStateFlow<List<VettingDecision>>(emptyList())
-        override suspend fun insert(decision: VettingDecision) {
-            rows.value = rows.value.filterNot { it.id == decision.id } + decision
-        }
-
-        override suspend fun update(decision: VettingDecision) = insert(decision)
-        override fun getBySyncStatus(status: SyncStatus): Flow<List<VettingDecision>> = rows.map { l -> l.filter { it.syncStatus == status } }
-        override fun getAll(): Flow<List<VettingDecision>> = rows
-        override fun observeAllNewestFirst(): Flow<List<VettingDecision>> =
-            rows.map { l -> l.sortedWith(compareByDescending<VettingDecision> { it.decisionTimestamp }.thenByDescending { it.createdAt }) }
-
-        override fun observeForRecord(recordId: String): Flow<List<VettingDecision>> =
-            observeAllNewestFirst().map { l -> l.filter { it.foodspaceRecordId == recordId } }
-    }
-
-    private val dao = FakeDao()
+    private val dao = FakeVettingDecisionDao()
     private val repository = VettingRepositoryImpl(dao)
 
     @Test

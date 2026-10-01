@@ -13,6 +13,7 @@ import com.example.client.network.CboSyncResponse
 import com.example.client.network.SyncApiService
 import com.example.client.network.SyncRequest
 import com.example.client.network.SyncResponse
+import com.example.client.network.VettingSyncRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -28,7 +29,7 @@ import java.io.IOException
 
 class CboSyncProcessorTest {
 
-    private class FakeCollectionDao : CboCollectionDao() {
+    internal class FakeCollectionDao : CboCollectionDao() {
         val rows = MutableStateFlow<List<CboCollectionEntity>>(emptyList())
 
         fun get(id: String) = rows.value.first { it.id == id }
@@ -75,7 +76,7 @@ class CboSyncProcessorTest {
         }
     }
 
-    private class FakeProductLineDao : ProductLineDao {
+    internal class FakeProductLineDao : ProductLineDao {
         override suspend fun insert(productLine: ProductLineEntity) = Unit
         override suspend fun update(productLine: ProductLineEntity) = Unit
         override fun getBySyncStatus(status: SyncStatus): Flow<List<ProductLineEntity>> = MutableStateFlow(emptyList())
@@ -84,9 +85,10 @@ class CboSyncProcessorTest {
         override fun getByCollectionId(collectionId: String): Flow<List<ProductLineEntity>> = MutableStateFlow(emptyList())
     }
 
-    private class FakeApi(var handler: (CboSyncRequest) -> Response<ApiEnvelope<CboSyncResponse>>) : SyncApiService {
+    internal class FakeApi(var handler: (CboSyncRequest) -> Response<ApiEnvelope<CboSyncResponse>>) : SyncApiService {
         val requests = mutableListOf<CboSyncRequest>()
         override suspend fun syncData(request: SyncRequest): Response<SyncResponse> = error("unused")
+        override suspend fun syncVettingDecisions(request: VettingSyncRequest): Response<ApiEnvelope<CboSyncResponse>> = error("unused")
         override suspend fun syncCboCollections(request: CboSyncRequest): Response<ApiEnvelope<CboSyncResponse>> {
             requests += request
             return handler(request)

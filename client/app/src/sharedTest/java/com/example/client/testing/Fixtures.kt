@@ -2,6 +2,7 @@ package com.example.client.testing
 
 import com.example.client.auth.Session
 import com.example.client.auth.TokenStorage
+import com.example.client.data.local.dao.VettingDecisionDao
 import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.local.entity.FoodspaceBeneficiaryRecord
 import com.example.client.data.local.entity.SyncStatus
@@ -11,6 +12,7 @@ import com.example.client.data.repository.RecordsMetaStore
 import com.example.client.data.repository.RefreshOutcome
 import com.example.client.data.repository.VettingRecordsRepository
 import com.example.client.data.repository.VettingRepository
+import com.example.client.sync.VettingSyncTrigger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -164,5 +166,53 @@ class InMemoryTokenStorage(private var session: Session? = null) : TokenStorage 
 
     override fun clear() {
         session = null
+    }
+}
+
+/** An in-memory [VettingDecisionDao] with the same semantics as the real queries, for tests of anything that uses the DAO. */
+class FakeVettingDecisionDao : VettingDecisionDao {
+    val rows = MutableStateFlow<List<VettingDecision>>(emptyList())
+
+    fun get(id: String) = rows.value.first { it.id == id }
+
+    override suspend fun insert(decision: VettingDecision) {
+        rows.value = rows.value.filterNot { it.id == decision.id } + decision
+    }
+
+    override suspend fun update(decision: VettingDecision) = insert(decision)
+    override fun getBySyncStatus(status: SyncStatus): Flow<List<VettingDecision>> = rows.map { l -> l.filter { it.syncStatus == status } }
+    override fun getAll(): Flow<List<VettingDecision>> = rows
+
+    override fun observeAllNewestFirst(): Flow<List<VettingDecision>> =
+        rows.map { l -> l.sortedWith(compareByDescending<VettingDecision> { it.decisionTimestamp }.thenByDescending { it.createdAt }) }
+
+    override fun observeForRecord(recordId: String): Flow<List<VettingDecision>> =
+        observeAllNewestFirst().map { l -> l.filter { it.foodspaceRecordId == recordId } }
+
+    override suspend fun getSyncable(maxRetries: Int): List<VettingDecision> = rows.value
+        .filter { it.syncStatus == SyncStatus.PENDING || (it.syncStatus == SyncStatus.FAILED && it.retryCount < maxRetries) }
+        .sortedWith(compareBy({ it.decisionTimestamp }, { it.createdAt }))
+
+    override suspend fun markSynced(ids: List<String>, now: Long) {
+        rows.value = rows.value.map { if (it.id in ids) it.copy(syncStatus = SyncStatus.SYNCED, syncErrorCode = null, updatedAt = now) else it }
+    }
+
+    override suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long) {
+        rows.value = rows.value.map {
+            if (it.id in ids) it.copy(syncStatus = SyncStatus.FAILED, retryCount = it.retryCount + 1, syncErrorCode = errorCode, updatedAt = now) else it
+        }
+    }
+
+    override suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long) {
+        rows.value = rows.value.map {
+            if (it.id in ids) it.copy(syncStatus = SyncStatus.FAILED, retryCount = maxRetries, syncErrorCode = errorCode, updatedAt = now) else it
+        }
+    }
+}
+
+class FakeVettingSyncTrigger : VettingSyncTrigger {
+    var calls = 0
+    override fun syncVettingDecisionsNow() {
+        calls++
     }
 }

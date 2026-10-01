@@ -10,6 +10,7 @@ import com.example.client.network.CboSyncResponse
 import com.example.client.network.SyncApiService
 import com.example.client.network.SyncRequest
 import com.example.client.network.SyncResponse
+import com.example.client.network.VettingSyncRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -67,6 +68,8 @@ class CboCollectionRepositoryTest {
             calls++
             throw IOException("Network unreachable")
         }
+
+        override suspend fun syncVettingDecisions(request: VettingSyncRequest): Response<ApiEnvelope<CboSyncResponse>> = error("unused")
 
         override suspend fun syncCboCollections(request: CboSyncRequest): Response<ApiEnvelope<CboSyncResponse>> {
             calls++

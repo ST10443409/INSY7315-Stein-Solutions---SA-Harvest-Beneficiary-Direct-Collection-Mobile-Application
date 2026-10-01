@@ -27,5 +27,6 @@ class SaHarvestApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         syncScheduler.scheduleCboCollectionsPeriodic()
+        syncScheduler.scheduleVettingDecisionsPeriodic()
     }
 }

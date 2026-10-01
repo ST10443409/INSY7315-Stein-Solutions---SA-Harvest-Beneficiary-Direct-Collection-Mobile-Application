@@ -236,7 +236,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReadyContent(
 
 @Composable
 private fun DecisionSummary(decision: VettingDecision?) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -244,14 +244,23 @@ private fun DecisionSummary(decision: VettingDecision?) {
             .padding(14.dp)
             .testTag(DetailTags.CURRENT_DECISION)
             .semantics(mergeDescendants = true) {},
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        if (decision == null) {
-            Text(stringResource(R.string.vetting_no_decision_yet), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
-        } else {
-            Text(stringResource(R.string.vetting_current_decision), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
-            DecisionBadge(decision.outcome)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (decision == null) {
+                Text(stringResource(R.string.vetting_no_decision_yet), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
+            } else {
+                Text(stringResource(R.string.vetting_current_decision), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
+                DecisionBadge(decision.outcome)
+            }
+        }
+        if (decision != null) {
+            val sync = decision.syncDisplay()
+            Text(
+                stringResource(sync.hintRes()),
+                fontFamily = Figtree, fontSize = 12.5.sp, lineHeight = 18.sp,
+                color = if (sync.isFailed) SaColors.TagErrorText else SaColors.Muted
+            )
         }
     }
 }

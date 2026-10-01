@@ -11,6 +11,7 @@ import com.example.client.data.repository.VettingRecordsRepositoryImpl
 import com.example.client.data.repository.VettingRepository
 import com.example.client.data.repository.VettingRepositoryImpl
 import com.example.client.sync.CboSyncTrigger
+import com.example.client.sync.VettingSyncTrigger
 import com.example.client.sync.SyncScheduler
 import dagger.Binds
 import dagger.Module
@@ -32,6 +33,9 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindCboSyncTrigger(impl: SyncScheduler): CboSyncTrigger
+
+    @Binds
+    abstract fun bindVettingSyncTrigger(impl: SyncScheduler): VettingSyncTrigger
 
     @Binds
     @Singleton

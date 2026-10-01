@@ -27,6 +27,7 @@ import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.repository.RefreshOutcome
 import com.example.client.testing.FakeVettingRecordsRepository
 import com.example.client.testing.FakeVettingRepository
+import com.example.client.testing.FakeVettingSyncTrigger
 import com.example.client.testing.InMemoryTokenStorage
 import com.example.client.testing.sampleRecord
 import com.example.client.ui.components.AccordionTags
@@ -72,7 +73,7 @@ class VettingFlowTest {
                         BeneficiaryDetailScreen(state, onBack, onRecordDecision = { onDecide(selected) })
                     },
                     decision = { onBack ->
-                        val vm = remember(selected) { DecisionViewModel(SavedStateHandle(mapOf(VETTING_RECORD_ARG to selected)), records, vetting, session) }
+                        val vm = remember(selected) { DecisionViewModel(SavedStateHandle(mapOf(VETTING_RECORD_ARG to selected)), records, vetting, session, FakeVettingSyncTrigger()) }
                         val state by vm.uiState.collectAsState()
                         DecisionScreen(state, onBack, vm::onOutcomeChange, vm::onNotesChange, vm::onSave)
                     }

@@ -170,9 +170,17 @@ public class VettingDecisionSyncEndpointTests : IClassFixture<ApiFactory>
     public async Task TheDevicesSyncStatus_IsIgnored_TheServerSetsItsOwn()
     {
         var id = Guid.NewGuid().ToString();
-        await Post(await ClientFor("vetting_test_user"), Decision(id, d => d["syncStatus"] = "FAILED"));
+        await Post(await ClientFor("vetting_test_user"), Decision(id, d =>
+        {
+            d["syncStatus"] = "FAILED";
+            d["retryCount"] = 4;                       // the device's own retry bookkeeping
+            d["syncErrorCode"] = "VALIDATION_FAILED";
+        }));
 
-        Assert.Equal(SyncStatus.Synced, (await Stored(id)).SyncStatus);
+        var saved = await Stored(id);
+        Assert.Equal(SyncStatus.Synced, saved.SyncStatus);
+        Assert.Equal(0, saved.RetryCount);
+        Assert.Null(saved.SyncErrorCode);
     }
 
     [Fact]

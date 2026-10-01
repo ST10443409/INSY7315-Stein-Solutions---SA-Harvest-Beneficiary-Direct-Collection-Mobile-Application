@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.client.data.AppDatabase
 import com.example.client.data.MIGRATION_2_3
+import com.example.client.data.MIGRATION_3_4
 import com.example.client.data.SyncPayloadDao
 import com.example.client.data.local.dao.*
 import dagger.Module
@@ -25,7 +26,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "app_database"
         )
-        .addMigrations(MIGRATION_2_3)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
         // TODO(sprint-4): replace with real migration before release
         .fallbackToDestructiveMigration()
         .build()

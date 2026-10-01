@@ -26,6 +26,7 @@ import com.example.client.data.repository.RecordsMeta
 import com.example.client.data.repository.RefreshOutcome
 import com.example.client.testing.FakeVettingRecordsRepository
 import com.example.client.testing.FakeVettingRepository
+import com.example.client.testing.FakeVettingSyncTrigger
 import com.example.client.testing.InMemoryTokenStorage
 import com.example.client.testing.sampleRecord
 import org.junit.Assert.assertEquals
@@ -172,6 +173,7 @@ class VettingListAndDecisionTest {
     // ── decision screen ────────────────────────────────────────────────────────────
 
     private lateinit var vetting: FakeVettingRepository
+    private val trigger = FakeVettingSyncTrigger()
 
     private fun showDecision(previous: DecisionOutcome? = null, onBack: () -> Unit = {}) {
         val records = FakeVettingRecordsRepository(listOf(sampleRecord("a", legalName = "Alpha NPO")))
@@ -179,7 +181,7 @@ class VettingListAndDecisionTest {
         previous?.let { kotlinx.coroutines.runBlocking { vetting.saveDecision("a", it, null, "officer") } }
         val session = SessionManager(InMemoryTokenStorage()).apply { startSession("jwt", UserRole.VETTING, null, "vetting_test_user") }
         composeRule.setContent {
-            val vm = androidx.compose.runtime.remember { DecisionViewModel(SavedStateHandle(mapOf(VETTING_RECORD_ARG to "a")), records, vetting, session) }
+            val vm = androidx.compose.runtime.remember { DecisionViewModel(SavedStateHandle(mapOf(VETTING_RECORD_ARG to "a")), records, vetting, session, trigger) }
             val state by vm.uiState.collectAsState()
             DecisionScreen(state, onBack, vm::onOutcomeChange, vm::onNotesChange, vm::onSave)
         }

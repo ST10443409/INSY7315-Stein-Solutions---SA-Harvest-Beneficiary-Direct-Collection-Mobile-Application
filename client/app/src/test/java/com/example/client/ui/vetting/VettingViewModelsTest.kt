@@ -8,6 +8,7 @@ import com.example.client.data.repository.RecordsMeta
 import com.example.client.data.repository.RefreshOutcome
 import com.example.client.testing.FakeVettingRecordsRepository
 import com.example.client.testing.FakeVettingRepository
+import com.example.client.testing.FakeVettingSyncTrigger
 import com.example.client.testing.InMemoryTokenStorage
 import com.example.client.testing.sampleDecision
 import com.example.client.testing.sampleRecord
@@ -35,12 +36,14 @@ class VettingViewModelsTest {
     private lateinit var records: FakeVettingRecordsRepository
     private lateinit var vetting: FakeVettingRepository
     private lateinit var session: SessionManager
+    private lateinit var trigger: FakeVettingSyncTrigger
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         records = FakeVettingRecordsRepository()
         vetting = FakeVettingRepository()
+        trigger = FakeVettingSyncTrigger()
         session = SessionManager(InMemoryTokenStorage()).apply { startSession("jwt", UserRole.VETTING, null, "vetting_test_user") }
     }
 
@@ -237,7 +240,7 @@ class VettingViewModelsTest {
 
     // ── decision ───────────────────────────────────────────────────────────────────
 
-    private fun decision(id: String = "a") = DecisionViewModel(SavedStateHandle(mapOf(VETTING_RECORD_ARG to id)), records, vetting, session)
+    private fun decision(id: String = "a") = DecisionViewModel(SavedStateHandle(mapOf(VETTING_RECORD_ARG to id)), records, vetting, session, trigger)
 
     @Test
     fun theDecisionScreen_knowsWhichRecordItIsFor_andWhatWasDecidedBefore() = runTest {
@@ -350,5 +353,77 @@ class VettingViewModelsTest {
         vm.onSave()
 
         assertEquals(1, vetting.decisions.value.size)
+    }
+
+    // ── decisions are sent after they are saved ────────────────────────────────────
+
+    @Test
+    fun savingADecision_asksForASync_once() = runTest {
+        val vm = decision()
+        vm.onOutcomeChange(DecisionOutcome.APPROVE)
+
+        vm.onSave()
+        vm.onSave() // a second tap changes nothing
+
+        assertEquals(1, trigger.calls)
+    }
+
+    @Test
+    fun noSyncIsRequested_whenNothingWasSaved() = runTest {
+        val vm = decision()
+
+        vm.onSave() // nothing chosen: refused
+        assertEquals(0, trigger.calls)
+
+        vm.onOutcomeChange(DecisionOutcome.FLAG)
+        vetting.failWith = IllegalStateException("disk full")
+        vm.onSave() // the local save failed
+        assertEquals(0, trigger.calls)
+    }
+
+    @Test
+    fun aRetryAfterAFailedSave_asksForASync_whenItWorks() = runTest {
+        val vm = decision()
+        vm.onOutcomeChange(DecisionOutcome.FLAG)
+        vetting.failWith = IllegalStateException("disk full")
+        vm.onSave()
+
+        vetting.failWith = null
+        vm.onSave()
+
+        assertEquals(1, trigger.calls)
+    }
+
+    @Test
+    fun theList_showsWhetherEachCurrentDecisionHasBeenSent() = runTest {
+        records.records.value = listOf(sampleRecord("a", legalName = "Alpha"), sampleRecord("b", legalName = "Beta"), sampleRecord("c", legalName = "Gamma"))
+        vetting.decisions.value = listOf(
+            sampleDecision("a", DecisionOutcome.APPROVE, at = 1).copy(syncStatus = com.example.client.data.local.entity.SyncStatus.SYNCED),
+            sampleDecision("b", DecisionOutcome.REJECT, at = 2).copy(syncStatus = com.example.client.data.local.entity.SyncStatus.FAILED, retryCount = 1)
+        )
+        val vm = listVm()
+        keepActive(vm.uiState)
+
+        val items = vm.uiState.value.items.associateBy { it.id }
+
+        assertEquals(DecisionSyncDisplay.SYNCED, items.getValue("a").decisionSync)
+        assertEquals(DecisionSyncDisplay.FAILED_WILL_RETRY, items.getValue("b").decisionSync)
+        assertNull(items.getValue("c").decisionSync) // no decision, nothing to send
+    }
+
+    @Test
+    fun whenTheOfficerChangesTheirMind_theListShowsTheNewDecisionsSyncState() = runTest {
+        records.records.value = listOf(sampleRecord("a"))
+        vetting.decisions.value = listOf(
+            sampleDecision("a", DecisionOutcome.FLAG, at = 1).copy(syncStatus = com.example.client.data.local.entity.SyncStatus.SYNCED),
+            sampleDecision("a", DecisionOutcome.APPROVE, at = 2) // newer, still pending
+        )
+        val vm = listVm()
+        keepActive(vm.uiState)
+
+        val item = vm.uiState.value.items.single()
+
+        assertEquals(DecisionOutcome.APPROVE, item.decision)
+        assertEquals(DecisionSyncDisplay.PENDING, item.decisionSync)
     }
 }

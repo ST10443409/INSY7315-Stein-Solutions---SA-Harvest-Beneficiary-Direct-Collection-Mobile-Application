@@ -28,6 +28,13 @@
     <string name="vetting_outcome_reject">Rejected</string>
     <string name="vetting_outcome_flag">Flagged</string>
 
+    <!-- Whether a decision has reached the server -->
+    <string name="vetting_sync_pending">Saved on this device. Waiting to send.</string>
+    <string name="vetting_sync_synced">Sent.</string>
+    <string name="vetting_sync_retry">Could not send yet. Will try again automatically.</string>
+    <string name="vetting_sync_final">Could not be sent after several tries. Ask your admin for help. Your decision is still saved on this device.</string>
+    <string name="vetting_sync_rejected">The server refused this decision, so sending it again will not help. Ask your admin for help. Your decision is still saved on this device.</string>
+
     <!-- Record detail -->
     <string name="vetting_detail_not_found">This record is no longer on this device. Go back to the list and sync to refresh it.</string>
     <string name="vetting_expand_all">Expand all</string>

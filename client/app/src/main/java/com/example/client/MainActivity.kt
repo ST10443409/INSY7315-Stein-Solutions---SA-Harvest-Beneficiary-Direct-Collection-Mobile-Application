@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         // Back in the foreground: send anything still waiting to sync.
         syncScheduler.syncCboCollectionsNow()
+        syncScheduler.syncVettingDecisionsNow()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

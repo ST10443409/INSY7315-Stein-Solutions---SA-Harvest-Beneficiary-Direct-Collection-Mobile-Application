@@ -13,4 +13,7 @@ interface SyncApiService {
 
     @POST("/api/cbo-collection/sync")
     suspend fun syncCboCollections(@Body request: CboSyncRequest): Response<ApiEnvelope<CboSyncResponse>>
+
+    @POST("/api/vetting/sync")
+    suspend fun syncVettingDecisions(@Body request: VettingSyncRequest): Response<ApiEnvelope<CboSyncResponse>>
 }

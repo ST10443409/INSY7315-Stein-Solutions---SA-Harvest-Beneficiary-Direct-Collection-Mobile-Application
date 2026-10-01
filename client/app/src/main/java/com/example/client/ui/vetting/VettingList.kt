@@ -73,7 +73,9 @@ data class RecordItem(
     val province: String,
     val contactName: String,
     /** The officer's current decision on this record, or null if they have not decided. */
-    val decision: DecisionOutcome?
+    val decision: DecisionOutcome?,
+    /** Whether that decision has reached the server yet; null when there is no decision. */
+    val decisionSync: DecisionSyncDisplay? = null
 )
 
 data class VettingListUiState(
@@ -110,7 +112,7 @@ class VettingListViewModel @Inject constructor(
         val latest = latestDecisionByRecord(decisions)
         VettingListUiState(
             loaded = true,
-            items = cached.map { it.toItem(latest[it.id]?.outcome) },
+            items = cached.map { it.toItem(latest[it.id]) },
             refreshing = refresh.running,
             notice = noticeFor(refresh.outcome, meta),
             meta = meta
@@ -137,8 +139,11 @@ class VettingListViewModel @Inject constructor(
         else -> if (meta?.stale == true) ListNotice.STALE else null
     }
 
-    private fun FoodspaceBeneficiaryRecord.toItem(decision: DecisionOutcome?) =
-        RecordItem(id = id, legalName = legalName, province = province, contactName = contactName, decision = decision)
+    private fun FoodspaceBeneficiaryRecord.toItem(decision: VettingDecision?) =
+        RecordItem(
+            id = id, legalName = legalName, province = province, contactName = contactName,
+            decision = decision?.outcome, decisionSync = decision?.syncDisplay()
+        )
 }
 
 /** The officer's current decision on each record: the newest one (several can exist if they changed their mind). */
@@ -295,6 +300,16 @@ private fun RecordRow(item: RecordItem, onOpen: (String) -> Unit) {
                 fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight,
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
+            // Only while the decision has not reached the server: once it has, there is nothing to say.
+            val sync = item.decisionSync
+            if (sync != null && sync != DecisionSyncDisplay.SYNCED) {
+                Text(
+                    stringResource(sync.hintRes()),
+                    fontFamily = Figtree, fontSize = 11.5.sp, lineHeight = 16.sp,
+                    color = if (sync.isFailed) SaColors.TagErrorText else SaColors.Muted,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
         DecisionBadge(item.decision)
     }

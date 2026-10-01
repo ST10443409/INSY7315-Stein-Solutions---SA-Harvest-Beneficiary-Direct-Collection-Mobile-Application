@@ -39,6 +39,7 @@ import com.example.client.auth.SessionManager
 import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.repository.VettingRecordsRepository
 import com.example.client.data.repository.VettingRepository
+import com.example.client.sync.VettingSyncTrigger
 import com.example.client.ui.components.FilledPillButton
 import com.example.client.ui.components.SaTextArea
 import com.example.client.ui.components.ScreenHeader
@@ -85,7 +86,8 @@ class DecisionViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val records: VettingRecordsRepository,
     private val vetting: VettingRepository,
-    private val session: SessionManager
+    private val session: SessionManager,
+    private val syncTrigger: VettingSyncTrigger
 ) : ViewModel() {
 
     private val recordId: String = checkNotNull(savedStateHandle[VETTING_RECORD_ARG]) { "The record id is a required navigation argument." }
@@ -119,6 +121,8 @@ class DecisionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 vetting.saveDecision(recordId, outcome, state.notes, session.username() ?: UNKNOWN_OFFICER)
+                // Queued, not awaited: it waits for a network if there is none, and the save never depends on it.
+                syncTrigger.syncVettingDecisionsNow()
                 _uiState.update { it.copy(isSaving = false, saved = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, saveFailed = true) }

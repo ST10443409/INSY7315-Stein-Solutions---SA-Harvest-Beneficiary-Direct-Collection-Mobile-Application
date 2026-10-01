@@ -18,14 +18,14 @@
     <string name="form1_remove_product">Remove</string>
     <string name="form1_total_weight">Total weight</string>
     <string name="form1_no_notes">No notes</string>
-    <string name="form1_donor_name">Donor signatory name *</string>
+    <string name="form1_donor_name">Donor signatory name</string>
     <string name="form1_donor_name_hint">Full name of the person releasing stock</string>
-    <string name="form1_signatures">Signatures *</string>
+    <string name="form1_signatures">Signatures</string>
     <string name="form1_sign_donor">Donor</string>
     <string name="form1_sign_cbo">CBO</string>
     <string name="form1_signed">Signed</string>
     <string name="form1_tap_to_sign">Tap to sign</string>
-    <string name="form1_photos">Photos of donation *</string>
+    <string name="form1_photos">Photos of donation</string>
     <string name="form1_photo_shot">Photo %1$d</string>
     <string name="form1_photo_taken">Captured</string>
     <string name="form1_photo_tap">Tap to capture</string>
@@ -71,5 +71,18 @@
     <string name="submissions_hint_synced">Safely received by the server.</string>
     <string name="submissions_hint_failed_retry">Could not sync. Will try again automatically.</string>
     <string name="submissions_hint_failed_final">Could not sync after several tries. Ask your admin for help. Your data is still saved on this device.</string>
-    <string name="submissions_item_meta">%1$s · %2$s</string>
+    <string name="submissions_panel_failed">%1$d need attention. Your data is still saved on this device.</string>
+    <string name="submissions_panel_pending">%1$d waiting to sync. They send by themselves as soon as you have signal.</string>
+    <string name="submissions_panel_synced">Everything on this device is on the server.</string>
+    <string-array name="form1_photo_labels">
+        <item>Stock on vehicle</item>
+        <item>Stock delivered</item>
+        <item>Storage area</item>
+        <item>Delivery note</item>
+    </string-array>
+    <string name="form1_lines_count">%1$d lines</string>
+    <string name="form1_line_count_one">1 line</string>
+    <string name="form1_departure_stamped">Departure stamped at %1$s</string>
+    <string name="form1_photos_progress">%1$d of 4 captured</string>
+    <string name="form1_dialog_add_to_collection">Add to collection</string>
 </resources>

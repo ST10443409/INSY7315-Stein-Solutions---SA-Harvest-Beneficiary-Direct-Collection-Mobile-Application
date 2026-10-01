@@ -1,44 +1,36 @@
 package com.example.client.ui.cbo
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -47,9 +39,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.client.R
+import com.example.client.ui.components.FilledPillButton
+import com.example.client.ui.components.OutlinePillButton
+import com.example.client.ui.components.SaDashedActionButton
+import com.example.client.ui.components.SaInputField
+import com.example.client.ui.components.SaSelectField
+import com.example.client.ui.components.SaTextArea
+import com.example.client.ui.components.ScreenHeader
+import com.example.client.ui.components.dashedBorder
 import com.example.client.ui.placeholder.ScreenTags
+import com.example.client.ui.theme.CBOCollectorTheme
+import com.example.client.ui.theme.Figtree
+import com.example.client.ui.theme.GlyphPaths
+import com.example.client.ui.theme.Poppins
+import com.example.client.ui.theme.SaColors
+import com.example.client.ui.theme.StrokeIcon
+
+// Visual design follows the CBO Collector UI demo (CollectScreen, PhotosScreen, AddProductSheet, DoneScreen).
 
 object Form1Tags {
     const val DONOR_NAME = "form1_donor_name"
@@ -68,9 +77,6 @@ object Form1Tags {
     const val SAVE_FAILED = "form1_save_failed"
     fun error(field: Form1Field) = "form1_error_${field.name.lowercase()}"
 }
-
-private val Yellow = Color(0xFFFFD400)
-private val Ink = Color(0xFF1A1A1A)
 
 @StringRes
 private fun Form1Error.message(): Int = when (this) {
@@ -129,10 +135,10 @@ fun Form1Screen(
     onDismissAddProduct: () -> Unit,
     onSubmit: () -> Unit,
     onStartNew: () -> Unit
-) {
+) = CBOCollectorTheme {
     if (state.submitted) {
         SuccessContent(onStartNew)
-        return
+        return@CBOCollectorTheme
     }
     val form = state.form
     val errors = state.errors
@@ -140,198 +146,228 @@ fun Form1Screen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(SaColors.Surface)
             .testTag(ScreenTags.FORM1)
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        Text(stringResource(R.string.form1_title), style = MaterialTheme.typography.headlineSmall)
+        ScreenHeader(
+            title = stringResource(R.string.form1_title),
+            modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 14.dp)
+        )
 
-        // Times
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TimeBox(R.string.form1_arrival, form.arrivalTime, Modifier.weight(1f))
-                TimeBox(
-                    R.string.form1_departure,
-                    form.departureTime ?: stringResource(R.string.form1_departure_none),
-                    Modifier.weight(1f)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(20.dp, 0.dp, 20.dp, 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Times
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatBox(
+                        label = stringResource(R.string.form1_arrival),
+                        value = form.arrivalTime,
+                        containerColor = SaColors.SurfaceAlt,
+                        textColor = SaColors.Ink,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatBox(
+                        label = stringResource(R.string.form1_departure),
+                        value = form.departureTime ?: "—",
+                        containerColor = if (form.departureTime != null) SaColors.SurfaceAlt else SaColors.AppBg,
+                        textColor = if (form.departureTime != null) SaColors.Ink else SaColors.MutedLight,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                FieldError(Form1Field.ARRIVAL, errors)
+                FieldError(Form1Field.DEPARTURE, errors)
+            }
+
+            // Products
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        stringResource(R.string.form1_products),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Ink
+                    )
+                    Text(
+                        if (form.productLines.size == 1) stringResource(R.string.form1_line_count_one)
+                        else stringResource(R.string.form1_lines_count, form.productLines.size),
+                        fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight
+                    )
+                }
+                form.productLines.forEach { line -> ProductLineCard(line) { onRemoveProduct(line.id) } }
+                SaDashedActionButton(
+                    onClick = onOpenAddProduct,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(Form1Tags.ADD_PRODUCT)
+                ) {
+                    StrokeIcon(pathData = GlyphPaths.Plus, tint = SaColors.LinkGold, modifier = Modifier.size(17.dp))
+                    Text(
+                        stringResource(R.string.form1_add_product),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = SaColors.Muted,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+                FieldError(Form1Field.PRODUCTS, errors)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SaColors.Ink)
+                        .padding(horizontal = 18.dp, vertical = 15.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(R.string.form1_total_weight),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Cream
+                    )
+                    Text(
+                        Form1Validator.formatKg(form.totalKg) + " kg",
+                        fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = SaColors.Cream
+                    )
+                }
+            }
+
+            // Donor name
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                FieldLabel(stringResource(R.string.form1_donor_name), required = true)
+                SaInputField(
+                    value = form.donorName,
+                    onValueChange = onDonorNameChange,
+                    placeholder = stringResource(R.string.form1_donor_name_hint),
+                    isError = Form1Field.DONOR_NAME in errors,
+                    fieldTestTag = Form1Tags.DONOR_NAME
+                )
+                FieldError(Form1Field.DONOR_NAME, errors)
+            }
+
+            // Signatures
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FieldLabel(stringResource(R.string.form1_signatures), required = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SignatureButton(
+                        title = stringResource(R.string.form1_sign_donor),
+                        signed = form.donorSigned,
+                        onClick = onToggleDonorSigned,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(Form1Tags.SIGN_DONOR)
+                    )
+                    SignatureButton(
+                        title = stringResource(R.string.form1_sign_cbo),
+                        signed = form.cboSigned,
+                        onClick = onToggleCboSigned,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(Form1Tags.SIGN_CBO)
+                    )
+                }
+                FieldError(Form1Field.SIGNATURES, errors)
+            }
+
+            // Photos
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FieldLabel(stringResource(R.string.form1_photos), required = true)
+                Text(
+                    stringResource(R.string.form1_photos_progress, form.shots.count { it }),
+                    fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight
+                )
+                val labels = stringArrayResource(R.array.form1_photo_labels)
+                form.shots.chunked(2).forEachIndexed { row, pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEachIndexed { col, taken ->
+                            val index = row * 2 + col
+                            PhotoShot(
+                                label = labels.getOrElse(index) { "" },
+                                taken = taken,
+                                onClick = { onToggleShot(index) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag(Form1Tags.PHOTO_PREFIX + index)
+                            )
+                        }
+                    }
+                }
+                FieldError(Form1Field.PHOTOS, errors)
+            }
+
+            // Delivery note
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                FieldLabel(stringResource(R.string.form1_delivery_note))
+                SaInputField(
+                    value = form.deliveryNote,
+                    onValueChange = onDeliveryNoteChange,
+                    placeholder = stringResource(R.string.form1_delivery_note),
+                    fieldTestTag = Form1Tags.DELIVERY_NOTE
+                )
+                OutlinePillButton(
+                    onClick = onToggleNoteAttached,
+                    modifier = Modifier.padding(top = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        stringResource(if (form.noteAttached) R.string.form1_note_attached else R.string.form1_note_attach),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SaColors.Ink
+                    )
+                }
+            }
+
+            // Notes
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                FieldLabel(stringResource(R.string.form1_notes))
+                SaTextArea(
+                    value = form.collectNotes,
+                    onValueChange = onCollectNotesChange,
+                    placeholder = stringResource(R.string.form1_notes_hint),
+                    minLines = 3,
+                    fieldTestTag = Form1Tags.NOTES
                 )
             }
-            FieldError(Form1Field.DEPARTURE, errors)
-            FieldError(Form1Field.ARRIVAL, errors)
-            OutlinedButton(
+
+            OutlinePillButton(
                 onClick = onStampDeparture,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag(Form1Tags.STAMP_DEPARTURE)
-            ) { Text(stringResource(R.string.form1_stamp_departure), fontSize = 16.sp) }
-        }
-
-        // Products
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel(stringResource(R.string.form1_products))
-            form.productLines.forEach { line ->
-                ProductLineCard(line, onRemove = { onRemoveProduct(line.id) })
-            }
-            OutlinedButton(
-                onClick = onOpenAddProduct,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag(Form1Tags.ADD_PRODUCT)
-            ) { Text("+ " + stringResource(R.string.form1_add_product), fontSize = 16.sp) }
-            FieldError(Form1Field.PRODUCTS, errors)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .roundedBackground(Ink)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(stringResource(R.string.form1_total_weight), color = Color.White, fontSize = 15.sp)
-                Text(
-                    Form1Validator.formatKg(form.totalKg) + " kg",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        // Donor name
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionLabel(stringResource(R.string.form1_donor_name))
-            OutlinedTextField(
-                value = form.donorName,
-                onValueChange = onDonorNameChange,
-                placeholder = { Text(stringResource(R.string.form1_donor_name_hint)) },
-                singleLine = true,
-                isError = Form1Field.DONOR_NAME in errors,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(Form1Tags.DONOR_NAME)
-            )
-            FieldError(Form1Field.DONOR_NAME, errors)
-        }
-
-        // Signatures
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel(stringResource(R.string.form1_signatures))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ToggleCard(
-                    title = stringResource(R.string.form1_sign_donor),
-                    status = stringResource(if (form.donorSigned) R.string.form1_signed else R.string.form1_tap_to_sign),
-                    done = form.donorSigned,
-                    onClick = onToggleDonorSigned,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(Form1Tags.SIGN_DONOR)
-                )
-                ToggleCard(
-                    title = stringResource(R.string.form1_sign_cbo),
-                    status = stringResource(if (form.cboSigned) R.string.form1_signed else R.string.form1_tap_to_sign),
-                    done = form.cboSigned,
-                    onClick = onToggleCboSigned,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(Form1Tags.SIGN_CBO)
-                )
-            }
-            FieldError(Form1Field.SIGNATURES, errors)
-        }
-
-        // Photos
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel(stringResource(R.string.form1_photos))
-            form.shots.chunked(2).forEachIndexed { row, pair ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    pair.forEachIndexed { col, taken ->
-                        val index = row * 2 + col
-                        ToggleCard(
-                            title = stringResource(R.string.form1_photo_shot, index + 1),
-                            status = stringResource(if (taken) R.string.form1_photo_taken else R.string.form1_photo_tap),
-                            done = taken,
-                            onClick = { onToggleShot(index) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag(Form1Tags.PHOTO_PREFIX + index)
-                        )
-                    }
-                }
-            }
-            FieldError(Form1Field.PHOTOS, errors)
-        }
-
-        // Delivery note
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = form.deliveryNote,
-                onValueChange = onDeliveryNoteChange,
-                label = { Text(stringResource(R.string.form1_delivery_note)) },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(Form1Tags.DELIVERY_NOTE)
-            )
-            OutlinedButton(
-                onClick = onToggleNoteAttached,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
+                    .testTag(Form1Tags.STAMP_DEPARTURE),
+                contentPadding = PaddingValues(15.dp)
             ) {
                 Text(
-                    stringResource(if (form.noteAttached) R.string.form1_note_attached else R.string.form1_note_attach),
-                    fontSize = 16.sp
+                    form.departureTime?.let { stringResource(R.string.form1_departure_stamped, it) }
+                        ?: stringResource(R.string.form1_stamp_departure),
+                    fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = SaColors.Ink
                 )
             }
-        }
 
-        // Notes
-        OutlinedTextField(
-            value = form.collectNotes,
-            onValueChange = onCollectNotesChange,
-            label = { Text(stringResource(R.string.form1_notes)) },
-            placeholder = { Text(stringResource(R.string.form1_notes_hint)) },
-            minLines = 3,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(Form1Tags.NOTES)
-        )
+            if (errors.isNotEmpty()) {
+                Notice(stringResource(R.string.form1_fix_errors), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+            if (state.saveFailed) {
+                Notice(
+                    stringResource(R.string.form1_save_failed),
+                    Modifier
+                        .testTag(Form1Tags.SAVE_FAILED)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
+                )
+            }
 
-        if (errors.isNotEmpty()) {
-            Text(
-                stringResource(R.string.form1_fix_errors),
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-            )
-        }
-        if (state.saveFailed) {
-            Text(
-                stringResource(R.string.form1_save_failed),
-                color = MaterialTheme.colorScheme.error,
+            FilledPillButton(
+                onClick = onSubmit,
+                enabled = !state.isSaving,
                 modifier = Modifier
-                    .testTag(Form1Tags.SAVE_FAILED)
-                    .semantics { liveRegion = LiveRegionMode.Polite }
-            )
-        }
-
-        Button(
-            onClick = onSubmit,
-            enabled = !state.isSaving,
-            colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Ink),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .testTag(Form1Tags.SUBMIT)
-        ) {
-            if (state.isSaving) {
-                CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp), strokeWidth = 2.dp, color = Ink)
-                Text(stringResource(R.string.form1_saving), fontSize = 16.sp)
-            } else {
-                Text(stringResource(R.string.form1_submit), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    .fillMaxWidth()
+                    .testTag(Form1Tags.SUBMIT),
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Text(
+                    stringResource(if (state.isSaving) R.string.form1_saving else R.string.form1_submit),
+                    fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                    color = if (state.isSaving) SaColors.Muted else SaColors.Ink
+                )
             }
         }
     }
@@ -348,107 +384,205 @@ fun Form1Screen(
     }
 }
 
+/** Mirrors the demo's DoneScreen: yellow check, big Poppins title, short explanation. */
 @Composable
 private fun SuccessContent(onStartNew: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(SaColors.Surface)
             .testTag(ScreenTags.FORM1)
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .verticalScroll(rememberScrollState())
+            .padding(26.dp, 32.dp),
+        verticalArrangement = Arrangement.Center
     ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(SaColors.Yellow),
+            contentAlignment = Alignment.Center
+        ) {
+            StrokeIcon(pathData = GlyphPaths.Check, tint = SaColors.Ink, strokeWidth = 2.75f, modifier = Modifier.size(34.dp))
+        }
         Text(
             stringResource(R.string.form1_success_title),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.testTag(Form1Tags.SUCCESS)
-        )
-        Text(stringResource(R.string.form1_success_body))
-        Button(
-            onClick = onStartNew,
-            colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Ink),
+            fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 30.sp, color = SaColors.Ink,
             modifier = Modifier
-                .heightIn(min = 48.dp)
-                .testTag(Form1Tags.NEW_COLLECTION)
-        ) { Text(stringResource(R.string.form1_new_collection), fontSize = 16.sp) }
+                .padding(top = 24.dp, bottom = 10.dp)
+                .testTag(Form1Tags.SUCCESS)
+        )
+        Text(
+            stringResource(R.string.form1_success_body),
+            fontFamily = Figtree, fontSize = 14.5.sp, lineHeight = 23.sp, color = SaColors.Muted
+        )
+        FilledPillButton(
+            onClick = onStartNew,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 28.dp)
+                .testTag(Form1Tags.NEW_COLLECTION),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            Text(
+                stringResource(R.string.form1_new_collection),
+                fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = SaColors.Ink
+            )
+        }
     }
 }
 
 @Composable
-private fun SectionLabel(text: String) =
-    Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+private fun FieldLabel(text: String, required: Boolean = false) {
+    Row {
+        Text(text, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Ink)
+        if (required) {
+            Text(" *", fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.YellowDark)
+        }
+    }
+}
 
 @Composable
 private fun FieldError(field: Form1Field, errors: Map<Form1Field, Form1Error>) {
     val error = errors[field] ?: return
     Text(
         stringResource(error.message()),
-        color = MaterialTheme.colorScheme.error,
-        fontSize = 13.sp,
+        fontFamily = Figtree, fontWeight = FontWeight.Medium, fontSize = 12.5.sp, color = SaColors.Error,
         modifier = Modifier
             .testTag(Form1Tags.error(field))
             .semantics { liveRegion = LiveRegionMode.Polite }
     )
 }
 
+/** A tinted callout, like the demo's yellow hint on the photos screen, in red for problems. */
 @Composable
-private fun TimeBox(@StringRes label: Int, value: String, modifier: Modifier = Modifier) {
+private fun Notice(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        fontFamily = Figtree, fontSize = 12.5.sp, lineHeight = 19.sp, color = SaColors.TagErrorText,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SaColors.TagErrorBg)
+            .padding(14.dp)
+    )
+}
+
+@Composable
+private fun StatBox(label: String, value: String, containerColor: Color, textColor: Color, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .roundedBackground(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(containerColor)
+            .padding(16.dp, 13.dp)
     ) {
-        Text(stringResource(label), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label.uppercase(),
+            fontFamily = Figtree, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.1.sp,
+            color = textColor.copy(alpha = 0.7f)
+        )
+        Text(
+            value,
+            fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = textColor,
+            modifier = Modifier.padding(top = 3.dp)
+        )
     }
 }
 
 @Composable
 private fun ProductLineCard(line: ProductLineInput, onRemove: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SaColors.White)
+            .border(1.dp, SaColors.inkAlpha(0.12f), RoundedCornerShape(12.dp))
+            .padding(16.dp, 13.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(modifier = Modifier.weight(1f)) {
+            Text(line.category, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = SaColors.Ink)
+            Text(
+                line.notes.ifBlank { stringResource(R.string.form1_no_notes) },
+                fontFamily = Figtree, fontSize = 11.5.sp, color = SaColors.MutedLight
+            )
+        }
+        Text(
+            "${line.kg} kg",
+            fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = SaColors.LinkGold,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        )
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(SaColors.AppBg)
+                .clickable(onClickLabel = stringResource(R.string.form1_remove_product), onClick = onRemove),
+            contentAlignment = Alignment.Center
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(line.category, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                Text(
-                    line.notes.ifBlank { stringResource(R.string.form1_no_notes) },
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text("${line.kg} kg", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-            TextButton(onClick = onRemove) { Text(stringResource(R.string.form1_remove_product)) }
+            Text("×", fontFamily = Figtree, fontSize = 15.sp, color = SaColors.Muted)
         }
     }
 }
 
 @Composable
-private fun ToggleCard(
-    title: String,
-    status: String,
-    done: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    OutlinedButton(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(if (done) 2.dp else 1.dp, if (done) Color(0xFF2F5D3A) else MaterialTheme.colorScheme.outline),
-        modifier = modifier.heightIn(min = 64.dp)
+private fun SignatureButton(title: String, signed: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(if (signed) SaColors.SurfaceAlt else SaColors.White, shape)
+            .let {
+                if (signed) it.border(1.dp, SaColors.Divider, shape)
+                else it.dashedBorder(SaColors.DashedBorder, cornerRadius = 12.dp)
+            }
+            .clickable(onClick = onClick)
+            .padding(16.dp, 12.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Text(status, fontSize = 13.sp, color = if (done) Color(0xFF2F5D3A) else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SaColors.Ink)
+        Text(
+            stringResource(if (signed) R.string.form1_signed else R.string.form1_tap_to_sign),
+            fontFamily = Figtree, fontSize = 11.5.sp, color = SaColors.Ink.copy(alpha = 0.8f),
+            modifier = Modifier.padding(top = 3.dp)
+        )
+    }
+}
+
+/** One photo slot, styled like a tile on the demo's photos screen. */
+@Composable
+private fun PhotoShot(label: String, taken: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(SaColors.White)
+            .border(1.dp, SaColors.inkAlpha(0.08f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .background(
+                    Brush.linearGradient(
+                        colors = if (taken) listOf(SaColors.SurfaceAlt, SaColors.Divider) else listOf(SaColors.SurfaceAlt, SaColors.AppBg)
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (taken) StrokeIcon(pathData = GlyphPaths.Check, tint = SaColors.TagOkText, modifier = Modifier.size(24.dp))
+        }
+        Column(modifier = Modifier.padding(13.dp, 11.dp)) {
+            Text(label, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, color = SaColors.Ink)
+            Text(
+                stringResource(if (taken) R.string.form1_photo_taken else R.string.form1_photo_tap),
+                fontFamily = Figtree, fontSize = 11.sp, color = if (taken) SaColors.TagOkText else SaColors.Faint,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }
 
+/** The demo's "Add product" sheet, shown as a rounded dialog. */
 @Composable
 private fun AddProductDialog(
     draft: ProductDraft,
@@ -458,70 +592,77 @@ private fun AddProductDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.form1_dialog_title)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                CategoryPicker(draft.category, onCategoryChange)
-                OutlinedTextField(
-                    value = draft.kg,
-                    onValueChange = onKgChange,
-                    label = { Text(stringResource(R.string.form1_dialog_kg)) },
-                    singleLine = true,
-                    isError = draft.kgError != null,
-                    supportingText = draft.kgError?.let { { Text(stringResource(it.message())) } },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(Form1Tags.DRAFT_KG)
-                )
-                OutlinedTextField(
-                    value = draft.notes,
-                    onValueChange = onNotesChange,
-                    label = { Text(stringResource(R.string.form1_dialog_notes)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm, modifier = Modifier.testTag(Form1Tags.DRAFT_CONFIRM)) {
-                Text(stringResource(R.string.form1_dialog_add))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.form1_dialog_cancel)) }
-        }
-    )
-}
-
-@Composable
-private fun CategoryPicker(selected: String, onSelect: (String) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    Column {
-        Text(stringResource(R.string.form1_dialog_category), fontSize = 13.sp)
-        OutlinedButton(
-            onClick = { expanded = true },
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
-        ) { Text(selected, fontSize = 16.sp) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            PRODUCT_CATEGORIES.forEach { category ->
-                DropdownMenuItem(
-                    text = { Text(category) },
-                    onClick = {
-                        onSelect(category)
-                        expanded = false
+                .clip(RoundedCornerShape(20.dp))
+                .background(SaColors.Surface)
+                .verticalScroll(rememberScrollState())
+                .padding(22.dp, 22.dp, 22.dp, 20.dp)
+        ) {
+            Text(
+                stringResource(R.string.form1_dialog_title),
+                fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = SaColors.Ink,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        stringResource(R.string.form1_dialog_category),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SaColors.Ink
+                    )
+                    SaSelectField(value = draft.category, options = PRODUCT_CATEGORIES, onSelect = onCategoryChange)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        stringResource(R.string.form1_dialog_kg),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SaColors.Ink
+                    )
+                    SaInputField(
+                        value = draft.kg,
+                        onValueChange = onKgChange,
+                        placeholder = "0.0",
+                        keyboardType = KeyboardType.Decimal,
+                        isError = draft.kgError != null,
+                        fieldTestTag = Form1Tags.DRAFT_KG,
+                        modifier = Modifier.width(160.dp)
+                    )
+                    draft.kgError?.let {
+                        Text(
+                            stringResource(it.message()),
+                            fontFamily = Figtree, fontWeight = FontWeight.Medium, fontSize = 12.5.sp, color = SaColors.Error
+                        )
                     }
-                )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        stringResource(R.string.form1_dialog_notes),
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SaColors.Ink
+                    )
+                    SaTextArea(value = draft.notes, onValueChange = onNotesChange, minLines = 2)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinePillButton(onClick = onDismiss, contentPadding = PaddingValues(vertical = 14.dp, horizontal = 22.dp)) {
+                        Text(
+                            stringResource(R.string.form1_dialog_cancel),
+                            fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = SaColors.Ink
+                        )
+                    }
+                    FilledPillButton(
+                        onClick = onConfirm,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(Form1Tags.DRAFT_CONFIRM),
+                        contentPadding = PaddingValues(14.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.form1_dialog_add_to_collection),
+                            fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = SaColors.Ink
+                        )
+                    }
+                }
             }
         }
     }
 }
-
-private fun Modifier.roundedBackground(color: Color): Modifier =
-    this.then(Modifier.background(color, RoundedCornerShape(12.dp)))

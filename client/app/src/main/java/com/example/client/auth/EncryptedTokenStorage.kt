@@ -29,7 +29,7 @@ class EncryptedTokenStorage @Inject constructor(
         val role = prefs.getString(KEY_ROLE, null)?.let { name ->
             UserRole.values().firstOrNull { it.name == name }
         }
-        if (token.isNullOrBlank() || role == null) null else Session(token, role)
+        if (token.isNullOrBlank() || role == null) null else Session(token, role, prefs.getString(KEY_CBO_ID, null))
     } catch (e: Exception) {
         // Unreadable (e.g. Keystore key invalidated): treat as signed out and start clean.
         clear()
@@ -41,6 +41,7 @@ class EncryptedTokenStorage @Inject constructor(
         prefs.edit()
             .putString(KEY_TOKEN, session.token)
             .putString(KEY_ROLE, session.role.name)
+            .putString(KEY_CBO_ID, session.cboId)
             .commit()
     }
 
@@ -82,5 +83,6 @@ class EncryptedTokenStorage @Inject constructor(
         const val FILE_NAME = "auth_secure_prefs"
         private const val KEY_TOKEN = "token"
         private const val KEY_ROLE = "role"
+        private const val KEY_CBO_ID = "cbo_id"
     }
 }

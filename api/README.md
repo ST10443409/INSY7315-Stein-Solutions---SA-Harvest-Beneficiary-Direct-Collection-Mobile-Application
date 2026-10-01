@@ -98,6 +98,8 @@ return `401 {"error":"Invalid username or password."}`. Send the token as `Autho
 - **Role claim:** the JWT carries a `role` claim whose value is exactly the Android `UserRole` name
   (`CBO_COLLECTION`, `VETTING`, `ADMIN`). `api.Tests` fails if the two enums drift. Use
   `[Authorize(Roles = AppRoles.Admin)]` etc.; `Controllers/AccessDemoController.cs` shows the pattern (delete it once real endpoints exist).
+- **CBO:** a `CBO_COLLECTION` user belongs to one CBO (`users.cbo_id`, set by whoever creates the account; Vetting and Admin
+  users have none). It is returned in the login response (`cboId`) and carried in the token as the `cbo_id` claim.
 - **Configuration** (section `Jwt`): `Issuer`, `Audience`, `ExpiryMinutes` (default 60) live in `appsettings.json`.
   **`Jwt:SigningKey` is a secret** and must be at least 32 characters; the app refuses to start without it.
   ```bash
@@ -107,7 +109,7 @@ return `401 {"error":"Invalid username or password."}`. Send the token as `Autho
   In Docker it comes from `JWT_SIGNING_KEY` in `.env`.
 - **Passwords** are hashed with ASP.NET Core's `PasswordHasher` (PBKDF2, per-user salt).
 - **Test users** (development only): with `Seed:Enabled=true` (set in `compose.yaml`) the app creates
-  `cbo_test_user`, `vetting_test_user` and `admin_test_user`, all using the password in `SEED_TEST_PASSWORD`
+  `cbo_test_user` (CBO `cbo-test-001`), `vetting_test_user` and `admin_test_user`, all using the password in `SEED_TEST_PASSWORD`
   (`.env.example` has a dev-only value). For `dotnet run` set `Seed:Enabled` and `Seed:TestUserPassword` via user-secrets.
 - **Ports:** in Docker the API is on `http://localhost:5000` (what the Android emulator reaches as `10.0.2.2:5000`).
 
@@ -136,6 +138,11 @@ Records that reach this backend are forwarded to Foodspace by `FoodspaceApiClien
 record in the same order. Each record is validated and stored on its own, so one bad record never affects the others. Only a
 request unusable as a whole (no records, more than 100) is a `400`.
 
+- **The CBO comes from the account, not the request:** when the token has a `cbo_id` claim (every collector's does), the
+  server overwrites each record's `cboId` with it before validating and before computing the duplicate key. A device that
+  does not know its CBO yet, or sends the wrong one, is stored (and duplicate-matched) under the right CBO. Users without
+  the claim (Admins) are stored with the `cboId` they send.
+- **Device-only fields** (`retryCount`, `syncErrorCode`, `syncStatus`) are ignored if sent: the server keeps its own.
 - **Permanent vs transient:** `VALIDATION_FAILED` has `retryable: false` (don't resend the same data); `SERVER_ERROR` has `retryable: true`.
 - **Idempotency:** the client UUID is the primary key. An id that is already stored is reported as a success with
   `alreadyReceived: true` and nothing is written ("already exists, treat as success"; the first write wins and a retry with

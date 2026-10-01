@@ -108,4 +108,25 @@ class AuthRepositoryImplTest {
         assertEquals(LoginResult.NetworkError, repository.login("a", "b"))
         assertNull(sessionManager.currentRole.value)
     }
+
+    @Test
+    fun aCollectorsCbo_isKeptWithTheSession() = runBlocking {
+        server.enqueue(json("""{"token":"jwt-abc","role":"CBO_COLLECTION","cboId":"cbo-7"}"""))
+
+        assertEquals(LoginResult.Success, repository.login("agent", "s3cret"))
+
+        assertEquals("cbo-7", sessionManager.cboId())
+        assertEquals("cbo-7", storage.load()?.cboId)
+    }
+
+    @Test
+    fun noCboInTheResponse_orABlankOne_meansTheSessionHasNone() = runBlocking {
+        server.enqueue(json("""{"token":"jwt-abc","role":"ADMIN"}"""))
+        assertEquals(LoginResult.Success, repository.login("agent", "s3cret"))
+        assertNull(sessionManager.cboId())
+
+        server.enqueue(json("""{"token":"jwt-def","role":"CBO_COLLECTION","cboId":"  "}"""))
+        assertEquals(LoginResult.Success, repository.login("agent", "s3cret"))
+        assertNull(sessionManager.cboId())
+    }
 }

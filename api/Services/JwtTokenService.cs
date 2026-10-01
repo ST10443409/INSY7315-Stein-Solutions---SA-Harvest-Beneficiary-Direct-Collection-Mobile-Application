@@ -20,6 +20,9 @@ public class JwtTokenService : IJwtTokenService
     /// <summary>The JWT claim carrying the role. The Android app and [Authorize(Roles = ...)] both rely on this name.</summary>
     public const string RoleClaim = "role";
 
+    /// <summary>The JWT claim carrying the user's CBO (CBO_COLLECTION users only). The sync endpoint trusts this, not the request body.</summary>
+    public const string CboIdClaim = "cbo_id";
+
     private readonly JwtOptions _options;
     private readonly TimeProvider _time;
 
@@ -34,6 +37,16 @@ public class JwtTokenService : IJwtTokenService
         var now = _time.GetUtcNow();
         var expires = now.AddMinutes(_options.ExpiryMinutes);
 
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Name, user.Username),
+            // Exactly CBO_COLLECTION | VETTING | ADMIN (the enum names), matching the Android UserRole.
+            new(RoleClaim, user.Role.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+        if (!string.IsNullOrWhiteSpace(user.CboId)) claims.Add(new Claim(CboIdClaim, user.CboId));
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = _options.Issuer,
@@ -41,14 +54,7 @@ public class JwtTokenService : IJwtTokenService
             IssuedAt = now.UtcDateTime,
             NotBefore = now.UtcDateTime,
             Expires = expires.UtcDateTime,
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Name, user.Username),
-                // Exactly CBO_COLLECTION | VETTING | ADMIN (the enum names), matching the Android UserRole.
-                new Claim(RoleClaim, user.Role.ToString()),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            }),
+            Subject = new ClaimsIdentity(claims),
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey)),
                 SecurityAlgorithms.HmacSha256),

@@ -31,6 +31,12 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
         return client;
     }
 
+    /// <summary>
+    /// A client whose account has no CBO (an Admin), so the cboId in the request body is used as sent. A collector's own
+    /// CBO always replaces it, so tests that need several different CBOs (e.g. for duplicate matching) use this.
+    /// </summary>
+    private Task<HttpClient> ClientWithoutCbo() => ClientFor("admin_test_user");
+
     private static Dictionary<string, object?> Record(string? id = null, Action<Dictionary<string, object?>>? tweak = null)
     {
         id ??= Guid.NewGuid().ToString();
@@ -216,7 +222,7 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
     [InlineData("createdAt", 0L, "createdAt")]
     public async Task InvalidField_IsReportedByName(string field, object? value, string expectedInError)
     {
-        var (_, body) = await Post(await ClientFor("cbo_test_user"), Record(tweak: r => r[field] = value));
+        var (_, body) = await Post(await ClientWithoutCbo(), Record(tweak: r => r[field] = value));
 
         var result = Results(body)[0];
         Assert.False(result.GetProperty("success").GetBoolean());
@@ -305,7 +311,7 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task DifferentIdSameCollection_IsReportedAsDuplicateDetected_NotSuccessAndNotAValidationError()
     {
-        var client = await ClientFor("cbo_test_user");
+        var client = await ClientWithoutCbo();
         var originalId = Guid.NewGuid().ToString();
         var duplicateId = Guid.NewGuid().ToString();
         await Post(client, SameVisit(originalId, r => r["cboId"] = "cbo-dup-1"));
@@ -358,7 +364,7 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task RetryOfTheOriginal_IsStillAnIdempotentSuccess_NotADuplicateOfItself()
     {
-        var client = await ClientFor("cbo_test_user");
+        var client = await ClientWithoutCbo();
         var originalId = Guid.NewGuid().ToString();
         await Post(client, SameVisit(originalId, r => r["cboId"] = "cbo-dup-4"));
 
@@ -375,7 +381,7 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
         var first = Guid.NewGuid().ToString();
         var second = Guid.NewGuid().ToString();
 
-        var (_, body) = await Post(await ClientFor("cbo_test_user"),
+        var (_, body) = await Post(await ClientWithoutCbo(),
             SameVisit(first, r => r["cboId"] = "cbo-dup-5"),
             SameVisit(second, r => r["cboId"] = "cbo-dup-5"),
             Record());
@@ -394,7 +400,7 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
     [InlineData("createdAt", 1_700_200_000_000L)]       // a different day
     public async Task ADifferentCboDonorDateOrDeliveryNote_IsNotADuplicate(string field, object value)
     {
-        var client = await ClientFor("cbo_test_user");
+        var client = await ClientWithoutCbo();
         var scope = "cbo-neg-" + field;
         await Post(client, SameVisit(tweak: r => r["cboId"] = scope));
 
@@ -410,7 +416,7 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Duplicates_AreNotForwardedToFoodspace()
     {
-        var client = await ClientFor("cbo_test_user");
+        var client = await ClientWithoutCbo();
         var originalId = Guid.NewGuid().ToString();
         var duplicateId = Guid.NewGuid().ToString();
         await Post(client, SameVisit(originalId, r => r["cboId"] = "cbo-fwd"));
@@ -422,6 +428,90 @@ public class CboCollectionSyncEndpointTests : IClassFixture<ApiFactory>
             .Select(c => c.Id).ToListAsync();
         Assert.Contains(originalId, due);
         Assert.DoesNotContain(duplicateId, due);
+    }
+
+    // ── a collector's CBO comes from their account ──────────────────────────────────
+
+    private async Task<CboCollection> Stored(string id)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<AppDbContext>().CboCollections.AsNoTracking().SingleAsync(c => c.Id == id);
+    }
+
+    [Theory]
+    [InlineData("unassigned")]                // the old app's placeholder
+    [InlineData("some-other-cbo")]            // a device claiming somebody else's CBO
+    [InlineData("")]                          // a device that sends nothing
+    [InlineData(null)]
+    public async Task ACollectorsRecord_IsStoredUnderTheCboOnTheirAccount_WhateverTheDeviceSent(string? sent)
+    {
+        var id = Guid.NewGuid().ToString();
+        var (_, body) = await Post(await ClientFor("cbo_test_user"), Record(id, r => r["cboId"] = sent));
+
+        Assert.True(Results(body)[0].GetProperty("success").GetBoolean());
+        Assert.Equal(ApiFactory.CboId, (await Stored(id)).CboId);
+    }
+
+    [Fact]
+    public async Task AnAdminsRecord_KeepsTheCboItWasSentWith()
+    {
+        var id = Guid.NewGuid().ToString();
+        await Post(await ClientFor("admin_test_user"), Record(id, r => r["cboId"] = "cbo-chosen-by-admin"));
+
+        Assert.Equal("cbo-chosen-by-admin", (await Stored(id)).CboId);
+    }
+
+    [Fact]
+    public async Task TwoCollectorsFromDifferentCbos_AreNotDuplicatesOfEachOther()
+    {
+        // Same donor, day and delivery note; only the account's CBO differs. The device-sent cboId is irrelevant.
+        Dictionary<string, object?> Visit(string id) => Record(id, r =>
+        {
+            r["donorName"] = "Shared Donor";
+            r["deliveryNote"] = "DN-SHARED-CBO";
+            r["cboId"] = "unassigned";
+        });
+
+        var (_, first) = await Post(await ClientFor("cbo_test_user"), Visit(Guid.NewGuid().ToString()));
+        var (_, second) = await Post(await ClientFor("cbo_other_user"), Visit(Guid.NewGuid().ToString()));
+
+        Assert.True(Results(first)[0].GetProperty("success").GetBoolean());
+        Assert.True(Results(second)[0].GetProperty("success").GetBoolean());
+    }
+
+    [Fact]
+    public async Task TheSameCollectorSubmittingTheSameVisitTwice_IsStillADuplicate_EvenIfTheDeviceSentDifferentCbos()
+    {
+        var client = await ClientFor("cbo_test_user");
+        Dictionary<string, object?> Visit(string cbo) => Record(null, r =>
+        {
+            r["donorName"] = "Repeat Donor";
+            r["deliveryNote"] = "DN-REPEAT";
+            r["cboId"] = cbo;
+        });
+
+        await Post(client, Visit("unassigned"));
+        var (_, body) = await Post(client, Visit(ApiFactory.CboId));
+
+        Assert.Equal("DUPLICATE_DETECTED", Results(body)[0].GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task DeviceBookkeepingFields_SentByTheApp_AreIgnored_NotStored()
+    {
+        // The Room entity's retryCount / syncErrorCode / syncStatus are device state; the server owns its own.
+        var id = Guid.NewGuid().ToString();
+        await Post(await ClientFor("cbo_test_user"), Record(id, r =>
+        {
+            r["retryCount"] = 4;
+            r["syncErrorCode"] = "DUPLICATE_DETECTED";
+            r["syncStatus"] = "FAILED";
+        }));
+
+        var saved = await Stored(id);
+        Assert.Equal(0, saved.RetryCount);
+        Assert.Null(saved.SyncErrorCode);
+        Assert.Equal(SyncStatus.Synced, saved.SyncStatus);
     }
 
     // ── the duplicate key rule ──────────────────────────────────────────────────────

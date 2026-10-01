@@ -30,6 +30,10 @@ namespace api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CboId")
+                        .HasColumnType("text")
+                        .HasColumnName("cbo_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")

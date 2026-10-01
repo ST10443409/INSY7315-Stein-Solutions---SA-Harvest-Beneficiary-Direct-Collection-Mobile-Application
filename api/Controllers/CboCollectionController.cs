@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using api.DTOs;
 using api.Models;
 using api.Services;
@@ -30,7 +31,9 @@ public class CboCollectionController : ApiControllerBase
             return (ObjectResult)Failure(StatusCodes.Status400BadRequest, ApiErrorCodes.ValidationFailed,
                 $"A batch can hold at most {CboCollectionSyncValidator.MaxBatchSize} records.");
 
-        var results = await _ingestion.IngestAsync(request.Records, User.Identity?.Name, cancellationToken);
+        // A collector's CBO is the one on their account; the cboId in the request body is not trusted.
+        var cboId = User.FindFirstValue(JwtTokenService.CboIdClaim);
+        var results = await _ingestion.IngestAsync(request.Records, User.Identity?.Name, cboId, cancellationToken);
         return Success(new CboCollectionSyncResponse(results));
     }
 }

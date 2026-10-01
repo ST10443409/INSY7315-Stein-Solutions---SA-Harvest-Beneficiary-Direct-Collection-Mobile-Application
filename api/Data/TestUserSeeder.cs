@@ -21,6 +21,9 @@ public static class TestUserSeeder
         ("admin_test_user", UserRole.ADMIN),
     };
 
+    /// <summary>The CBO the seeded CBO_COLLECTION test user collects for. Test data only.</summary>
+    public const string TestCboId = "cbo-test-001";
+
     public static async Task SeedAsync(IServiceProvider services, string? password, ILogger logger)
     {
         if (string.IsNullOrWhiteSpace(password))
@@ -34,10 +37,15 @@ public static class TestUserSeeder
 
         foreach (var (username, role) in TestUsers)
         {
-            if (await db.Users.AnyAsync(u => u.Username == username))
+            var existing = await db.Users.SingleOrDefaultAsync(u => u.Username == username);
+            if (existing is not null)
+            {
+                // Users seeded before CBOs existed get theirs, so the collector flow works on an existing dev database.
+                if (role == UserRole.CBO_COLLECTION && string.IsNullOrWhiteSpace(existing.CboId)) existing.CboId = TestCboId;
                 continue;
+            }
 
-            var user = new AppUser { Username = AuthService.Normalize(username), PasswordHash = "pending", Role = role };
+            var user = new AppUser { Username = AuthService.Normalize(username), PasswordHash = "pending", Role = role, CboId = role == UserRole.CBO_COLLECTION ? TestCboId : null };
             user.PasswordHash = hasher.HashPassword(user, password);
             db.Users.Add(user);
             logger.LogWarning("Seeded TEST user {Username} with role {Role}. Development only.", username, role);

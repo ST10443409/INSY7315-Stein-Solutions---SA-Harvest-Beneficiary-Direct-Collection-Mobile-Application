@@ -21,7 +21,7 @@ public class AuthEndpointTests : IClassFixture<ApiFactory>
 
     // ── helpers ────────────────────────────────────────────────────────────────────
 
-    private record LoginBody(string Token, string Role, DateTimeOffset ExpiresAt);
+    private record LoginBody(string Token, string Role, DateTimeOffset ExpiresAt, string? CboId = null);
 
     private Task<HttpResponseMessage> PostLogin(string username, string password) =>
         _factory.CreateClient().PostAsJsonAsync("/api/auth/login", new { username, password });
@@ -73,6 +73,28 @@ public class AuthEndpointTests : IClassFixture<ApiFactory>
         Assert.Contains(ApiFactory.Audience, jwt.Audiences);
         Assert.Equal("HS256", jwt.Alg);
         Assert.Equal(username, jwt.GetClaim("name").Value);
+    }
+
+    [Fact]
+    public async Task Login_OfACollector_ReturnsTheirCbo_AndPutsItInTheToken()
+    {
+        var response = await PostLogin("cbo_test_user", ApiFactory.Password);
+
+        var body = (await response.Content.ReadFromJsonAsync<LoginBody>(new JsonSerializerOptions(JsonSerializerDefaults.Web)))!;
+        Assert.Equal(ApiFactory.CboId, body.CboId);
+        Assert.Equal(ApiFactory.CboId, new JsonWebTokenHandler().ReadJsonWebToken(body.Token).GetClaim("cbo_id").Value);
+    }
+
+    [Theory]
+    [InlineData("vetting_test_user")]
+    [InlineData("admin_test_user")]
+    public async Task Login_OfUsersWithoutACbo_ReturnsNone_AndNoCboClaim(string username)
+    {
+        var response = await PostLogin(username, ApiFactory.Password);
+
+        var body = (await response.Content.ReadFromJsonAsync<LoginBody>(new JsonSerializerOptions(JsonSerializerDefaults.Web)))!;
+        Assert.Null(body.CboId);
+        Assert.DoesNotContain(new JsonWebTokenHandler().ReadJsonWebToken(body.Token).Claims, c => c.Type == "cbo_id");
     }
 
     [Fact]

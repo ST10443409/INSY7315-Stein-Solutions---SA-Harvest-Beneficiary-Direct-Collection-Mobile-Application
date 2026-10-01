@@ -4,6 +4,8 @@ import com.example.client.auth.AuthRepository
 import com.example.client.auth.AuthRepositoryImpl
 import com.example.client.data.repository.CboCollectionRepository
 import com.example.client.data.repository.CboCollectionRepositoryImpl
+import com.example.client.sync.CboSyncTrigger
+import com.example.client.sync.SyncScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -21,4 +23,7 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCboCollectionRepository(impl: CboCollectionRepositoryImpl): CboCollectionRepository
+
+    @Binds
+    abstract fun bindCboSyncTrigger(impl: SyncScheduler): CboSyncTrigger
 }

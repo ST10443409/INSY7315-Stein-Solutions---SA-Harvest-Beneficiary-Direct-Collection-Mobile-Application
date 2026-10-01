@@ -12,6 +12,11 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** What the UI needs from the scheduler: ask for a CBO sync soon. A separate type so ViewModels can be tested without WorkManager. */
+interface CboSyncTrigger {
+    fun syncCboCollectionsNow()
+}
+
 /**
  * Schedules the sync workers. Every request needs a connected network, so work queued while
  * offline simply waits and runs when connectivity returns, with no explicit connectivity listener.
@@ -20,13 +25,13 @@ import javax.inject.Singleton
 @Singleton
 class SyncScheduler @Inject constructor(
     private val workManager: WorkManager
-) {
+) : CboSyncTrigger {
     /**
      * Sync CBO collections as soon as possible: call after a save and when the app comes to the
      * foreground. Calls made while a run is queued or running are chained after it, so a record
      * saved mid-run is still picked up, and rapid saves cannot start overlapping runs.
      */
-    fun syncCboCollectionsNow() {
+    override fun syncCboCollectionsNow() {
         val request = OneTimeWorkRequestBuilder<CboSyncWorker>()
             .setConstraints(CONSTRAINTS)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)

@@ -7,6 +7,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.example.client.auth.UserRole
 import com.example.client.ui.cbo.Form1Route
+import com.example.client.ui.cbo.MySubmissionsRoute
+import com.example.client.ui.cbo.SyncStatusBadgeRoute
 
 /**
  * Root of the navigation shell. Shows [login] while there is no role (signed out, or the
@@ -16,15 +18,25 @@ import com.example.client.ui.cbo.Form1Route
 @Composable
 fun AppRoot(
     role: UserRole?,
-    form1: @Composable () -> Unit = { Form1Route() },
+    screens: CboScreens = CboScreens(),
     login: @Composable () -> Unit
 ) {
     if (role == null) {
         login()
     } else {
-        key(role) { AppNavHost(role, form1 = form1) }
+        key(role) { AppNavHost(role, screens = screens) }
     }
 }
+
+/**
+ * The CBO Collection screens the nav graphs host. The defaults are the real, Hilt-backed screens;
+ * navigation tests substitute plain composables so they don't need a Hilt activity.
+ */
+class CboScreens(
+    val form1: @Composable () -> Unit = { Form1Route() },
+    val syncBadge: @Composable (onClick: () -> Unit) -> Unit = { SyncStatusBadgeRoute(onClick = it) },
+    val mySubmissions: @Composable (onBack: () -> Unit) -> Unit = { MySubmissionsRoute(onBack = it) }
+)
 
 /**
  * Registers only [role]'s nested graph. Routes belonging to other roles do not exist
@@ -34,13 +46,13 @@ fun AppRoot(
 fun AppNavHost(
     role: UserRole,
     navController: NavHostController = rememberNavController(),
-    form1: @Composable () -> Unit = { Form1Route() }
+    screens: CboScreens = CboScreens()
 ) {
     NavHost(navController = navController, startDestination = role.graphRoute()) {
         when (role) {
-            UserRole.CBO_COLLECTION -> cboCollectionGraph(form1)
+            UserRole.CBO_COLLECTION -> cboCollectionGraph(navController, screens)
             UserRole.VETTING -> vettingGraph()
-            UserRole.ADMIN -> adminGraph(navController, form1)
+            UserRole.ADMIN -> adminGraph(navController, screens.form1)
         }
     }
 }

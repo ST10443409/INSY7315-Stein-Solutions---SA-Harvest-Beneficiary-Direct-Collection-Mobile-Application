@@ -54,4 +54,22 @@
     <string name="form1_err_no_products">Add at least one product.</string>
     <string name="form1_err_signatures">Both the donor and the CBO must sign.</string>
     <string name="form1_err_photos">Capture at least one photo.</string>
+
+    <string name="submissions_title">My submissions</string>
+    <string name="submissions_back">Back</string>
+    <string name="submissions_empty">No submissions yet. Records you complete will appear here.</string>
+    <string name="submissions_summary_safe">All %1$d saved on this device</string>
+    <string name="submissions_badge_pending">%1$d waiting to sync</string>
+    <string name="submissions_badge_synced">%1$d synced</string>
+    <string name="submissions_badge_failed">%1$d need attention</string>
+    <string name="submissions_badge_none">No submissions yet</string>
+    <string name="submissions_view_all">View all</string>
+    <string name="submissions_status_pending">Pending</string>
+    <string name="submissions_status_synced">Synced</string>
+    <string name="submissions_status_failed">Failed</string>
+    <string name="submissions_hint_pending">Saved on this device. Will sync when you are online.</string>
+    <string name="submissions_hint_synced">Safely received by the server.</string>
+    <string name="submissions_hint_failed_retry">Could not sync. Will try again automatically.</string>
+    <string name="submissions_hint_failed_final">Could not sync after several tries. Ask your admin for help. Your data is still saved on this device.</string>
+    <string name="submissions_item_meta">%1$s · %2$s</string>
 </resources>

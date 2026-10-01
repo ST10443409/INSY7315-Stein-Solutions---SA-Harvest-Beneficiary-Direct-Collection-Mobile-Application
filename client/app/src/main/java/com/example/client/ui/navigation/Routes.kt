@@ -10,6 +10,7 @@ object Routes {
     // CBO Collection graph
     const val CBO_GRAPH = "cbo_graph"
     const val CBO_FORM1 = "cbo_form1"
+    const val CBO_SUBMISSIONS = "cbo_submissions"
 
     // Vetting graph
     const val VETTING_GRAPH = "vetting_graph"

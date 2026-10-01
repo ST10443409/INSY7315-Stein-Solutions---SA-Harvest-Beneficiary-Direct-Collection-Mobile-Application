@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph
 import androidx.navigation.NavHostController
@@ -17,6 +18,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.client.auth.UserRole
 import com.example.client.ui.placeholder.Form1PlaceholderScreen
 import com.example.client.ui.placeholder.Form2PlaceholderScreen
+import com.example.client.ui.admin.AdminDestination
+import com.example.client.ui.admin.AdminTags
 import com.example.client.ui.placeholder.ScreenTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -51,6 +54,11 @@ class RoleNavigationTest {
 
     private fun routesOf(vararg routes: String) = routes.toList()
 
+    private val adminRoutes = listOf(
+        Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1, Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION,
+        Routes.ADMIN_SYNC_MONITOR, Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_USER_ACTIVITY
+    )
+
     // NavGraph.findNode only checks direct children, so walk nested graphs explicitly.
     private fun allDestinations(destination: NavDestination): List<NavDestination> =
         if (destination is NavGraph) listOf(destination) + destination.flatMap { allDestinations(it) }
@@ -61,7 +69,8 @@ class RoleNavigationTest {
             Routes.CBO_GRAPH, Routes.CBO_FORM1, Routes.CBO_SUBMISSIONS,
             Routes.VETTING_GRAPH, Routes.VETTING_FORM2, Routes.VETTING_RECORD, Routes.VETTING_DECISION,
             Routes.ADMIN_GRAPH, Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1,
-            Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION, Routes.ADMIN_SYNC_MONITOR
+            Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION, Routes.ADMIN_SYNC_MONITOR,
+            Routes.ADMIN_FAILED_SYNC, Routes.ADMIN_USER_ACTIVITY
         )
         composeRule.runOnUiThread {
             everyRoute.forEach { route ->
@@ -108,41 +117,65 @@ class RoleNavigationTest {
     }
 
     @Test
-    fun admin_landsOnDashboard_withEntryPointsToBothFormsAndSyncMonitor() {
+    fun admin_landsOnDashboard_withAnEntryForEverythingAnAdminCanOpen() {
         launch(UserRole.ADMIN)
 
-        composeRule.onNodeWithTag(ScreenTags.ADMIN_DASHBOARD).assertIsDisplayed()
-        composeRule.onNodeWithTag(ScreenTags.OPEN_FORM1).assertIsDisplayed()
-        composeRule.onNodeWithTag(ScreenTags.OPEN_FORM2).assertIsDisplayed()
-        composeRule.onNodeWithTag(ScreenTags.OPEN_SYNC_MONITOR).assertIsDisplayed()
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
+        AdminDestination.values().forEach { composeRule.onNodeWithTag(AdminTags.entry(it)).performScrollTo().assertIsDisplayed() }
+    }
 
-        composeRule.onNodeWithTag(ScreenTags.OPEN_FORM1).performClick()
+    @Test
+    fun admin_canOpenBothWorkflows_andComeBackToTheDashboard() {
+        launch(UserRole.ADMIN)
+
+        composeRule.onNodeWithTag(AdminTags.entry(AdminDestination.FORM1)).performClick()
         composeRule.onNodeWithTag(ScreenTags.FORM1).assertIsDisplayed()
         pressBack()
-        composeRule.onNodeWithTag(ScreenTags.ADMIN_DASHBOARD).assertIsDisplayed()
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
 
-        composeRule.onNodeWithTag(ScreenTags.OPEN_FORM2).performClick()
+        composeRule.onNodeWithTag(AdminTags.entry(AdminDestination.FORM2)).performClick()
         composeRule.onNodeWithTag(ScreenTags.FORM2).assertIsDisplayed()
         pressBack()
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
+    }
 
-        composeRule.onNodeWithTag(ScreenTags.OPEN_SYNC_MONITOR).performClick()
-        composeRule.onNodeWithTag(ScreenTags.SYNC_MONITOR).assertIsDisplayed()
+    @Test
+    fun admin_canOpenEachOversightSection_seeItLabelled_andComeBack() {
+        launch(UserRole.ADMIN)
+
+        AdminDestination.placeholders.forEach { destination ->
+            composeRule.onNodeWithTag(AdminTags.entry(destination)).performScrollTo().performClick()
+            composeRule.onNodeWithTag(AdminTags.section(destination)).assertIsDisplayed()
+            composeRule.onNodeWithTag(AdminTags.SECTION_COMING_SOON).assertIsDisplayed()
+            pressBack()
+            composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
+        }
     }
 
     @Test
     fun admin_graphDoesNotContainOtherRolesGraphs() {
         launch(UserRole.ADMIN)
 
-        composeRule.onNodeWithTag(ScreenTags.ADMIN_DASHBOARD).assertIsDisplayed()
-        assertOnlyReachable(
-            routesOf(
-                Routes.ADMIN_GRAPH, Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1,
-                Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION, Routes.ADMIN_SYNC_MONITOR
-            )
-        )
+        composeRule.onNodeWithTag(AdminTags.DASHBOARD).assertIsDisplayed()
+        assertOnlyReachable(routesOf(Routes.ADMIN_GRAPH, *adminRoutes.toTypedArray()))
     }
 
     @Test
+    fun adminSections_areUnreachableForCboCollection() = assertAdminRoutesUnreachableFor(UserRole.CBO_COLLECTION)
+
+    @Test
+    fun adminSections_areUnreachableForVetting() = assertAdminRoutesUnreachableFor(UserRole.VETTING)
+
+    private fun assertAdminRoutesUnreachableFor(role: UserRole) {
+        launch(role)
+        composeRule.waitForIdle()
+        composeRule.runOnUiThread {
+            adminRoutes.forEach { route ->
+                assertThrows("$role must not reach $route", IllegalArgumentException::class.java) { navController.navigate(route) }
+            }
+        }
+    }
+
     fun cboCollection_startDestinationHasNothingBehindIt() =
         assertNothingBehindStartDestination(UserRole.CBO_COLLECTION)
 

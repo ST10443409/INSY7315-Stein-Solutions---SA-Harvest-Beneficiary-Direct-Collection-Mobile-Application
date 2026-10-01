@@ -136,7 +136,7 @@ class VettingFlowTest {
     fun anAdmin_reachesTheSameThreeScreens() {
         launch(UserRole.ADMIN)
 
-        composeRule.onNodeWithTag(com.example.client.ui.placeholder.ScreenTags.OPEN_FORM2).performClick()
+        composeRule.onNodeWithTag(com.example.client.ui.admin.AdminTags.entry(com.example.client.ui.admin.AdminDestination.FORM2)).performClick()
         composeRule.onNodeWithTag(ListTags.item("a")).performClick()
         composeRule.onNodeWithTag(DetailTags.SCREEN).assertIsDisplayed()
         composeRule.onNodeWithTag(DetailTags.RECORD_DECISION).performClick()

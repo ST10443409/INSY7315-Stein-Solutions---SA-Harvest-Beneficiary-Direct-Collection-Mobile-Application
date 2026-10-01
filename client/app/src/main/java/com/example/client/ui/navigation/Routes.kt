@@ -26,6 +26,8 @@ object Routes {
     const val ADMIN_RECORD = "admin_record/{id}"
     const val ADMIN_DECISION = "admin_decision/{id}"
     const val ADMIN_SYNC_MONITOR = "admin_sync_monitor"
+    const val ADMIN_FAILED_SYNC = "admin_failed_sync"
+    const val ADMIN_USER_ACTIVITY = "admin_user_activity"
 }
 
 /** Route of the nested graph that belongs to this role. */

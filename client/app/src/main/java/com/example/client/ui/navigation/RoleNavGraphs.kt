@@ -11,8 +11,9 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
-import com.example.client.ui.placeholder.AdminDashboardPlaceholderScreen
-import com.example.client.ui.placeholder.SyncMonitorPlaceholderScreen
+import com.example.client.ui.admin.AdminDashboardScreen
+import com.example.client.ui.admin.AdminDestination
+import com.example.client.ui.admin.AdminSectionScreen
 import com.example.client.ui.vetting.VETTING_RECORD_ARG
 
 // One nested graph per role. A graph only declares the destinations that role may
@@ -41,15 +42,14 @@ fun NavGraphBuilder.vettingGraph(navController: NavController, screens: VettingS
 fun NavGraphBuilder.adminGraph(navController: NavController, form1: @Composable () -> Unit, vetting: VettingScreens) {
     navigation(startDestination = Routes.ADMIN_DASHBOARD, route = Routes.ADMIN_GRAPH) {
         composable(Routes.ADMIN_DASHBOARD) {
-            AdminDashboardPlaceholderScreen(
-                onOpenForm1 = { navController.navigate(Routes.ADMIN_FORM1) },
-                onOpenForm2 = { navController.navigate(Routes.ADMIN_FORM2) },
-                onOpenSyncMonitor = { navController.navigate(Routes.ADMIN_SYNC_MONITOR) }
-            )
+            AdminDashboardScreen(onOpen = { destination -> navController.navigate(destination.route) })
         }
         composable(Routes.ADMIN_FORM1) { form1() }
         form2Destinations(navController, vetting, Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION)
-        composable(Routes.ADMIN_SYNC_MONITOR) { SyncMonitorPlaceholderScreen() }
+        // The oversight sections (#49 to #51): a labelled "coming soon" screen each until its issue lands, then the real one.
+        AdminDestination.placeholders.forEach { destination ->
+            composable(destination.route) { AdminSectionScreen(destination, onBack = { navController.popBackStack() }) }
+        }
     }
 }
 

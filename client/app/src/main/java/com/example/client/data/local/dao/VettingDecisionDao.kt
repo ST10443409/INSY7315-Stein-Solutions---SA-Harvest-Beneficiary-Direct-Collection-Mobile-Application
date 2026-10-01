@@ -19,7 +19,15 @@ interface VettingDecisionDao {
 
     @Query("SELECT * FROM vetting_decisions WHERE syncStatus = :status")
     fun getBySyncStatus(status: SyncStatus): Flow<List<VettingDecision>>
-    
+
     @Query("SELECT * FROM vetting_decisions")
     fun getAll(): Flow<List<VettingDecision>>
+
+    /** Every decision on this device, newest first (the Vetting list shows the latest one per record). */
+    @Query("SELECT * FROM vetting_decisions ORDER BY decisionTimestamp DESC, createdAt DESC")
+    fun observeAllNewestFirst(): Flow<List<VettingDecision>>
+
+    /** The decisions made on one record, newest first. */
+    @Query("SELECT * FROM vetting_decisions WHERE foodspaceRecordId = :recordId ORDER BY decisionTimestamp DESC, createdAt DESC")
+    fun observeForRecord(recordId: String): Flow<List<VettingDecision>>
 }

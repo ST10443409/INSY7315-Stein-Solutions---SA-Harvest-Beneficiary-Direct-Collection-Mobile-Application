@@ -16,6 +16,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.client.auth.UserRole
 import com.example.client.ui.placeholder.Form1PlaceholderScreen
+import com.example.client.ui.placeholder.Form2PlaceholderScreen
 import com.example.client.ui.placeholder.ScreenTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -42,7 +43,8 @@ class RoleNavigationTest {
             navController = rememberNavController()
             if (role == null) AppRoot(null, login = { Text("login", Modifier.testTag(LOGIN_SLOT)) }) else AppNavHost(
                 role, navController,
-                screens = CboScreens(form1 = { Form1PlaceholderScreen() }, syncBadge = {}, mySubmissions = {})
+                screens = CboScreens(form1 = { Form1PlaceholderScreen() }, syncBadge = {}, mySubmissions = {}),
+                vetting = VettingScreens(list = { Form2PlaceholderScreen() }, detail = { _, _ -> }, decision = { })
             )
         }
     }
@@ -57,9 +59,9 @@ class RoleNavigationTest {
     private fun assertOnlyReachable(allowed: List<String>) {
         val everyRoute = listOf(
             Routes.CBO_GRAPH, Routes.CBO_FORM1, Routes.CBO_SUBMISSIONS,
-            Routes.VETTING_GRAPH, Routes.VETTING_FORM2,
+            Routes.VETTING_GRAPH, Routes.VETTING_FORM2, Routes.VETTING_RECORD, Routes.VETTING_DECISION,
             Routes.ADMIN_GRAPH, Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1,
-            Routes.ADMIN_FORM2, Routes.ADMIN_SYNC_MONITOR
+            Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION, Routes.ADMIN_SYNC_MONITOR
         )
         composeRule.runOnUiThread {
             everyRoute.forEach { route ->
@@ -93,7 +95,7 @@ class RoleNavigationTest {
         launch(UserRole.VETTING)
 
         composeRule.onNodeWithTag(ScreenTags.FORM2).assertIsDisplayed()
-        assertOnlyReachable(routesOf(Routes.VETTING_GRAPH, Routes.VETTING_FORM2))
+        assertOnlyReachable(routesOf(Routes.VETTING_GRAPH, Routes.VETTING_FORM2, Routes.VETTING_RECORD, Routes.VETTING_DECISION))
         composeRule.runOnUiThread {
             assertEquals(Routes.VETTING_FORM2, navController.currentDestination?.route)
             assertThrows(IllegalArgumentException::class.java) {
@@ -135,7 +137,7 @@ class RoleNavigationTest {
         assertOnlyReachable(
             routesOf(
                 Routes.ADMIN_GRAPH, Routes.ADMIN_DASHBOARD, Routes.ADMIN_FORM1,
-                Routes.ADMIN_FORM2, Routes.ADMIN_SYNC_MONITOR
+                Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION, Routes.ADMIN_SYNC_MONITOR
             )
         )
     }

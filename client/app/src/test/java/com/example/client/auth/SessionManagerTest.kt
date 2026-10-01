@@ -122,4 +122,26 @@ class SessionManagerTest {
 
         assertNull(manager.cboId())
     }
+
+    @Test
+    fun username_isKept_persisted_andRestored() {
+        val storage = FakeTokenStorage()
+        SessionManager(storage).startSession("jwt-1", UserRole.VETTING, null, "vetting_test_user")
+
+        assertEquals("vetting_test_user", SessionManager(storage).username())
+        assertEquals("vetting_test_user", storage.load()?.username)
+    }
+
+    @Test
+    fun username_isNullWhenSignedOut_orWhenNoneWasKept() {
+        val manager = SessionManager(FakeTokenStorage())
+        assertNull(manager.username())
+
+        manager.startSession("jwt-1", UserRole.ADMIN)
+        assertNull(manager.username())
+
+        manager.startSession("jwt-2", UserRole.VETTING, null, "officer")
+        manager.endSession()
+        assertNull(manager.username())
+    }
 }

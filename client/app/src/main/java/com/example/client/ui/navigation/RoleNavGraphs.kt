@@ -7,11 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.example.client.ui.placeholder.AdminDashboardPlaceholderScreen
-import com.example.client.ui.placeholder.Form2PlaceholderScreen
 import com.example.client.ui.placeholder.SyncMonitorPlaceholderScreen
+import com.example.client.ui.vetting.VETTING_RECORD_ARG
 
 // One nested graph per role. A graph only declares the destinations that role may
 // reach, so access control is visible by inspection rather than via runtime checks.
@@ -30,13 +32,13 @@ fun NavGraphBuilder.cboCollectionGraph(navController: NavController, screens: Cb
     }
 }
 
-fun NavGraphBuilder.vettingGraph() {
+fun NavGraphBuilder.vettingGraph(navController: NavController, screens: VettingScreens) {
     navigation(startDestination = Routes.VETTING_FORM2, route = Routes.VETTING_GRAPH) {
-        composable(Routes.VETTING_FORM2) { Form2PlaceholderScreen() }
+        form2Destinations(navController, screens, Routes.VETTING_FORM2, Routes.VETTING_RECORD, Routes.VETTING_DECISION)
     }
 }
 
-fun NavGraphBuilder.adminGraph(navController: NavController, form1: @Composable () -> Unit) {
+fun NavGraphBuilder.adminGraph(navController: NavController, form1: @Composable () -> Unit, vetting: VettingScreens) {
     navigation(startDestination = Routes.ADMIN_DASHBOARD, route = Routes.ADMIN_GRAPH) {
         composable(Routes.ADMIN_DASHBOARD) {
             AdminDashboardPlaceholderScreen(
@@ -46,7 +48,34 @@ fun NavGraphBuilder.adminGraph(navController: NavController, form1: @Composable 
             )
         }
         composable(Routes.ADMIN_FORM1) { form1() }
-        composable(Routes.ADMIN_FORM2) { Form2PlaceholderScreen() }
+        form2Destinations(navController, vetting, Routes.ADMIN_FORM2, Routes.ADMIN_RECORD, Routes.ADMIN_DECISION)
         composable(Routes.ADMIN_SYNC_MONITOR) { SyncMonitorPlaceholderScreen() }
+    }
+}
+
+/**
+ * The three Form 2 screens (record list, one record's details, decision capture) under one role's route names.
+ * The Vetting and Admin graphs each get their own copies, so no route is shared between graphs.
+ */
+private fun NavGraphBuilder.form2Destinations(
+    navController: NavController,
+    screens: VettingScreens,
+    listRoute: String,
+    recordRoute: String,
+    decisionRoute: String
+) {
+    val recordArg = listOf(navArgument(VETTING_RECORD_ARG) { type = NavType.StringType })
+
+    composable(listRoute) {
+        screens.list { id -> navController.navigate(recordRoute.withRecordId(id)) }
+    }
+    composable(recordRoute, arguments = recordArg) {
+        screens.detail(
+            { navController.popBackStack() },
+            { id -> navController.navigate(decisionRoute.withRecordId(id)) }
+        )
+    }
+    composable(decisionRoute, arguments = recordArg) {
+        screens.decision { navController.popBackStack() }
     }
 }

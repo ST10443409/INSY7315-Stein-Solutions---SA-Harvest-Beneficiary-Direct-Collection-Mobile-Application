@@ -52,6 +52,15 @@ data class CboSyncRecordResult(
 
 data class CboSyncResponse(val results: List<CboSyncRecordResult> = emptyList())
 
+/** Values of [CboSyncRecordResult.errorCode] the app reacts to (see the backend's CboSyncErrorCodes). */
+object CboSyncErrorCodes {
+    /** The record is invalid as sent; resending the same data will never work. */
+    const val VALIDATION_FAILED = "VALIDATION_FAILED"
+
+    /** Another submission already covers this real-world collection; the server kept this one for Admin review. */
+    const val DUPLICATE_DETECTED = "DUPLICATE_DETECTED"
+}
+
 /** The backend's standard response envelope (`{ success, data, error }`). */
 data class ApiEnvelope<T>(val success: Boolean = false, val data: T? = null, val error: ApiErrorBody? = null)
 

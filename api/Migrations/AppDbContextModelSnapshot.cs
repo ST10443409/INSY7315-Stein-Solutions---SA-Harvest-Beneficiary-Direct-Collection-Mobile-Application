@@ -217,6 +217,10 @@ namespace api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("sync_error");
 
+                    b.Property<string>("SyncErrorCode")
+                        .HasColumnType("text")
+                        .HasColumnName("sync_error_code");
+
                     b.Property<string>("SyncStatus")
                         .IsRequired()
                         .HasColumnType("text")

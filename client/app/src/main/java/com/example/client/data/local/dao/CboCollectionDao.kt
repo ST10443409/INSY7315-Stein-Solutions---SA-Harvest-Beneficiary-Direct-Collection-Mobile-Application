@@ -49,14 +49,25 @@ abstract class CboCollectionDao {
     )
     abstract suspend fun getSyncable(maxRetries: Int): List<CboCollectionEntity>
 
-    @Query("UPDATE cbo_collections SET syncStatus = 'SYNCED', updatedAt = :now WHERE id IN (:ids)")
+    @Query("UPDATE cbo_collections SET syncStatus = 'SYNCED', syncErrorCode = NULL, updatedAt = :now WHERE id IN (:ids)")
     abstract suspend fun markSynced(ids: List<String>, now: Long)
 
+    /** A failure that may heal on its own: uses up one retry, and the record is sent again on a later run. */
     @Query(
         "UPDATE cbo_collections SET syncStatus = 'FAILED', retryCount = retryCount + 1, " +
-            "updatedAt = :now WHERE id IN (:ids)"
+            "syncErrorCode = :errorCode, updatedAt = :now WHERE id IN (:ids)"
     )
-    abstract suspend fun markFailed(ids: List<String>, now: Long)
+    abstract suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long)
+
+    /**
+     * A failure resending cannot fix (the server said so): the record is FAILED with all [maxRetries] used up,
+     * so [getSyncable] skips it from now on. Its data stays on the device.
+     */
+    @Query(
+        "UPDATE cbo_collections SET syncStatus = 'FAILED', retryCount = :maxRetries, " +
+            "syncErrorCode = :errorCode, updatedAt = :now WHERE id IN (:ids)"
+    )
+    abstract suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long)
 
     @Query("SELECT COUNT(*) FROM cbo_collections WHERE syncStatus = :status")
     abstract fun observeCountByStatus(status: SyncStatus): Flow<Int>

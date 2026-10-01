@@ -51,6 +51,7 @@ import com.example.client.ui.theme.StrokeIcon
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.data.repository.CboCollectionRepository
+import com.example.client.network.CboSyncErrorCodes
 import com.example.client.sync.CboSyncProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,8 +71,12 @@ object SubmissionsTags {
     fun item(id: String) = "submission_$id"
 }
 
-/** How a submission is shown. FAILED is split so the collector knows whether the app is still trying. */
-enum class SubmissionDisplay { PENDING, SYNCED, FAILED_WILL_RETRY, FAILED_FINAL }
+/**
+ * How a submission is shown. FAILED is split so the collector knows whether the app is still trying, and, when it
+ * has stopped, why: the server already has this collection (DUPLICATE), the server refused the data (REJECTED),
+ * or the retries ran out (FINAL).
+ */
+enum class SubmissionDisplay { PENDING, SYNCED, FAILED_WILL_RETRY, FAILED_FINAL, FAILED_DUPLICATE, FAILED_REJECTED }
 
 data class SubmissionItem(
     val id: String,
@@ -89,7 +94,7 @@ data class SubmissionsUiState(
 }
 
 val SubmissionDisplay.isFailed: Boolean
-    get() = this == SubmissionDisplay.FAILED_WILL_RETRY || this == SubmissionDisplay.FAILED_FINAL
+    get() = this != SubmissionDisplay.PENDING && this != SubmissionDisplay.SYNCED
 
 fun CboCollectionEntity.toSubmissionItem() = SubmissionItem(
     id = id,
@@ -98,9 +103,12 @@ fun CboCollectionEntity.toSubmissionItem() = SubmissionItem(
     display = when (syncStatus) {
         SyncStatus.PENDING -> SubmissionDisplay.PENDING
         SyncStatus.SYNCED -> SubmissionDisplay.SYNCED
-        SyncStatus.FAILED ->
-            if (retryCount < CboSyncProcessor.MAX_RETRIES) SubmissionDisplay.FAILED_WILL_RETRY
-            else SubmissionDisplay.FAILED_FINAL
+        SyncStatus.FAILED -> when {
+            syncErrorCode == CboSyncErrorCodes.DUPLICATE_DETECTED -> SubmissionDisplay.FAILED_DUPLICATE
+            retryCount < CboSyncProcessor.MAX_RETRIES -> SubmissionDisplay.FAILED_WILL_RETRY
+            syncErrorCode == CboSyncErrorCodes.VALIDATION_FAILED -> SubmissionDisplay.FAILED_REJECTED
+            else -> SubmissionDisplay.FAILED_FINAL
+        }
     }
 )
 
@@ -142,6 +150,14 @@ private fun SubmissionDisplay.style() = when (this) {
     )
     SubmissionDisplay.FAILED_FINAL -> StatusStyle(
         R.string.submissions_status_failed, R.string.submissions_hint_failed_final,
+        ErrorTagPalette, SaColors.TagErrorBg, SaColors.TagErrorText
+    )
+    SubmissionDisplay.FAILED_DUPLICATE -> StatusStyle(
+        R.string.submissions_status_duplicate, R.string.submissions_hint_duplicate,
+        ErrorTagPalette, SaColors.TagErrorBg, SaColors.TagErrorText
+    )
+    SubmissionDisplay.FAILED_REJECTED -> StatusStyle(
+        R.string.submissions_status_rejected, R.string.submissions_hint_rejected,
         ErrorTagPalette, SaColors.TagErrorBg, SaColors.TagErrorText
     )
 }

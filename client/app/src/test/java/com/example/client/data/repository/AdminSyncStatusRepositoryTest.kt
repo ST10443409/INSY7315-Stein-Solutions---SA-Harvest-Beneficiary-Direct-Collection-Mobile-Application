@@ -26,6 +26,7 @@ class AdminSyncStatusRepositoryTest {
         override suspend fun getSyncRecord(id: String, form: String) = throw NotImplementedError()
         override suspend fun retrySync(id: String, form: String) = throw NotImplementedError()
         override suspend fun dismissSync(id: String, form: String, request: DismissRequestDto) = throw NotImplementedError()
+        override suspend fun getUserActivity(user: String?, role: String?, from: String?, to: String?, page: Int, pageSize: Int) = throw NotImplementedError()
     }
 
     private fun repository(handler: suspend () -> Response<ApiEnvelope<AdminSyncStatusDto>>) = AdminSyncStatusRepositoryImpl(FakeApi(handler))

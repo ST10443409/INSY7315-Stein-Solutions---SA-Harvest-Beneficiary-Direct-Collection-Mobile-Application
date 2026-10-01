@@ -3,16 +3,11 @@ package com.example.client.data.repository
 import com.example.client.data.parseIsoInstantMillis
 import com.example.client.network.AdminActionEntryDto
 import com.example.client.network.AdminApiService
-import com.example.client.network.ApiEnvelope
 import com.example.client.network.DismissRequestDto
 import com.example.client.network.DuplicateOfDto
 import com.example.client.network.ResolutionDto
 import com.example.client.network.SyncAttentionItemDto
 import com.example.client.network.SyncRecordDetailDto
-import com.google.gson.JsonParseException
-import com.google.gson.JsonParser
-import retrofit2.Response
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -105,7 +100,7 @@ class AdminSyncResolutionRepositoryImpl @Inject constructor(
         val items = ArrayList<AttentionItem>()
         var page = 1
         while (true) {
-            val result = call { api.getAttention(page, PAGE_SIZE) }
+            val result = adminCall { api.getAttention(page, PAGE_SIZE) }
             val data = when (result) {
                 is AdminResult.Success -> result.value
                 else -> return result.failure()
@@ -118,49 +113,13 @@ class AdminSyncResolutionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun record(id: String, form: SyncForm): AdminResult<RecordDetail> =
-        call { api.getSyncRecord(id, form.name) }.map { it.toModel() }
+        adminCall { api.getSyncRecord(id, form.name) }.map { it.toModel() }
 
     override suspend fun retry(id: String, form: SyncForm): AdminResult<Resolution> =
-        call { api.retrySync(id, form.name) }.map { it.toModel() }
+        adminCall { api.retrySync(id, form.name) }.map { it.toModel() }
 
     override suspend fun dismiss(id: String, form: SyncForm, reason: String): AdminResult<Resolution> =
-        call { api.dismissSync(id, form.name, DismissRequestDto(reason)) }.map { it.toModel() }
-
-    // ── transport ──────────────────────────────────────────────────────────────────
-
-    private suspend fun <T> call(request: suspend () -> Response<ApiEnvelope<T>>): AdminResult<T> {
-        val response = try {
-            request()
-        } catch (e: IOException) {
-            return AdminResult.Offline
-        } catch (e: JsonParseException) {
-            return AdminResult.Failed
-        }
-        if (response.isSuccessful) {
-            return response.body()?.data?.let { AdminResult.Success(it) } ?: AdminResult.Failed
-        }
-        return when (response.code()) {
-            401, 403 -> AdminResult.Denied
-            404 -> AdminResult.NotFound
-            409 -> AdminResult.Conflict(serverMessage(response))
-            400 -> AdminResult.Invalid(serverMessage(response))
-            else -> AdminResult.Failed
-        }
-    }
-
-    /** The server's own message from its error envelope, or null if there is none. Never throws. */
-    private fun serverMessage(response: Response<*>): String? = try {
-        JsonParser.parseString(response.errorBody()?.string().orEmpty())
-            .asJsonObject["error"]?.asJsonObject?.get("message")?.asString
-    } catch (e: Exception) {
-        null
-    }
-
-    private inline fun <T, R> AdminResult<T>.map(transform: (T) -> R): AdminResult<R> =
-        if (this is AdminResult.Success) AdminResult.Success(transform(value)) else failure()
-
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> AdminResult<*>.failure(): AdminResult<T> = this as AdminResult<T>
+        adminCall { api.dismissSync(id, form.name, DismissRequestDto(reason)) }.map { it.toModel() }
 
     // ── mapping ────────────────────────────────────────────────────────────────────
 

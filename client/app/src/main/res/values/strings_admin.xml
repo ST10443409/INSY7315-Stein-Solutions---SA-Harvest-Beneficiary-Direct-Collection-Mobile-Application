@@ -18,9 +18,6 @@
     <string name="admin_activity_title">User activity</string>
     <string name="admin_activity_desc">See who submitted what, and when.</string>
 
-    <string name="admin_coming_soon_tag">Coming soon</string>
-    <string name="admin_coming_soon_title">Not available yet</string>
-    <string name="admin_coming_soon_body">This section is being built. Nothing here needs your attention yet.</string>
 
 
     <!-- Sync monitoring (#49) -->
@@ -128,4 +125,33 @@
     <string name="admin_failed_notice_invalid">The server did not accept that. Check what you entered and try again.</string>
     <string name="admin_failed_notice_action_offline">You are offline, so nothing was changed. Connect and try again.</string>
     <string name="admin_failed_notice_action_failed">Could not do that just now, so nothing was changed. Try again in a moment.</string>
+
+    <!-- User activity (#51) -->
+    <string name="admin_activity_loading">Loading activity…</string>
+    <string name="admin_activity_loading_more">Loading…</string>
+    <string name="admin_activity_more">Show more</string>
+    <string name="admin_activity_filter_user">User</string>
+    <string name="admin_activity_filter_user_placeholder">Username</string>
+    <string name="admin_activity_filter_role">Role</string>
+    <string name="admin_activity_role_any">All</string>
+    <string name="admin_activity_role_collector">Collectors</string>
+    <string name="admin_activity_role_vetting">Vetting</string>
+    <string name="admin_activity_role_admin">Admins</string>
+    <string name="admin_activity_filter_dates">Dates</string>
+    <string name="admin_activity_filter_from">From 2026-09-01</string>
+    <string name="admin_activity_filter_to">To 2026-09-20</string>
+    <string name="admin_activity_dates_hint">Leave both empty for the last 7 days. Days are South African days and the last day is included.</string>
+    <string name="admin_activity_date_error">Enter dates like 2026-09-20, with the first day not after the last.</string>
+    <string name="admin_activity_apply">Apply</string>
+    <string name="admin_activity_clear">Clear</string>
+    <string name="admin_activity_window_between">%1$s to %2$s</string>
+    <string name="admin_activity_window_since">From %1$s</string>
+    <string name="admin_activity_window_until">Up to %1$s</string>
+    <string name="admin_activity_window_all">All time</string>
+    <string name="admin_activity_count">%1$d results</string>
+    <string name="admin_activity_empty_title">No activity found</string>
+    <string name="admin_activity_empty_body">Nothing was submitted or decided with these filters. Try a wider date range, or clear the filters.</string>
+    <string name="admin_activity_unknown_user">Unknown user</string>
+    <string name="admin_activity_did_collection">%1$s submitted a collection</string>
+    <string name="admin_activity_did_decision">%1$s recorded a decision</string>
 </resources>

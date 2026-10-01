@@ -234,7 +234,7 @@ even by a manual forward. "Newer" is by decision time, then by when the device c
 forwarded oldest first, so Foodspace's last word is always the newest. Foodspace was assumed to want this; confirm it (see
 `docs/OPEN-DECISIONS.md`).
 
-## Admin oversight endpoints (#49, #50)
+## Admin oversight endpoints (#49, #50, #51)
 
 All under `/api/admin`, `ADMIN` only (`AdminController`). Every record that reaches this backend is in exactly one `SyncState`,
 derived in one place (`SyncStates.Of`) from `ForwardingStatus`, whether a retry is scheduled, and whether it is a suspected duplicate:
@@ -266,3 +266,24 @@ derived in one place (`SyncStates.Of`) from `ForwardingStatus`, whether a retry 
 - **Accountability:** every retry and dismissal is a row in `admin_actions` (who, which record, when, previous and resulting status,
   previous attempt count, the reason) and a log line. Rows are only added. The record's `history` shows them, newest first.
 - **Not here: editing a record before resubmitting.** See `docs/decisions/0002-failed-sync-resolution.md` for why, and what would be needed.
+
+### User activity (#51)
+
+`GET /api/admin/user-activity` lists who submitted or vetted what, newest first: Form 1 collections and Form 2 decisions in one list, each with the
+acting user, their role, the time, and a record reference (`form` + `id`, plus a one-line `label`). Read-only: nothing here changes a record.
+
+| Query | Meaning |
+|---|---|
+| `user` | Username, any case |
+| `role` | `CBO_COLLECTION`, `VETTING` or `ADMIN` (an Admin's own work counts under `ADMIN`) |
+| `from`, `to` | `yyyy-MM-dd`, South African days, `to` inclusive. Either can be used alone for an open range. Years 2000 to 2100. |
+| `page`, `pageSize` | Default 50, at most 100. Ask for `page + 1` while `hasMore` is true. |
+
+- **Default window:** with neither `from` nor `to`, only the last 7 South African days (today included) are returned, so the whole history is never
+  the default. The answer's `from` / `to` say what was applied. Using any filter other than a date still gets the default window.
+- **"When"** is the time on the device when the work was done (`createdAt` / `decisionTimestamp`), so work done offline counts on the day it was done,
+  not the day it synced; `receivedAt` says when the server heard about it. A device with a wrong clock therefore shows work on the wrong day.
+- **Role** is the one on the account today (records only store the username), so it is null for a user who no longer exists, and a role filter leaves
+  out Form 1 records from before submitters were recorded (their `user` is null).
+- The date and user filters run on unindexed columns (`created_at`, `decision_timestamp`, `submitted_by`; only `officer_id` has an index). That is fine at this size; add
+  indexes with the rest of #56 if the lists grow.

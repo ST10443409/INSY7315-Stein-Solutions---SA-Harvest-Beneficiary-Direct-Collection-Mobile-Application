@@ -12,8 +12,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.example.client.ui.admin.AdminDashboardScreen
-import com.example.client.ui.admin.AdminDestination
-import com.example.client.ui.admin.AdminSectionScreen
 import com.example.client.ui.admin.FAILED_SYNC_FORM_ARG
 import com.example.client.ui.admin.FAILED_SYNC_ID_ARG
 import com.example.client.ui.vetting.VETTING_RECORD_ARG
@@ -67,10 +65,7 @@ fun NavGraphBuilder.adminGraph(
                 navArgument(FAILED_SYNC_ID_ARG) { type = NavType.StringType }
             )
         ) { admin.failedSyncRecord { navController.popBackStack() } }
-        // The remaining oversight section (#51): a labelled "coming soon" screen until its issue lands, then the real one.
-        AdminDestination.placeholders.forEach { destination ->
-            composable(destination.route) { AdminSectionScreen(destination, onBack = { navController.popBackStack() }) }
-        }
+        composable(Routes.ADMIN_USER_ACTIVITY) { admin.userActivity { navController.popBackStack() } }
     }
 }
 

@@ -19,7 +19,11 @@ public class RoomParityTests
         nameof(ForwardedEntity.SyncAttempts),
         nameof(ForwardedEntity.LastSyncAttemptAt),
         nameof(ForwardedEntity.SyncError),
+        nameof(ForwardedEntity.ForwardingStatus),
+        nameof(ForwardedEntity.NextForwardAttemptAt),
         nameof(CboCollection.SubmittedBy),
+        nameof(CboCollection.DuplicateKey),
+        nameof(CboCollection.DuplicateOfId),
         nameof(FoodspaceBeneficiaryRecord.FetchedAt),
     };
 

@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.client.auth.UserRole
+import com.example.client.ui.placeholder.Form1PlaceholderScreen
 import com.example.client.ui.placeholder.ScreenTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -39,7 +40,7 @@ class RoleNavigationTest {
     private fun launch(role: UserRole?) {
         composeRule.setContent {
             navController = rememberNavController()
-            if (role == null) AppRoot(null) { Text("login", Modifier.testTag(LOGIN_SLOT)) } else AppNavHost(role, navController)
+            if (role == null) AppRoot(null, login = { Text("login", Modifier.testTag(LOGIN_SLOT)) }) else AppNavHost(role, navController, form1 = { Form1PlaceholderScreen() })
         }
     }
 

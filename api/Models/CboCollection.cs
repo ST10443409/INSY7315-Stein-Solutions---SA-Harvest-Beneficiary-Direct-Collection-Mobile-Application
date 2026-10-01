@@ -27,5 +27,19 @@ public class CboCollection : ForwardedEntity
     // Server-only: who submitted it (username from the JWT once #30 lands). For Admin activity oversight (#51).
     public string? SubmittedBy { get; set; }
 
+    /// <summary>
+    /// SERVER-ONLY. Fingerprint of the real-world collection (CBO + donor + collection date + delivery note), computed by
+    /// <see cref="api.Services.CboCollectionDuplicateKey"/>. Distinct from <see cref="SyncedEntity.Id"/>: two different
+    /// client ids can describe the same visit. A partial unique index allows only ONE original per key.
+    /// </summary>
+    public string? DuplicateKey { get; set; }
+
+    /// <summary>
+    /// SERVER-ONLY. Null for an original. For a suspected duplicate submission (different client id, same
+    /// <see cref="DuplicateKey"/>) the id of the original it matched. The duplicate is kept, untouched, for Admin
+    /// review (#49/#50), is never merged into the original, and is not forwarded to Foodspace.
+    /// </summary>
+    public string? DuplicateOfId { get; set; }
+
     public List<ProductLine> ProductLines { get; set; } = new();
 }

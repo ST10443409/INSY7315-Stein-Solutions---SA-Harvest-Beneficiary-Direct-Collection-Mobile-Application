@@ -18,8 +18,9 @@ namespace api.Data;
 ///
 /// Deliberate differences from Room:
 ///   * Server-only columns (no Room equivalent): received_at, sync_attempts, last_sync_attempt_at,
-///     sync_error and submitted_by on collections/decisions (Admin monitoring, #49-#51), and fetched_at
-///     on the Foodspace cache. SyncStatus here means "forwarded to Foodspace", on the device "reached the backend".
+///     sync_error, forwarding_status and next_forward_attempt_at (Foodspace forwarding, see ForwardingStatus)
+///     and submitted_by on collections/decisions (Admin monitoring, #49-#51), and fetched_at on the Foodspace
+///     cache. SyncStatus means "reached the backend" on both sides; forwarding_status tracks Foodspace.
 ///   * List fields are native Postgres arrays (text[] / boolean[]) instead of delimiter-joined text.
 ///   * product_lines.collection_id is a real foreign key (cascade delete). Room only relates them "in spirit".
 ///   * vetting_decisions.foodspace_record_id and cbo_collections.cbo_id are intentionally NOT foreign keys:
@@ -49,6 +50,7 @@ public class AppDbContext : DbContext
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<SyncStatus>().HaveConversion<UpperCaseEnumConverter<SyncStatus>>();
+        configurationBuilder.Properties<ForwardingStatus>().HaveConversion<UpperSnakeEnumConverter<ForwardingStatus>>();
         configurationBuilder.Properties<DecisionOutcome>().HaveConversion<UpperCaseEnumConverter<DecisionOutcome>>();
         configurationBuilder.Properties<Tone>().HaveConversion<UpperCaseEnumConverter<Tone>>();
         // UserRole names are already the wire values (CBO_COLLECTION, ...), so plain string conversion is exact.
@@ -70,6 +72,12 @@ public class AppDbContext : DbContext
             e.Property(x => x.ReceivedAt).HasDefaultValueSql("now()");
             e.HasIndex(x => x.CboId).HasDatabaseName("ix_cbo_collections_cbo_id");
             e.HasIndex(x => x.SyncStatus).HasDatabaseName("ix_cbo_collections_sync_status");
+            e.HasIndex(x => x.ForwardingStatus).HasDatabaseName("ix_cbo_collections_forwarding_status");
+            // The database-level duplicate rule (#38): at most one ORIGINAL record per real-world collection.
+            // Suspected duplicates (duplicate_of_id set) are stored for review and are exempt.
+            e.HasIndex(x => x.DuplicateKey).IsUnique().HasFilter("duplicate_of_id IS NULL")
+                .HasDatabaseName("ux_cbo_collections_duplicate_key_original");
+            e.HasIndex(x => x.DuplicateOfId).HasDatabaseName("ix_cbo_collections_duplicate_of_id");
         });
 
         modelBuilder.Entity<ProductLine>(e =>

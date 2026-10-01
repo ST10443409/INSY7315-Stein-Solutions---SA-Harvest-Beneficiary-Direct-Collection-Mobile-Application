@@ -173,6 +173,23 @@ namespace api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("note_attached");
 
+                    b.Property<string>("DuplicateKey")
+                        .HasColumnType("text")
+                        .HasColumnName("duplicate_key");
+
+                    b.Property<string>("DuplicateOfId")
+                        .HasColumnType("text")
+                        .HasColumnName("duplicate_of_id");
+
+                    b.Property<string>("ForwardingStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("forwarding_status");
+
+                    b.Property<DateTimeOffset?>("NextForwardAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_forward_attempt_at");
+
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -213,6 +230,17 @@ namespace api.Migrations
 
                     b.HasIndex("SyncStatus")
                         .HasDatabaseName("ix_cbo_collections_sync_status");
+
+                    b.HasIndex("ForwardingStatus")
+                        .HasDatabaseName("ix_cbo_collections_forwarding_status");
+
+                    b.HasIndex("DuplicateKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_cbo_collections_duplicate_key_original")
+                        .HasFilter("duplicate_of_id IS NULL");
+
+                    b.HasIndex("DuplicateOfId")
+                        .HasDatabaseName("ix_cbo_collections_duplicate_of_id");
 
                     b.ToTable("cbo_collections", (string)null);
                 });
@@ -554,6 +582,15 @@ namespace api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("outcome");
+
+                    b.Property<string>("ForwardingStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("forwarding_status");
+
+                    b.Property<DateTimeOffset?>("NextForwardAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_forward_attempt_at");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()

@@ -14,11 +14,14 @@ namespace external_api_sim;
 ///   SYSTEM     GET     /api/external/status                  Availability check                        monitoring
 ///   LEGACY     POST    /api/external/sync                    Generic payload from the first prototype  current queue worker
 ///   SIM ONLY   GET     /api/external/received                Shows what has been pushed to the sim     demos and debugging
+///   SIM ONLY   POST    /api/external/simulate/outage         Make every endpoint answer 503 (or ?status=)  demos and tests
+///   SIM ONLY   POST    /api/external/simulate/recover        End the simulated outage                  demos and tests
 ///
 /// PULL = we read from Foodspace. PUSH = we write to Foodspace. Payload shapes are in Contracts.cs.
 /// The same list is available as OpenAPI JSON at /openapi/v1.json.
 ///
-/// Assumed for now (to confirm with the client): no authentication on these endpoints, and pushes are
+/// Assumed for now (to confirm with the client): no authentication on these endpoints (set Simulator:ApiKey to
+/// require an X-Api-Key header, to exercise the backend's key handling), and pushes are
 /// idempotent upserts keyed by the client-generated "id", so a retried sync never creates duplicates.
 /// </summary>
 public static class ExternalApiEndpoints
@@ -28,7 +31,40 @@ public static class ExternalApiEndpoints
 
     public static void MapExternalApi(this WebApplication app)
     {
+        // Simulator controls live outside the group below so they keep working during a simulated outage.
+        app.MapPost("/api/external/simulate/outage", (int? status, SimulatedFaults faults) =>
+            {
+                faults.StartOutage(status is >= 400 and <= 599 ? status.Value : 503);
+                return Results.Ok(new { Outage = true, Status = faults.OutageStatus });
+            })
+            .WithTags("Simulator only")
+            .WithSummary("Start an outage")
+            .WithDescription("Every Foodspace endpoint answers with the given error status (default 503) until /simulate/recover is called.");
+
+        app.MapPost("/api/external/simulate/recover", (SimulatedFaults faults) =>
+            {
+                faults.EndOutage();
+                return Results.Ok(new { Outage = false });
+            })
+            .WithTags("Simulator only")
+            .WithSummary("End the outage");
+
         var api = app.MapGroup("/api/external");
+
+        // Applies to every Foodspace endpoint: a simulated outage, and the API key when one is configured
+        // (Simulator:ApiKey). Real Foodspace auth is still to be confirmed; the default is no authentication.
+        api.AddEndpointFilter(async (context, next) =>
+        {
+            var faults = context.HttpContext.RequestServices.GetRequiredService<SimulatedFaults>();
+            if (faults.OutageStatus is { } status) return Results.StatusCode(status);
+
+            var expectedKey = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Simulator:ApiKey"];
+            if (!string.IsNullOrEmpty(expectedKey)
+                && context.HttpContext.Request.Headers["X-Api-Key"] != expectedKey)
+                return Results.Unauthorized();
+
+            return await next(context);
+        });
 
         // ═════════════ PULL: data we read from Foodspace ═════════════
 

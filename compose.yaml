@@ -31,6 +31,8 @@ services:
       # JWT: the signing key is a secret and has no default on purpose (see .env.example).
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env (see .env.example)}
       Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
+      # Foodspace credentials: a SECRET, optional while the simulator (which needs none) stands in for Foodspace.
+      Foodspace__ApiKey: ${FOODSPACE_API_KEY:-}
       # Dev only: create one test user per role (cbo_test_user, vetting_test_user, admin_test_user).
       Seed__Enabled: "true"
       Seed__TestUserPassword: ${SEED_TEST_PASSWORD:?Set SEED_TEST_PASSWORD in .env (see .env.example)}

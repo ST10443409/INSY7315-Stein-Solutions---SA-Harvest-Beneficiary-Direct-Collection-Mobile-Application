@@ -110,3 +110,51 @@ return `401 {"error":"Invalid username or password."}`. Send the token as `Autho
   `cbo_test_user`, `vetting_test_user` and `admin_test_user`, all using the password in `SEED_TEST_PASSWORD`
   (`.env.example` has a dev-only value). For `dotnet run` set `Seed:Enabled` and `Seed:TestUserPassword` via user-secrets.
 - **Ports:** in Docker the API is on `http://localhost:5000` (what the Android emulator reaches as `10.0.2.2:5000`).
+
+## Forwarding to Foodspace
+
+Records that reach this backend are forwarded to Foodspace by `FoodspaceApiClient` (typed `HttpClient`), driven by
+`CboCollectionForwarder` and a background loop (`FoodspaceForwardingWorker`). Until we have access to Foodspace,
+`external-api-sim` stands in for it.
+
+- **Status:** `ForwardingStatus` (server-only) is `PENDING` -> `FORWARDED`, or `SYNCED_LOCAL_PENDING_FOODSPACE` when
+  Foodspace did not accept the record. That state is retried with exponential backoff (`Foodspace:BaseDelaySeconds`,
+  `MaxAttempts`); when retries run out it stays there for an Admin to retry (#49/#50). `SyncStatus` is untouched, so a
+  collector's record is never marked failed because of Foodspace.
+- **Ingestion:** `POST /api/cbo-collection/sync` stores the record; the forwarding loop then picks it up within `PollIntervalSeconds`.
+- **Config** (section `Foodspace`): `BaseUrl` (falls back to `ExternalApi:BaseUrl`), `ApiKey` (**secret**, sent as `X-Api-Key`;
+  set with user-secrets or `Foodspace__ApiKey`), `ForwardingEnabled`, `PollIntervalSeconds`, `MaxAttempts`, `LogPayloads`
+  (off by default: payloads contain donor names). The auth mechanism is an assumption until Foodspace confirms it.
+- **Mapping:** `FoodspaceCboCollectionMapper` is the single place our fields map to Foodspace's; its comment is the mapping table.
+- **Simulate an outage:** `POST http://localhost:5284/api/external/simulate/outage` (optionally `?status=500`), then
+  `POST .../simulate/recover`. `GET .../api/external/received` shows what Foodspace has received.
+
+## CBO collection sync endpoint
+
+`POST /api/cbo-collection/sync` (roles `CBO_COLLECTION` or `ADMIN`) takes `{ "records": [ ... up to 100 ... ] }` and answers
+`200 { success, data: { results: [ { clientId, success, alreadyReceived, error, errorCode, retryable } ] } }`, one result per
+record in the same order. Each record is validated and stored on its own, so one bad record never affects the others. Only a
+request unusable as a whole (no records, more than 100) is a `400`.
+
+- **Permanent vs transient:** `VALIDATION_FAILED` has `retryable: false` (don't resend the same data); `SERVER_ERROR` has `retryable: true`.
+- **Idempotency:** the client UUID is the primary key. An id that is already stored is reported as a success with
+  `alreadyReceived: true` and nothing is written ("already exists, treat as success"; the first write wins and a retry with
+  different data does not overwrite it). It can't yet tell a legitimate retry from two collectors reusing an id: that is #38.
+
+### Retry vs duplicate (#38)
+
+Two cases look alike and are handled differently:
+
+| | Same client id again (**retry**, #36) | Different client id, same real-world collection (**duplicate**, #38) |
+|---|---|---|
+| Meaning | The first response was lost | Two collectors, or a device that lost its data |
+| Result | `success: true, alreadyReceived: true` | `success: false, errorCode: "DUPLICATE_DETECTED", duplicateOfId, retryable: false` |
+| Stored? | Nothing written; first write wins | Kept (with `duplicate_of_id` set) for Admin review; never merged into the original |
+| Foodspace | n/a | Not forwarded |
+
+- **Matching rule** (`CboCollectionDuplicateKey`, one small class, easy to change): same CBO + donor name + collection date
+  (South African day of `createdAt`) + delivery note number; case and whitespace ignored. A different delivery note is a
+  separate pick-up, not a duplicate. This is a product decision, so confirm it with the people who run the collections.
+- **Database level:** `duplicate_key` (a SHA-256 of the rule's inputs, so no donor name in the index) has a partial unique
+  index `WHERE duplicate_of_id IS NULL`: at most one original per real-world collection, even for simultaneous requests.
+- Re-sending a stored duplicate returns `DUPLICATE_DETECTED` again, so the app never mistakes it for a synced record.

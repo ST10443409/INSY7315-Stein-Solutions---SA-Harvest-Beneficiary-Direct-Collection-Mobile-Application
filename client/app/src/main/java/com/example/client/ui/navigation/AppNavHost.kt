@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.example.client.auth.UserRole
+import com.example.client.ui.cbo.Form1Route
 
 /**
  * Root of the navigation shell. Shows [login] while there is no role (signed out, or the
@@ -13,11 +14,15 @@ import com.example.client.auth.UserRole
  * so a previous role's back stack can never leak into the next one.
  */
 @Composable
-fun AppRoot(role: UserRole?, login: @Composable () -> Unit) {
+fun AppRoot(
+    role: UserRole?,
+    form1: @Composable () -> Unit = { Form1Route() },
+    login: @Composable () -> Unit
+) {
     if (role == null) {
         login()
     } else {
-        key(role) { AppNavHost(role) }
+        key(role) { AppNavHost(role, form1 = form1) }
     }
 }
 
@@ -28,13 +33,14 @@ fun AppRoot(role: UserRole?, login: @Composable () -> Unit) {
 @Composable
 fun AppNavHost(
     role: UserRole,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    form1: @Composable () -> Unit = { Form1Route() }
 ) {
     NavHost(navController = navController, startDestination = role.graphRoute()) {
         when (role) {
-            UserRole.CBO_COLLECTION -> cboCollectionGraph()
+            UserRole.CBO_COLLECTION -> cboCollectionGraph(form1)
             UserRole.VETTING -> vettingGraph()
-            UserRole.ADMIN -> adminGraph(navController)
+            UserRole.ADMIN -> adminGraph(navController, form1)
         }
     }
 }

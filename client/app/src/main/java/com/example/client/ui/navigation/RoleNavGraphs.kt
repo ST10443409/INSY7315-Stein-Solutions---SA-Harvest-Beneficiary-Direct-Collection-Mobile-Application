@@ -1,11 +1,11 @@
 package com.example.client.ui.navigation
 
+import androidx.compose.runtime.Composable
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.example.client.ui.placeholder.AdminDashboardPlaceholderScreen
-import com.example.client.ui.placeholder.Form1PlaceholderScreen
 import com.example.client.ui.placeholder.Form2PlaceholderScreen
 import com.example.client.ui.placeholder.SyncMonitorPlaceholderScreen
 
@@ -13,9 +13,9 @@ import com.example.client.ui.placeholder.SyncMonitorPlaceholderScreen
 // reach, so access control is visible by inspection rather than via runtime checks.
 // Any future deep link must be declared inside the owning role's graph.
 
-fun NavGraphBuilder.cboCollectionGraph() {
+fun NavGraphBuilder.cboCollectionGraph(form1: @Composable () -> Unit) {
     navigation(startDestination = Routes.CBO_FORM1, route = Routes.CBO_GRAPH) {
-        composable(Routes.CBO_FORM1) { Form1PlaceholderScreen() }
+        composable(Routes.CBO_FORM1) { form1() }
     }
 }
 
@@ -25,7 +25,7 @@ fun NavGraphBuilder.vettingGraph() {
     }
 }
 
-fun NavGraphBuilder.adminGraph(navController: NavController) {
+fun NavGraphBuilder.adminGraph(navController: NavController, form1: @Composable () -> Unit) {
     navigation(startDestination = Routes.ADMIN_DASHBOARD, route = Routes.ADMIN_GRAPH) {
         composable(Routes.ADMIN_DASHBOARD) {
             AdminDashboardPlaceholderScreen(
@@ -34,7 +34,7 @@ fun NavGraphBuilder.adminGraph(navController: NavController) {
                 onOpenSyncMonitor = { navController.navigate(Routes.ADMIN_SYNC_MONITOR) }
             )
         }
-        composable(Routes.ADMIN_FORM1) { Form1PlaceholderScreen() }
+        composable(Routes.ADMIN_FORM1) { form1() }
         composable(Routes.ADMIN_FORM2) { Form2PlaceholderScreen() }
         composable(Routes.ADMIN_SYNC_MONITOR) { SyncMonitorPlaceholderScreen() }
     }

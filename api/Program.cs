@@ -4,6 +4,7 @@ using api.Infrastructure;
 using api.Models;
 using api.Options;
 using api.Services;
+using api.Services.Foodspace;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
@@ -81,6 +82,26 @@ builder.Services.AddHttpClient("ExternalApi", client =>
         ?? throw new InvalidOperationException("Configuration value 'ExternalApi:BaseUrl' is missing.");
     client.BaseAddress = new Uri(baseUrl);
 });
+
+// ── Foodspace forwarding ──────────────────────────────────────────────────────────────────
+// Records that reached this backend are forwarded to Foodspace by a typed HttpClient. Foodspace:ApiKey is a
+// secret (user-secrets / Foodspace__ApiKey); BaseUrl falls back to ExternalApi:BaseUrl (the simulator for now).
+builder.Services.AddOptions<FoodspaceOptions>()
+    .Bind(builder.Configuration.GetSection(FoodspaceOptions.SectionName))
+    .PostConfigure(o => o.BaseUrl ??= builder.Configuration["ExternalApi:BaseUrl"]);
+
+builder.Services.AddHttpClient<IFoodspaceApiClient, FoodspaceApiClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<FoodspaceOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl
+        ?? throw new InvalidOperationException("Configuration value 'Foodspace:BaseUrl' (or 'ExternalApi:BaseUrl') is missing."));
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+        client.DefaultRequestHeaders.Add(options.ApiKeyHeader, options.ApiKey);
+});
+builder.Services.AddScoped<ICboCollectionForwarder, CboCollectionForwarder>();
+builder.Services.AddScoped<ICboCollectionIngestionService, CboCollectionIngestionService>();
+builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 
 var app = builder.Build();
 

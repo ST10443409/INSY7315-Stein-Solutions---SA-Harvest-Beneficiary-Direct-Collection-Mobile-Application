@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace api.Controllers;
 
-[Authorize] // the Android client sends its bearer token; role scoping comes with #36/#52
+[Authorize(Roles = $"{AppRoles.CboCollection},{AppRoles.Vetting},{AppRoles.Admin}")] // Role scoping applied as per #52
 public class SyncController : ApiControllerBase
 {
     private readonly IQueueService _queueService;

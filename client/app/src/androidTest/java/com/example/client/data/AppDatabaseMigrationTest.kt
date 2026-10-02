@@ -81,8 +81,10 @@ class AppDatabaseMigrationTest {
             close()
         }
         val context = ApplicationProvider.getApplicationContext<Context>()
+        // Configured exactly as DatabaseModule does, so this is the upgrade a phone really goes through.
         val database = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(*ALL_MIGRATIONS)
+            .fallbackToDestructiveMigrationFrom(FIRST_MIGRATED_VERSION - 1)
             .build()
         try {
             val syncable = database.cboCollectionDao().getSyncable(maxRetries = 5)

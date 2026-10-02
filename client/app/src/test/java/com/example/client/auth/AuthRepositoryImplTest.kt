@@ -72,6 +72,14 @@ class AuthRepositoryImplTest {
     }
 
     @Test
+    fun rateLimited_429_isTooManyAttempts_andStoresNothing() = runBlocking {
+        server.enqueue(json("""{"success":false,"error":{"code":"TOO_MANY_REQUESTS"}}""", 429).setHeader("Retry-After", "42"))
+
+        assertEquals(LoginResult.TooManyAttempts, repository.login("a", "b"))
+        assertNull(storage.load())
+    }
+
+    @Test
     fun serverError_500_isServerError() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(500))
 

@@ -3,9 +3,8 @@ package com.example.client.di
 import android.content.Context
 import androidx.room.Room
 import com.example.client.data.AppDatabase
-import com.example.client.data.MIGRATION_2_3
-import com.example.client.data.MIGRATION_3_4
-import com.example.client.data.MIGRATION_4_5
+import com.example.client.data.ALL_MIGRATIONS
+import com.example.client.data.FIRST_MIGRATED_VERSION
 import com.example.client.data.SyncPayloadDao
 import com.example.client.data.local.dao.*
 import dagger.Module
@@ -27,9 +26,10 @@ object DatabaseModule {
             AppDatabase::class.java,
             "app_database"
         )
-        .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-        // TODO(sprint-4): replace with real migration before release
-        .fallbackToDestructiveMigration()
+        .addMigrations(*ALL_MIGRATIONS)
+        // Only the pre-release version 1 may be wiped. From version 2 on, every upgrade has a tested migration: a
+        // destructive fallback would silently delete collections and decisions that have not synced yet (#55).
+        .fallbackToDestructiveMigrationFrom(FIRST_MIGRATED_VERSION - 1)
         .build()
     }
 

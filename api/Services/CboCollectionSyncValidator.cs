@@ -11,6 +11,12 @@ public static class CboCollectionSyncValidator
 {
     public const int MaxBatchSize = 100;
 
+    /// <summary>
+    /// Largest request body accepted, measured after decompression. The app's batches of 50 are about 60 KB; this leaves
+    /// room for long notes while keeping a small gzip "bomb" from expanding into tens of megabytes.
+    /// </summary>
+    public const long MaxRequestBytes = 4 * 1024 * 1024;
+
     private const int MaxIdLength = 64;
     private const int MaxShortText = 200;
     private const int MaxLongText = 4000;

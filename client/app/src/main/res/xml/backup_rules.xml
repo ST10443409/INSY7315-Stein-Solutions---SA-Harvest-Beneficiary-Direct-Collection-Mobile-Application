@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 11 and below. The auth token is bound to a device Keystore key and must not be backed up. -->
+<!-- Android 11 and below. Nothing is backed up (#54; allowBackup is off as well): the database and attachments hold
+     beneficiary and donor details, signatures and photos, and the auth token is bound to a device Keystore key. -->
 <full-backup-content>
-    <exclude domain="sharedpref" path="auth_secure_prefs.xml" />
-    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__.xml" />
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
 </full-backup-content>

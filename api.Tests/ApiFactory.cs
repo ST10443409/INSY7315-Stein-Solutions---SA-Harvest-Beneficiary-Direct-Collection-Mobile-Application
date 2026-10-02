@@ -26,6 +26,9 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     public string? SigningKeyOverride { get; init; }
 
+    /// <summary>Sign-in attempts allowed per window. High by default: test clients all share one (absent) address.</summary>
+    public int LoginPermitLimit { get; init; } = 10_000;
+
     private readonly string _dbName = Guid.NewGuid().ToString();
 
     /// <summary>Subclasses that replace the database with something unusable turn this off.</summary>
@@ -39,6 +42,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:SigningKey", SigningKeyOverride ?? SigningKey);
         builder.UseSetting("Jwt:ExpiryMinutes", "60");
         builder.UseSetting("Foodspace:ForwardingEnabled", "false"); // tests must not call out to Foodspace
+        builder.UseSetting("Security:LoginPermitLimit", LoginPermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         builder.ConfigureServices(services =>
         {

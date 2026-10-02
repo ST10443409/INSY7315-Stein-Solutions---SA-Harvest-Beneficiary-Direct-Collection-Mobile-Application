@@ -1,13 +1,18 @@
 using System.Security.Claims;
 using api.DTOs;
+using api.Options;
 using api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace api.Controllers;
 
 public class AuthController : ApiControllerBase
 {
+    /// <summary>A username and password are well under a kilobyte.</summary>
+    public const long MaxLoginRequestBytes = 16 * 1024;
+
     private readonly IAuthService _authService;
     private readonly IJwtTokenService _tokenService;
 
@@ -17,9 +22,14 @@ public class AuthController : ApiControllerBase
         _tokenService = tokenService;
     }
 
-    /// <summary>Exchanges credentials for a signed JWT carrying the user's role.</summary>
+    /// <summary>
+    /// Exchanges credentials for a signed JWT carrying the user's role. Attempts are rate limited per client address
+    /// (Security:LoginPermitLimit per LoginWindowSeconds; 429 TOO_MANY_REQUESTS with Retry-After over it).
+    /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(SecurityOptions.LoginRateLimitPolicy)]
+    [RequestSizeLimit(MaxLoginRequestBytes)] // anonymous: a compressed body must not expand into megabytes of JSON
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var user = await _authService.AuthenticateAsync(request.Username, request.Password, cancellationToken);

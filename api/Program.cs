@@ -1,11 +1,16 @@
+using System.Globalization;
 using System.Text;
+using System.Threading.RateLimiting;
 using api.Data;
+using api.DTOs;
 using api.Infrastructure;
 using api.Models;
 using api.Options;
 using api.Services;
 using api.Services.Foodspace;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.EntityFrameworkCore;
@@ -63,6 +68,57 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     });
 builder.Services.AddAuthorization();
 
+// ── Transport and abuse protection (#54) ──────────────────────────────────────────────────
+// "Security" section: HTTPS is required by default and only relaxed in appsettings.Development.json.
+builder.Services.AddOptions<SecurityOptions>()
+    .Bind(builder.Configuration.GetSection(SecurityOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// Behind a TLS-terminating proxy the app sees plain HTTP; X-Forwarded-Proto/-For restore the real scheme and client
+// address, but only from the proxies listed in Security:KnownNetworks (loopback always), so a client cannot fake them.
+builder.Services.AddOptions<ForwardedHeadersOptions>()
+    .Configure<IOptions<SecurityOptions>>((forwarded, security) =>
+    {
+        forwarded.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        foreach (var network in security.Value.KnownNetworks)
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    });
+builder.Services.AddOptions<HstsOptions>()
+    .Configure<IOptions<SecurityOptions>>((hsts, security) => hsts.MaxAge = TimeSpan.FromDays(security.Value.HstsMaxAgeDays));
+
+// Sign-in attempts are limited per client address, so passwords cannot be guessed at speed. Over the limit: 429 in the
+// standard envelope, with Retry-After.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var http = context.HttpContext;
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            http.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+        await http.Response.WriteAsJsonAsync(
+            ApiResponse.Fail(ApiErrorCodes.TooManyRequests, "Too many attempts. Wait a minute and try again.", http.TraceIdentifier),
+            cancellationToken);
+    };
+    options.AddPolicy(SecurityOptions.LoginRateLimitPolicy, http =>
+    {
+        var limits = http.RequestServices.GetRequiredService<IOptions<SecurityOptions>>().Value;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limits.LoginPermitLimit,
+                Window = TimeSpan.FromSeconds(limits.LoginWindowSeconds),
+                QueueLimit = 0,
+            });
+    });
+});
+
+// The app gzips sync batches (#55: about 85% fewer bytes over 2G). Each endpoint's request size limit applies to the
+// decompressed body, so a small compressed "zip bomb" cannot expand past it.
+builder.Services.AddRequestDecompression();
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -118,6 +174,20 @@ builder.Services.AddResponseCompression();
 
 var app = builder.Build();
 
+// Refuse to start on a configuration that would quietly weaken a real deployment (#54); see SecurityStartupChecks.
+var security = app.Services.GetRequiredService<IOptions<SecurityOptions>>().Value;
+var unsafeConfiguration = SecurityStartupChecks.FindProblems(
+    app.Configuration, app.Environment, security, app.Services.GetRequiredService<IOptions<FoodspaceOptions>>().Value);
+if (unsafeConfiguration.Count > 0)
+    throw new InvalidOperationException("Refusing to start with an unsafe configuration:\n- " + string.Join("\n- ", unsafeConfiguration));
+if (security.RequireHttps)
+    app.Logger.LogInformation("HTTPS is required: plain-HTTP API calls are refused.");
+else if (!app.Environment.IsDevelopment())
+    app.Logger.LogWarning("Security:RequireHttps is off in {Environment}: API calls are accepted over plain HTTP.", app.Environment.EnvironmentName);
+
+// First, so everything below sees the client's real scheme and address.
+app.UseForwardedHeaders();
+
 app.UseResponseCompression();
 
 // Opt-in (Database:MigrateOnStartup=true, set in compose.yaml): apply pending migrations at start-up.
@@ -140,6 +210,15 @@ if (app.Configuration.GetValue<bool>("Seed:Enabled"))
 // Must stay first: catches whatever anything below it throws and returns the standard error envelope.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseEnvelopedStatusCodes(); // bodyless 401/403/404 etc. get the envelope too
+
+if (security.RequireHttps)
+{
+    app.UseHsts();
+    app.UseMiddleware<RequireHttpsMiddleware>(); // refuse, never redirect: see the middleware for why
+}
+
+app.UseRequestDecompression();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

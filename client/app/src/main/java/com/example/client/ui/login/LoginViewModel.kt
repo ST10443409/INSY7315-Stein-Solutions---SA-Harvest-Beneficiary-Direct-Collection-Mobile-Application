@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class LoginError { INVALID_CREDENTIALS, NETWORK, SERVER }
+enum class LoginError { INVALID_CREDENTIALS, NETWORK, SERVER, TOO_MANY_ATTEMPTS }
 
 data class LoginUiState(
     val username: String = "",
@@ -60,6 +60,7 @@ class LoginViewModel @Inject constructor(
                     LoginResult.InvalidCredentials -> it.copy(isLoading = false, error = LoginError.INVALID_CREDENTIALS)
                     LoginResult.NetworkError -> it.copy(isLoading = false, error = LoginError.NETWORK)
                     LoginResult.ServerError -> it.copy(isLoading = false, error = LoginError.SERVER)
+                    LoginResult.TooManyAttempts -> it.copy(isLoading = false, error = LoginError.TOO_MANY_ATTEMPTS)
                 }
             }
         }

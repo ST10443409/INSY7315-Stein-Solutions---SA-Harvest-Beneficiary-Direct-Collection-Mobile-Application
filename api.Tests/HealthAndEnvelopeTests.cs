@@ -159,9 +159,11 @@ public class HealthAndEnvelopeTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task OpenApiDocument_IsNotServedOutsideDevelopment()
     {
-        using var production = _factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        // Production also requires HTTPS and a safe configuration (#54), so it needs the production-like factory.
+        using var production = new TransportSecurityTests.ProductionApiFactory();
+        var client = production.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
 
-        Assert.Equal(HttpStatusCode.NotFound, (await production.CreateClient().GetAsync("/openapi/v1.json")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/openapi/v1.json")).StatusCode);
     }
 
     /// <summary>Points the API at a Postgres that refuses connections, with recognisable credentials to look for in leaks.</summary>

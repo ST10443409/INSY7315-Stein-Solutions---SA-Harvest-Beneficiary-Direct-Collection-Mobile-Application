@@ -4,6 +4,7 @@ import com.example.client.BuildConfig
 import com.example.client.network.AdminApiService
 import com.example.client.network.AuthApiService
 import com.example.client.network.AuthInterceptor
+import com.example.client.network.HttpClients
 import com.example.client.network.SessionAuthenticator
 import com.example.client.network.SyncApiService
 import com.example.client.network.VettingApiService
@@ -28,16 +29,19 @@ object NetworkModule {
         authInterceptor: AuthInterceptor,
         sessionAuthenticator: SessionAuthenticator
     ): OkHttpClient {
-        // BASIC (no bodies) so credentials and tokens never reach logcat; header redacted as well.
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-            redactHeader(AuthInterceptor.AUTHORIZATION)
-        }
-        return OkHttpClient.Builder()
+        // Timeouts and request compression for slow links come from HttpClients (#55).
+        val builder = HttpClients.builder()
             .addInterceptor(authInterceptor)
-            .addInterceptor(logging)
             .authenticator(sessionAuthenticator)
-            .build()
+        // Debug builds only, and BASIC (no bodies), so credentials and tokens never reach logcat; header redacted as well.
+        // Release builds log nothing: even URLs carry search terms such as a username (#54).
+        if (BuildConfig.DEBUG) {
+            builder.addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+                redactHeader(AuthInterceptor.AUTHORIZATION)
+            })
+        }
+        return builder.build()
     }
 
     @Provides

@@ -15,6 +15,14 @@ and on demand (`gh workflow run <file>`), **only** when files in its paths chang
 
 So an Android UI change does not run the backend pipeline, and a backend change does not run the Android one.
 
+A third workflow, `secret-scan.yml`, runs gitleaks on **every** pull request and push to `main` (their new commits only)
+and weekly over the whole history (#54). If it flags something real, rotate the secret first (it is already in history),
+then remove it. If it is a false positive, add a commented exception to `.gitleaks.toml` and note it in
+[`docs/security/security-review.md`](docs/security/security-review.md).
+
+**Release builds of the app** need an HTTPS API address: `./gradlew assembleRelease -PapiBaseUrl=https://<host>/`. Without
+one the build stops, because release builds refuse plain HTTP.
+
 Run the same checks locally before opening a PR:
 
 ```bash

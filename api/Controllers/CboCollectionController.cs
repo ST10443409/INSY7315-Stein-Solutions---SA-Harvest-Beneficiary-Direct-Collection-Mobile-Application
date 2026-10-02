@@ -22,6 +22,7 @@ public class CboCollectionController : ApiControllerBase
     /// is a 400. Idempotent on each record's id; see <see cref="CboCollectionIngestionService"/>.
     /// </summary>
     [HttpPost("sync")]
+    [RequestSizeLimit(CboCollectionSyncValidator.MaxRequestBytes)]
     public async Task<ActionResult<ApiResponse<CboCollectionSyncResponse>>> Sync(
         [FromBody] CboCollectionSyncRequest request, CancellationToken cancellationToken)
     {

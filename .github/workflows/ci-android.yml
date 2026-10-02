@@ -58,12 +58,24 @@ jobs:
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
 
+    # The emulator refuses to start unless the disk has 1.2x its data partition free. With the default 6 GB partition that
+    # is 7.4 GB, more than the hosted runner has left after the build (about 6.7 GB), so it never booted. Remove
+    # toolchains this job never uses (the Android SDK and Java are left alone) and give the AVD a smaller partition below.
+    - name: Free disk space for the emulator
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL \
+          /usr/local/share/boost /usr/local/share/powershell /usr/local/share/chromium /usr/local/lib/node_modules
+        df -h /
+
     - name: Run Instrumented Tests
       uses: reactivecircus/android-emulator-runner@v2
       with:
         api-level: 31
         target: google_apis
         arch: x86_64
+        # Plenty for the app and its tests, and needs about 4.9 GB free instead of 7.4 GB (see the step above).
+        disk-size: 4G
         force-avd-creation: false
         emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
         disable-animations: true

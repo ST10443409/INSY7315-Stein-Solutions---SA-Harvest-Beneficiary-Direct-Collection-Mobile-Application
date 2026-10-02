@@ -130,4 +130,5 @@ private fun LoginError.messageRes(): Int = when (this) {
     LoginError.INVALID_CREDENTIALS -> R.string.login_error_invalid_credentials
     LoginError.NETWORK -> R.string.login_error_network
     LoginError.SERVER -> R.string.login_error_server
+    LoginError.TOO_MANY_ATTEMPTS -> R.string.login_error_too_many_attempts
 }

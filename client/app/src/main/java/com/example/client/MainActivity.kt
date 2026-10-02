@@ -9,11 +9,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.client.auth.RoleProvider
 import com.example.client.sync.SyncScheduler
 import com.example.client.ui.login.LoginRoute
 import com.example.client.ui.navigation.AppRoot
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -25,15 +30,20 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var syncScheduler: SyncScheduler
 
-    override fun onStart() {
-        super.onStart()
-        // Back in the foreground: send anything still waiting to sync.
-        syncScheduler.syncCboCollectionsNow()
-        syncScheduler.syncVettingDecisionsNow()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Send anything still waiting whenever the app comes to the foreground with someone signed in, and straight after
+        // a sign-in. A session that expired in the field (the workers send nothing while signed out) would otherwise
+        // leave its records waiting for the next periodic run, up to 15 minutes after signing back in (#55).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                roleProvider.currentRole.filterNotNull().collect {
+                    syncScheduler.syncCboCollectionsNow()
+                    syncScheduler.syncVettingDecisionsNow()
+                }
+            }
+        }
 
         setContent {
             val role by roleProvider.currentRole.collectAsState()

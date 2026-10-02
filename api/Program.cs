@@ -1,5 +1,8 @@
+using System.Globalization;
 using System.Text;
+using System.Threading.RateLimiting;
 using api.Data;
+using api.DTOs;
 using api.Infrastructure;
 using api.Models;
 using api.Options;
@@ -83,6 +86,34 @@ builder.Services.AddOptions<ForwardedHeadersOptions>()
     });
 builder.Services.AddOptions<HstsOptions>()
     .Configure<IOptions<SecurityOptions>>((hsts, security) => hsts.MaxAge = TimeSpan.FromDays(security.Value.HstsMaxAgeDays));
+
+// Sign-in attempts are limited per client address, so passwords cannot be guessed at speed. Over the limit: 429 in the
+// standard envelope, with Retry-After.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var http = context.HttpContext;
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            http.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+        await http.Response.WriteAsJsonAsync(
+            ApiResponse.Fail(ApiErrorCodes.TooManyRequests, "Too many attempts. Wait a minute and try again.", http.TraceIdentifier),
+            cancellationToken);
+    };
+    options.AddPolicy(SecurityOptions.LoginRateLimitPolicy, http =>
+    {
+        var limits = http.RequestServices.GetRequiredService<IOptions<SecurityOptions>>().Value;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limits.LoginPermitLimit,
+                Window = TimeSpan.FromSeconds(limits.LoginWindowSeconds),
+                QueueLimit = 0,
+            });
+    });
+});
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
@@ -181,6 +212,8 @@ if (security.RequireHttps)
     app.UseHsts();
     app.UseMiddleware<RequireHttpsMiddleware>(); // refuse, never redirect: see the middleware for why
 }
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

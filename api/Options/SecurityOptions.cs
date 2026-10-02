@@ -10,6 +10,9 @@ public class SecurityOptions
 {
     public const string SectionName = "Security";
 
+    /// <summary>The rate-limiter policy on <c>POST /api/auth/login</c>.</summary>
+    public const string LoginRateLimitPolicy = "login";
+
     /// <summary>
     /// Refuse API calls that did not arrive over HTTPS (403 <c>HTTPS_REQUIRED</c>; <c>/api/health</c> excepted for platform
     /// probes), send HSTS, and refuse to start unless Foodspace and the database are reached over TLS too. Behind a
@@ -28,4 +31,11 @@ public class SecurityOptions
     /// the ingress' subnet, or 0.0.0.0/0 and ::/0 when the platform gives no fixed range.
     /// </summary>
     public List<string> KnownNetworks { get; set; } = new();
+
+    /// <summary>Login attempts allowed per client IP address in each <see cref="LoginWindowSeconds"/> window.</summary>
+    [Range(1, 10_000)]
+    public int LoginPermitLimit { get; set; } = 10;
+
+    [Range(1, 3600)]
+    public int LoginWindowSeconds { get; set; } = 60;
 }

@@ -65,6 +65,9 @@ public static class ApiErrorCodes
     /// <summary>The call came over plain HTTP and Security:RequireHttps is on.</summary>
     public const string HttpsRequired = "HTTPS_REQUIRED";
 
+    /// <summary>A rate limit (e.g. sign-in attempts) was hit; the <c>Retry-After</c> header says when to try again.</summary>
+    public const string TooManyRequests = "TOO_MANY_REQUESTS";
+
     /// <summary>Default code for an HTTP status that has no more specific one.</summary>
     public static string ForStatus(int status) => status switch
     {
@@ -72,6 +75,7 @@ public static class ApiErrorCodes
         401 => Unauthorized,
         403 => Forbidden,
         404 => NotFound,
+        429 => TooManyRequests,
         503 => Unhealthy,
         >= 500 => InternalError,
         _ => Unknown,

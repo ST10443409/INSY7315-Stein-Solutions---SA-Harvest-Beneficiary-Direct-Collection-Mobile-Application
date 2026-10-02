@@ -56,6 +56,56 @@ class VettingRepositoryTest {
         assertEquals(2, dao.rows.value.size)
     }
 
+    // The repository is built from the DAO alone (no API service, no connectivity check), so a decision can be saved with
+    // no network at all; nothing here can fail because the phone is offline. Mirrors CboCollectionRepositoryTest.
+    @Test
+    fun save_worksOffline_andTheDecisionIsKeptPendingUntilTheWorkerSendsIt() = runTest {
+        val saved = repository.saveDecision("fs-1", DecisionOutcome.APPROVE, "visited, fine", "vetting_test_user")
+
+        assertEquals(SyncStatus.PENDING, repository.observeDecisions().first().single().syncStatus)
+        assertEquals(0, saved.retryCount)
+        assertNull(saved.syncErrorCode)
+    }
+
+    @Test
+    fun save_forcesPending_andKeepsTheIdsItWasGiven_soASavedDecisionIsNeverDuplicated() = runTest {
+        val saved = repository.saveDecision("fs-1", DecisionOutcome.APPROVE, null, "o")
+
+        // The worker marks it synced; saving through the DAO again with the same id replaces the row, never adds one.
+        dao.markSynced(listOf(saved.id), now = 5)
+        dao.insert(dao.get(saved.id))
+
+        assertEquals(1, dao.rows.value.size)
+    }
+
+    @Test
+    fun theStatus_followsWhatTheSyncWorkerDoesUnderneath() = runTest {
+        val saved = repository.saveDecision("fs-1", DecisionOutcome.FLAG, null, "o")
+        suspend fun status() = repository.observeDecisionsFor("fs-1").first().single().syncStatus
+
+        assertEquals(SyncStatus.PENDING, status())
+
+        dao.markFailed(listOf(saved.id), errorCode = null, now = 10)
+        assertEquals(SyncStatus.FAILED, status())
+        assertEquals(1, repository.observeDecisions().first().single().retryCount)
+
+        dao.markSynced(listOf(saved.id), now = 20)
+        assertEquals(SyncStatus.SYNCED, status())
+        assertNull(repository.observeDecisions().first().single().syncErrorCode) // an old error is forgotten once it is sent
+    }
+
+    @Test
+    fun aRejectedDecision_staysOnTheDevice_withTheServersReason() = runTest {
+        val saved = repository.saveDecision("fs-1", DecisionOutcome.REJECT, "no certificate", "o")
+
+        dao.markRejected(listOf(saved.id), errorCode = "VALIDATION_FAILED", maxRetries = 5, now = 10)
+
+        val kept = repository.observeDecisions().first().single()
+        assertEquals(SyncStatus.FAILED, kept.syncStatus)
+        assertEquals("VALIDATION_FAILED", kept.syncErrorCode)
+        assertEquals("no certificate", kept.notes) // what the officer wrote is never lost
+    }
+
     @Test
     fun aChangedMind_keepsBothDecisions_withTheNewestFirst() = runTest {
         repository.saveDecision("fs-1", DecisionOutcome.FLAG, "unsure", "o")

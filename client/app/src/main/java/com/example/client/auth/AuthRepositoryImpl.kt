@@ -19,6 +19,7 @@ class AuthRepositoryImpl @Inject constructor(
         when {
             response.isSuccessful -> startSession(response.body()?.token, response.body()?.role, response.body()?.cboId, username.trim())
             response.code() == 400 || response.code() == 401 -> LoginResult.InvalidCredentials
+            response.code() == 429 -> LoginResult.TooManyAttempts
             else -> LoginResult.ServerError
         }
     } catch (e: MalformedJsonException) {

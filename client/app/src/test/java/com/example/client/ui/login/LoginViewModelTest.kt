@@ -112,6 +112,18 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun rateLimited_showsTooManyAttempts() = runTest(dispatcher) {
+        repository.next = CompletableDeferred(LoginResult.TooManyAttempts)
+        fill()
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals(LoginError.TOO_MANY_ATTEMPTS, viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
     fun editingAField_clearsTheError() = runTest(dispatcher) {
         repository.next = CompletableDeferred(LoginResult.InvalidCredentials)
         fill()

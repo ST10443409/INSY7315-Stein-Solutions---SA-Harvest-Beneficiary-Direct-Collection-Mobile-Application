@@ -9,6 +9,7 @@
     <string name="login_error_invalid_credentials">Incorrect username or password.</string>
     <string name="login_error_network">Can\'t reach the server. Check your connection and try again.</string>
     <string name="login_error_server">Something went wrong on our side. Please try again.</string>
+    <string name="login_error_too_many_attempts">Too many sign-in attempts. Wait a minute, then try again.</string>
     <string name="form1_title">CBO Collection</string>
     <string name="form1_arrival">Arrival</string>
     <string name="form1_departure">Departure</string>

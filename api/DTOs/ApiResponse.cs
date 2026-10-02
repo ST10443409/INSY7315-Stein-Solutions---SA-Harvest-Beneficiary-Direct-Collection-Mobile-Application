@@ -62,6 +62,9 @@ public static class ApiErrorCodes
     public const string InternalError = "INTERNAL_ERROR";
     public const string Unknown = "ERROR";
 
+    /// <summary>The call came over plain HTTP and Security:RequireHttps is on.</summary>
+    public const string HttpsRequired = "HTTPS_REQUIRED";
+
     /// <summary>Default code for an HTTP status that has no more specific one.</summary>
     public static string ForStatus(int status) => status switch
     {

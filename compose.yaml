@@ -7,8 +7,8 @@ services:
       # No default on purpose: copy .env.example to .env and set a password.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and set POSTGRES_PASSWORD}
     ports:
-      # Exposed so host tools (dotnet ef, psql) can reach it. Remove for anything but local dev.
-      - "5432:5432"
+      # Exposed so host tools (dotnet ef, psql) can reach it, on this machine only (not the LAN). Remove for anything but local dev.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,6 +23,9 @@ services:
       # 5000 is where the Android app (10.0.2.2:5000 from the emulator) expects the API.
       - "5000:8080"
     environment:
+      # This file is the LOCAL DEVELOPMENT stack (plain HTTP, seeded test users), so it says so. In any other
+      # environment the API requires HTTPS and refuses to start with Seed__Enabled (see api/README.md, "Security").
+      ASPNETCORE_ENVIRONMENT: Development
       # Inside the compose network the simulator and database are reachable by service name, not localhost.
       ExternalApi__BaseUrl: http://external-api-sim:8080
       ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-saharvest};Username=${POSTGRES_USER:-saharvest};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable
@@ -45,7 +48,8 @@ services:
   external-api-sim:
     build: ./external-api-sim
     ports:
-      - "5284:8080"
+      # This machine only: the simulator's fault-injection endpoints have no authentication.
+      - "127.0.0.1:5284:8080"
 
 volumes:
   pgdata:

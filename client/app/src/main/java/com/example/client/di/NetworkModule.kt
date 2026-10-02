@@ -4,6 +4,7 @@ import com.example.client.BuildConfig
 import com.example.client.network.AdminApiService
 import com.example.client.network.AuthApiService
 import com.example.client.network.AuthInterceptor
+import com.example.client.network.HttpClients
 import com.example.client.network.SessionAuthenticator
 import com.example.client.network.SyncApiService
 import com.example.client.network.VettingApiService
@@ -33,7 +34,8 @@ object NetworkModule {
             level = HttpLoggingInterceptor.Level.BASIC
             redactHeader(AuthInterceptor.AUTHORIZATION)
         }
-        return OkHttpClient.Builder()
+        // Timeouts and request compression for slow links come from HttpClients (#55).
+        return HttpClients.builder()
             .addInterceptor(authInterceptor)
             .addInterceptor(logging)
             .authenticator(sessionAuthenticator)

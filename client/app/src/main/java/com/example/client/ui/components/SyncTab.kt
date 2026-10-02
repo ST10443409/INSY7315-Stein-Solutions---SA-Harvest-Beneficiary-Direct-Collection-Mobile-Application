@@ -15,12 +15,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +43,10 @@ object SyncTabTags {
     const val FAILED = "sync_tab_failed"
     const val SYNC_NOW = "sync_tab_sync_now"
     const val SIGN_OUT = "sync_tab_sign_out"
+    const val SIGN_OUT_DIALOG = "sync_tab_sign_out_dialog"
+    const val SIGN_OUT_STAY = "sync_tab_sign_out_stay"
+    const val SIGN_OUT_ANYWAY = "sync_tab_sign_out_anyway"
+    const val OTHER_ACCOUNTS = "sync_tab_other_accounts"
 }
 
 /**
@@ -43,6 +54,10 @@ object SyncTabTags {
  * Each role's Sync tab fills in its own queue and its own counts; this only lays them out.
  *
  * The demo's "Return to role selection" is a sign-out here, because the role comes from the account.
+ *
+ * Signing out never deletes anything: unsent work stays on the phone. But it is only ever sent by the person who captured
+ * it (#70), so with [unsentCount] above zero signing out asks first and says so, instead of leaving the user to find out
+ * later. [otherAccountsWaiting] tells the next person on a shared phone that someone else's work is waiting here.
  */
 @Composable
 fun SyncTabScreen(
@@ -54,8 +69,31 @@ fun SyncTabScreen(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     failedMessage: String? = null,
+    unsentCount: Int = 0,
+    otherAccountsWaiting: Int = 0,
     queue: @Composable ColumnScope.() -> Unit
 ) {
+    var confirmingSignOut by remember { mutableStateOf(false) }
+    if (confirmingSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmingSignOut = false },
+            modifier = Modifier.testTag(SyncTabTags.SIGN_OUT_DIALOG),
+            title = { Text(stringResource(R.string.sync_sign_out_title)) },
+            text = { Text(pluralStringResource(R.plurals.sync_sign_out_body, unsentCount, unsentCount)) },
+            confirmButton = {
+                TextButton(
+                    onClick = { confirmingSignOut = false; onSignOut() },
+                    modifier = Modifier.testTag(SyncTabTags.SIGN_OUT_ANYWAY)
+                ) { Text(stringResource(R.string.sync_sign_out_anyway)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { confirmingSignOut = false },
+                    modifier = Modifier.testTag(SyncTabTags.SIGN_OUT_STAY)
+                ) { Text(stringResource(R.string.sync_sign_out_stay)) }
+            }
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -127,6 +165,16 @@ fun SyncTabScreen(
                 )
             }
         }
+        if (otherAccountsWaiting > 0) {
+            Text(
+                pluralStringResource(R.plurals.sync_other_accounts_waiting, otherAccountsWaiting, otherAccountsWaiting),
+                fontFamily = Figtree, fontSize = 12.5.sp, lineHeight = 19.sp, color = SaColors.Muted,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .testTag(SyncTabTags.OTHER_ACCOUNTS)
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -151,7 +199,7 @@ fun SyncTabScreen(
             )
         }
         OutlinePillButton(
-            onClick = onSignOut,
+            onClick = { if (unsentCount > 0) confirmingSignOut = true else onSignOut() },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp)

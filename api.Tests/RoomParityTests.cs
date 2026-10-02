@@ -27,6 +27,10 @@ public class RoomParityTests
         nameof(FoodspaceBeneficiaryRecord.FetchedAt),
     };
 
+    // Room fields that exist only on the device (#70). authorUsername is who captured a collection, so the app only ever sends
+    // it as that person; the server never needs it because it reads the submitter from the token.
+    private static readonly HashSet<string> DeviceOnlyFields = new() { "cbo_collections.authorUsername" };
+
     // Room tables deliberately not modelled on the server (demo table of the old queue prototype).
     private static readonly HashSet<string> IgnoredRoomTables = new() { "sync_payloads" };
 
@@ -130,7 +134,7 @@ public class RoomParityTests
         foreach (var room in ReadRoomEntities().Where(r => !IgnoredRoomTables.Contains(r.Table)))
         {
             var entity = model.GetEntityTypes().Single(e => e.GetTableName() == room.Table);
-            foreach (var field in room.Fields)
+            foreach (var field in room.Fields.Where(f => !DeviceOnlyFields.Contains($"{room.Table}.{f.Name}")))
             {
                 var property = entity.FindProperty(Pascal(field.Name));
                 if (property == null)

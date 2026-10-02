@@ -67,7 +67,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"), decision("b"))
         api.handler = ::okAll
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("vetting_test_user"))
 
         assertEquals(1, api.requests.size)
         assertEquals(listOf("a", "b"), api.requests.single().records.map { it.id })
@@ -82,7 +82,7 @@ class VettingSyncProcessorTest {
         )
         api.handler = ::okAll
 
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         val json = Gson().toJson(api.requests.single())
         assertEquals(
@@ -96,7 +96,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a", SyncStatus.FAILED, retryCount = 2).copy(syncErrorCode = "SERVER_ERROR"))
         api.handler = ::okAll
 
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         val json = Gson().toJson(api.requests.single())
         assertTrue("syncStatus" !in json && "retryCount" !in json && "syncErrorCode" !in json)
@@ -107,7 +107,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("late", at = 3_000), decision("early", at = 1_000), decision("middle", at = 2_000))
         api.handler = ::okAll
 
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         assertEquals(listOf("early", "middle", "late"), api.requests.single().records.map { it.id })
     }
@@ -117,7 +117,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = (1..(SyncPolicy.BATCH_SIZE + 5)).map { decision("d$it", at = it.toLong()) }
         api.handler = ::okAll
 
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         assertEquals(listOf(SyncPolicy.BATCH_SIZE, 5), api.requests.map { it.records.size })
         assertTrue(dao.rows.value.all { it.syncStatus == SyncStatus.SYNCED })
@@ -127,7 +127,7 @@ class VettingSyncProcessorTest {
     fun nothingToSync_makesNoRequest() = runTest {
         dao.rows.value = listOf(decision("done", SyncStatus.SYNCED))
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("vetting_test_user"))
         assertEquals(0, api.requests.size)
     }
 
@@ -136,7 +136,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"))
         api.handler = { ok(CboSyncRecordResult("a", true, alreadyReceived = true)) }
 
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         assertEquals(SyncStatus.SYNCED, dao.get("a").syncStatus)
     }
@@ -155,7 +155,7 @@ class VettingSyncProcessorTest {
             )
         }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending("vetting_test_user"))
 
         assertEquals(SyncStatus.SYNCED, dao.get("ok").syncStatus)
         assertEquals(1, dao.get("again").retryCount)
@@ -171,9 +171,9 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("bad"))
         api.handler = { ok(CboSyncRecordResult("bad", false, errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false)) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
-        processor.syncPending()
-        processor.syncPending()
+        assertEquals(SyncRunResult.DONE, processor.syncPending("vetting_test_user"))
+        processor.syncPending("vetting_test_user")
+        processor.syncPending("vetting_test_user")
 
         assertEquals(1, api.requests.size)
         assertEquals(SyncStatus.FAILED, dao.get("bad").syncStatus)
@@ -188,10 +188,10 @@ class VettingSyncProcessorTest {
             if (calls < 3) ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) else okAll(req)
         }
 
-        processor.syncPending()
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
+        processor.syncPending("vetting_test_user")
         assertEquals(2, dao.get("a").retryCount)
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         assertEquals(SyncStatus.SYNCED, dao.get("a").syncStatus)
         assertNull(dao.get("a").syncErrorCode)
@@ -202,7 +202,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"))
         api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
 
-        repeat(SyncPolicy.MAX_RETRIES + 3) { processor.syncPending() }
+        repeat(SyncPolicy.MAX_RETRIES + 3) { processor.syncPending("vetting_test_user") }
 
         assertEquals(SyncPolicy.MAX_RETRIES, api.requests.size)
         assertEquals(SyncPolicy.MAX_RETRIES, dao.get("a").retryCount)
@@ -213,7 +213,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a", SyncStatus.FAILED, retryCount = SyncPolicy.MAX_RETRIES - 1))
         api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("vetting_test_user"))
     }
 
     @Test
@@ -221,7 +221,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"))
         api.handler = { throw IOException("offline") }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending("vetting_test_user"))
 
         assertEquals(SyncStatus.PENDING, dao.get("a").syncStatus)
         assertEquals(0, dao.get("a").retryCount)
@@ -232,7 +232,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"))
         listOf(401, 403, 408, 429, 500, 503).forEach { code ->
             api.handler = { httpError(code) }
-            assertEquals("HTTP $code", SyncRunResult.RETRY_LATER, processor.syncPending())
+            assertEquals("HTTP $code", SyncRunResult.RETRY_LATER, processor.syncPending("vetting_test_user"))
             assertEquals("HTTP $code", SyncStatus.PENDING, dao.get("a").syncStatus)
         }
     }
@@ -242,7 +242,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"))
         api.handler = { httpError(400) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("vetting_test_user"))
 
         assertEquals(SyncStatus.FAILED, dao.get("a").syncStatus)
         assertEquals(1, dao.get("a").retryCount)
@@ -254,7 +254,7 @@ class VettingSyncProcessorTest {
         dao.rows.value = listOf(decision("a"))
         api.handler = { httpError(403) }
 
-        processor.syncPending()
+        processor.syncPending("vetting_test_user")
 
         assertEquals(0, dao.get("a").retryCount)
     }

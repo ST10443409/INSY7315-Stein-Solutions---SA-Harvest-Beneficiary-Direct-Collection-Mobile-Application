@@ -3,6 +3,9 @@ package com.example.client.data.local.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+/** The officer id stored when a session did not carry a username (one from before it was kept). Such a decision may be sent by whoever is signed in. */
+const val UNKNOWN_OFFICER = "unknown"
+
 @Entity(tableName = "vetting_decisions")
 data class VettingDecision(
     @PrimaryKey
@@ -12,7 +15,9 @@ data class VettingDecision(
 
     val outcome: DecisionOutcome,
     val notes: String?,
-    val officerId: String, // String username as requested
+    // The username of the officer who made the decision: also the only account it is sent as (#70), because the server
+    // takes the officer from the token. [UNKNOWN_OFFICER] only for a decision saved before the username was kept.
+    val officerId: String,
 
     val decisionTimestamp: Long,
 

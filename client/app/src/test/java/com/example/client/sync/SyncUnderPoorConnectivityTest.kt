@@ -119,11 +119,11 @@ class SyncUnderPoorConnectivityTest {
         val port = server.port
         server.shutdown() // nothing listening: like airplane mode, the connection is refused at once
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor().syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor().syncPending("tester"))
         assertUntouched(expectedPending = 120)
 
         server = MockWebServer().apply { dispatcher = backend; start(port) }
-        assertEquals(SyncRunResult.DONE, processor().syncPending())
+        assertEquals(SyncRunResult.DONE, processor().syncPending("tester"))
 
         assertEquals(mapOf(SyncStatus.SYNCED to 120), statuses())
         assertEquals(120, backend.stored.size)
@@ -136,14 +136,14 @@ class SyncUnderPoorConnectivityTest {
         // answer reaches the phone (the worst case: the phone cannot know the second batch arrived).
         backend.fault = { n -> if (n >= 2) SocketPolicy.DISCONNECT_AFTER_REQUEST else null }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor().syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor().syncPending("tester"))
 
         assertEquals(50, dao.rows.value.count { it.syncStatus == SyncStatus.SYNCED })
         assertUntouched(expectedPending = 70)
         assertEquals(100, backend.stored.size) // the server did get the second batch
 
         backend.fault = null
-        assertEquals(SyncRunResult.DONE, processor().syncPending())
+        assertEquals(SyncRunResult.DONE, processor().syncPending("tester"))
 
         assertEquals(mapOf(SyncStatus.SYNCED to 120), statuses())
         assertEquals(120, backend.stored.size) // the resent batch was "already received", not stored twice
@@ -154,11 +154,11 @@ class SyncUnderPoorConnectivityTest {
         savePending(120)
         backend.fault = { n -> if (n >= 2) SocketPolicy.DISCONNECT_DURING_REQUEST_BODY else null }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor().syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor().syncPending("tester"))
         assertUntouched(expectedPending = 70)
 
         backend.fault = null
-        assertEquals(SyncRunResult.DONE, processor().syncPending())
+        assertEquals(SyncRunResult.DONE, processor().syncPending("tester"))
 
         assertEquals(mapOf(SyncStatus.SYNCED to 120), statuses())
         assertEquals(120, backend.stored.size)
@@ -172,7 +172,7 @@ class SyncUnderPoorConnectivityTest {
         val client = HttpClients.builder().readTimeout(1, TimeUnit.SECONDS).retryOnConnectionFailure(false).build()
 
         val started = System.nanoTime()
-        assertEquals(SyncRunResult.RETRY_LATER, processor(client).syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor(client).syncPending("tester"))
 
         assertTrue(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started) < 10)
         assertUntouched(expectedPending = 10)
@@ -182,7 +182,7 @@ class SyncUnderPoorConnectivityTest {
     fun aBatch_goesOverTheWireGzipped_atUnderAFifthOfItsSize() = runBlocking {
         savePending(50)
 
-        processor().syncPending()
+        processor().syncPending("tester")
 
         val request = backend.requests.single()
         assertEquals("gzip", request.getHeader("Content-Encoding"))
@@ -204,7 +204,7 @@ class SyncUnderPoorConnectivityTest {
             start()
         }
 
-        assertEquals(SyncRunResult.DONE, processor().syncPending())
+        assertEquals(SyncRunResult.DONE, processor().syncPending("tester"))
         assertEquals(mapOf(SyncStatus.SYNCED to 100), statuses())
     }
 }

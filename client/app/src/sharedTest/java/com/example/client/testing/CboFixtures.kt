@@ -72,8 +72,13 @@ class InMemoryCboCollectionRepository : CboCollectionRepository {
     }
 
     override fun observeAll(): Flow<List<CboCollectionEntity>> = all
+    override fun observeByAuthor(author: String?): Flow<List<CboCollectionEntity>> =
+        all.map { l -> l.filter { it.authorUsername == null || it.authorUsername.equals(author, ignoreCase = true) } }
     override fun observeAttachments(): Flow<List<CollectionAttachmentEntity>> = attachments
     override fun observeCount(status: SyncStatus): Flow<Int> = all.map { l -> l.count { it.syncStatus == status } }
+    override fun observeWaitingForOthers(author: String?): Flow<Int> = all.map { l ->
+        l.count { it.syncStatus == SyncStatus.PENDING && it.authorUsername != null && !it.authorUsername.equals(author, ignoreCase = true) }
+    }
 }
 
 class CountingCboSyncTrigger : CboSyncTrigger {

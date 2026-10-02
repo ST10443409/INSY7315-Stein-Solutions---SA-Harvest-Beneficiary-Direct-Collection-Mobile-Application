@@ -19,12 +19,50 @@ class SessionManagerTest {
     @Test
     fun restoresTokenAndRole_afterProcessRestart() {
         val storage = FakeTokenStorage()
-        SessionManager(storage).startSession("jwt-1", UserRole.VETTING)
+        SessionManager(storage).startSession("jwt-1", UserRole.VETTING, null, "vetting_test_user")
 
         val restarted = SessionManager(storage) // new process, same persisted storage
 
         assertEquals(UserRole.VETTING, restarted.currentRole.value)
         assertEquals("jwt-1", restarted.token())
+        assertEquals("vetting_test_user", restarted.currentUsername())
+    }
+
+    // #70: records are only ever sent by the person who captured them, so a session with no username (kept from before it
+    // was recorded) cannot be tied to anyone's records. It ends and the user signs in again, rather than syncing as nobody.
+    @Test
+    fun aStoredSessionWithoutAUsername_isEnded_andRemovedFromStorage() {
+        val storage = FakeTokenStorage(Session("old-jwt", UserRole.CBO_COLLECTION, "cbo-7", username = null))
+
+        val manager = SessionManager(storage)
+
+        assertNull(manager.currentRole.value)
+        assertNull(manager.token())
+        assertNull(manager.currentUsername())
+        assertNull(storage.load())
+    }
+
+    @Test
+    fun aStoredSessionWithABlankUsername_isEnded_too() {
+        val storage = FakeTokenStorage(Session("old-jwt", UserRole.VETTING, username = "  "))
+
+        assertNull(SessionManager(storage).currentRole.value)
+        assertNull(storage.load())
+    }
+
+    @Test
+    fun currentUsername_isWhoeverIsSignedIn_andNullOnceSignedOut() {
+        val manager = SessionManager(FakeTokenStorage())
+        assertNull(manager.currentUsername())
+
+        manager.startSession("jwt-1", UserRole.CBO_COLLECTION, "cbo-7", "collector_one")
+        assertEquals("collector_one", manager.currentUsername())
+
+        manager.endSession()
+        assertNull(manager.currentUsername())
+
+        manager.startSession("jwt-2", UserRole.CBO_COLLECTION, "cbo-7", "collector_two")
+        assertEquals("collector_two", manager.currentUsername())
     }
 
     @Test
@@ -92,7 +130,7 @@ class SessionManagerTest {
     @Test
     fun cboId_isPublished_persisted_andRestoredAfterProcessRestart() {
         val storage = FakeTokenStorage()
-        SessionManager(storage).startSession("jwt-1", UserRole.CBO_COLLECTION, "cbo-7")
+        SessionManager(storage).startSession("jwt-1", UserRole.CBO_COLLECTION, "cbo-7", "collector_one")
 
         val restarted = SessionManager(storage)
 

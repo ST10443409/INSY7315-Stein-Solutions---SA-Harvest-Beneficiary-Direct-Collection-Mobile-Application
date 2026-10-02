@@ -134,10 +134,10 @@ class DecisionViewModel @Inject constructor(
         const val MAX_NOTES_LENGTH = 1000
 
         /**
-         * The officer id when the session does not carry a username (a session from before it was kept). The backend
-         * knows the real officer from the token (#47), so this never stands in for them there.
+         * The officer id when the session does not carry a username. The session no longer restores without one (#70), so
+         * this is only a last resort. The backend knows the real officer from the token (#47), so it never stands in for them there.
          */
-        const val UNKNOWN_OFFICER = "unknown"
+        const val UNKNOWN_OFFICER = com.example.client.data.local.entity.UNKNOWN_OFFICER
     }
 }
 

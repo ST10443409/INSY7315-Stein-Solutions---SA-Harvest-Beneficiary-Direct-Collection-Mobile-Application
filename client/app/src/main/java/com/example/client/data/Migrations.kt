@@ -39,9 +39,25 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
 }
 
 /**
+ * v5 -> v6 (#70, and the upload of signatures and photos):
+ * - cbo_collections.authorUsername, who captured the record, so it is only ever sent as them. Records saved before this
+ *   have no recorded author (NULL) and stay sendable by whoever is signed in, as they always were; nothing is dropped.
+ * - collection_attachments.retryCount and .syncErrorCode, the bookkeeping the attachment upload keeps. Existing files have
+ *   never been uploaded: zero retries used, no error, status unchanged (PENDING).
+ * Vetting decisions need nothing: they already carry the officer's username.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE cbo_collections ADD COLUMN authorUsername TEXT")
+        db.execSQL("ALTER TABLE collection_attachments ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE collection_attachments ADD COLUMN syncErrorCode TEXT")
+    }
+}
+
+/**
  * Every migration, oldest first: what DatabaseModule registers. There is no destructive fallback for these versions, so
  * an app update can never silently wipe records that have not synced yet (#55); a missing migration fails loudly
  * instead, and MigrationsTest fails before that can ship. Add each new migration here (below its declaration, since
  * top-level values initialise in file order), with a test that keeps PENDING records.
  */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

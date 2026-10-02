@@ -62,7 +62,7 @@ class SyncParityTest {
         dao.rows.value = listOf(record)
         val answer = scenario.answer("r")
         val api = CboSyncProcessorTest.FakeApi { answer() }
-        val run = CboSyncProcessor(dao, CboSyncProcessorTest.FakeProductLineDao(), api).syncPending()
+        val run = CboSyncProcessor(dao, CboSyncProcessorTest.FakeProductLineDao(), api).syncPending("tester")
         return dao.get("r").let { Outcome(run, it.syncStatus, it.retryCount, it.syncErrorCode) }
     }
 
@@ -71,7 +71,7 @@ class SyncParityTest {
         dao.rows.value = listOf(sampleDecision().copy(id = "r", retryCount = scenario.startRetries))
         val answer = scenario.answer("r")
         val api = VettingSyncProcessorTest.FakeApi { answer() }
-        val run = VettingSyncProcessor(dao, api).syncPending()
+        val run = VettingSyncProcessor(dao, api).syncPending("vetting_test_user")
         return dao.get("r").let { Outcome(run, it.syncStatus, it.retryCount, it.syncErrorCode) }
     }
 

@@ -23,5 +23,5 @@ class VettingSyncWorker @AssistedInject constructor(
     /** Who POST /api/vetting/sync accepts. */
     override val syncRoles = setOf(UserRole.VETTING, UserRole.ADMIN)
 
-    override suspend fun performSync(): SyncRunResult = processor.syncPending()
+    override suspend fun performSync(username: String): SyncRunResult = processor.syncPending(username)
 }

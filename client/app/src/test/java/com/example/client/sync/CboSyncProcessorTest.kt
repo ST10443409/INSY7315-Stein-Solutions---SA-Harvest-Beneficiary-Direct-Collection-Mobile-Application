@@ -1,6 +1,6 @@
 package com.example.client.sync
 
-import com.example.client.data.local.dao.CboCollectionDao
+import com.example.client.testing.InMemoryCboCollectionDao
 import com.example.client.data.local.dao.ProductLineDao
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.CollectionAttachmentEntity
@@ -30,56 +30,7 @@ import java.io.IOException
 
 class CboSyncProcessorTest {
 
-    internal class FakeCollectionDao : CboCollectionDao() {
-        val rows = MutableStateFlow<List<CboCollectionEntity>>(emptyList())
-
-        fun get(id: String) = rows.value.first { it.id == id }
-
-        override suspend fun insert(collection: CboCollectionEntity) {
-            rows.value = rows.value.filterNot { it.id == collection.id } + collection
-        }
-
-        override suspend fun insertProductLines(productLines: List<ProductLineEntity>) = Unit
-        override suspend fun update(collection: CboCollectionEntity) = insert(collection)
-
-        override suspend fun insertAttachments(attachments: List<CollectionAttachmentEntity>) = Unit
-        override suspend fun getAttachmentsForCollections(collectionIds: List<String>): List<CollectionAttachmentEntity> = emptyList()
-        override fun observeAttachments(): Flow<List<CollectionAttachmentEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
-        override fun getBySyncStatus(status: SyncStatus): Flow<List<CboCollectionEntity>> =
-            rows.map { l -> l.filter { it.syncStatus == status } }
-
-        override fun getAll(): Flow<List<CboCollectionEntity>> = rows
-        override fun observeAllNewestFirst(): Flow<List<CboCollectionEntity>> = rows
-        override fun observeCountByStatus(status: SyncStatus): Flow<Int> =
-            rows.map { l -> l.count { it.syncStatus == status } }
-
-        override suspend fun getSyncable(maxRetries: Int) = rows.value.filter {
-            it.syncStatus == SyncStatus.PENDING ||
-                (it.syncStatus == SyncStatus.FAILED && it.retryCount < maxRetries)
-        }
-
-        override suspend fun markSynced(ids: List<String>, now: Long) {
-            rows.value = rows.value.map {
-                if (it.id in ids) it.copy(syncStatus = SyncStatus.SYNCED, syncErrorCode = null) else it
-            }
-        }
-
-        override suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long) {
-            rows.value = rows.value.map {
-                if (it.id in ids) {
-                    it.copy(syncStatus = SyncStatus.FAILED, retryCount = it.retryCount + 1, syncErrorCode = errorCode)
-                } else it
-            }
-        }
-
-        override suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long) {
-            rows.value = rows.value.map {
-                if (it.id in ids) {
-                    it.copy(syncStatus = SyncStatus.FAILED, retryCount = maxRetries, syncErrorCode = errorCode)
-                } else it
-            }
-        }
-    }
+    internal class FakeCollectionDao : InMemoryCboCollectionDao()
 
     internal class FakeProductLineDao : ProductLineDao {
         override suspend fun insert(productLine: ProductLineEntity) = Unit
@@ -130,7 +81,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"), record("b"))
         api.handler = { req -> ok(*req.records.map { CboSyncRecordResult(it.id, true) }.toTypedArray()) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("tester"))
 
         assertEquals(SyncStatus.SYNCED, dao.get("a").syncStatus)
         assertEquals(SyncStatus.SYNCED, dao.get("b").syncStatus)
@@ -146,7 +97,7 @@ class CboSyncProcessorTest {
             )
         }
 
-        processor.syncPending()
+        processor.syncPending("tester")
 
         assertEquals(SyncStatus.SYNCED, dao.get("good").syncStatus)
         assertEquals(SyncStatus.FAILED, dao.get("bad").syncStatus)
@@ -161,13 +112,13 @@ class CboSyncProcessorTest {
             ok(CboSyncRecordResult("bad", false, error = "invalid kg", errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false))
         }
 
-        processor.syncPending()
+        processor.syncPending("tester")
 
         val bad = dao.get("bad")
         assertEquals(SyncStatus.FAILED, bad.syncStatus)
         assertEquals(CboSyncErrorCodes.VALIDATION_FAILED, bad.syncErrorCode)
         assertEquals(CboSyncProcessor.MAX_RETRIES, bad.retryCount) // no retries left
-        assertTrue(dao.getSyncable(CboSyncProcessor.MAX_RETRIES).isEmpty())
+        assertTrue(dao.getSyncable(CboSyncProcessor.MAX_RETRIES, "tester").isEmpty())
     }
 
     @Test
@@ -175,9 +126,9 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("bad"))
         api.handler = { ok(CboSyncRecordResult("bad", false, errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false)) }
 
-        processor.syncPending()
-        processor.syncPending()
-        processor.syncPending()
+        processor.syncPending("tester")
+        processor.syncPending("tester")
+        processor.syncPending("tester")
 
         assertEquals(1, api.requests.size)
     }
@@ -187,7 +138,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("bad"))
         api.handler = { ok(CboSyncRecordResult("bad", false, errorCode = CboSyncErrorCodes.VALIDATION_FAILED, retryable = false)) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("tester"))
     }
 
     @Test
@@ -200,7 +151,7 @@ class CboSyncProcessorTest {
             )
         }
 
-        processor.syncPending()
+        processor.syncPending("tester")
 
         assertEquals(CboSyncErrorCodes.DUPLICATE_DETECTED, dao.get("dup").syncErrorCode)
         assertEquals(CboSyncErrorCodes.VALIDATION_FAILED, dao.get("invalid").syncErrorCode)
@@ -220,7 +171,7 @@ class CboSyncProcessorTest {
             )
         }
 
-        processor.syncPending()
+        processor.syncPending("tester")
 
         assertEquals(SyncStatus.SYNCED, dao.get("ok").syncStatus)
         assertEquals(1, dao.get("again").retryCount)
@@ -234,7 +185,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"))
         api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending("tester"))
     }
 
     @Test
@@ -242,7 +193,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a", SyncStatus.FAILED, retryCount = CboSyncProcessor.MAX_RETRIES - 1))
         api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("tester"))
         assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("a").retryCount)
     }
 
@@ -256,10 +207,10 @@ class CboSyncProcessorTest {
             else ok(*req.records.map { CboSyncRecordResult(it.id, true) }.toTypedArray())
         }
 
-        processor.syncPending()
-        processor.syncPending()
+        processor.syncPending("tester")
+        processor.syncPending("tester")
         assertEquals(2, dao.get("a").retryCount)
-        processor.syncPending()
+        processor.syncPending("tester")
 
         assertEquals(SyncStatus.SYNCED, dao.get("a").syncStatus)
         assertEquals(null, dao.get("a").syncErrorCode)
@@ -270,7 +221,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"))
         api.handler = { ok(CboSyncRecordResult("a", false, errorCode = "SERVER_ERROR", retryable = true)) }
 
-        repeat(CboSyncProcessor.MAX_RETRIES + 3) { processor.syncPending() }
+        repeat(CboSyncProcessor.MAX_RETRIES + 3) { processor.syncPending("tester") }
 
         assertEquals(CboSyncProcessor.MAX_RETRIES, api.requests.size)
         assertEquals(CboSyncProcessor.MAX_RETRIES, dao.get("a").retryCount)
@@ -281,7 +232,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"), record("b"))
         api.handler = { ok(CboSyncRecordResult("a", true)) }
 
-        processor.syncPending()
+        processor.syncPending("tester")
 
         assertEquals(SyncStatus.SYNCED, dao.get("a").syncStatus)
         assertEquals(SyncStatus.FAILED, dao.get("b").syncStatus)
@@ -292,7 +243,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"))
         api.handler = { throw IOException("offline") }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending("tester"))
 
         assertEquals(SyncStatus.PENDING, dao.get("a").syncStatus)
         assertEquals(0, dao.get("a").retryCount)
@@ -303,7 +254,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"))
         api.handler = { httpError(503) }
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor.syncPending("tester"))
         assertEquals(SyncStatus.PENDING, dao.get("a").syncStatus)
     }
 
@@ -312,7 +263,7 @@ class CboSyncProcessorTest {
         dao.rows.value = listOf(record("a"))
         api.handler = { httpError(400) }
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("tester"))
         assertEquals(SyncStatus.FAILED, dao.get("a").syncStatus)
         assertEquals(1, dao.get("a").retryCount)
     }
@@ -326,7 +277,7 @@ class CboSyncProcessorTest {
         )
         api.handler = { req -> ok(*req.records.map { CboSyncRecordResult(it.id, true) }.toTypedArray()) }
 
-        processor.syncPending()
+        processor.syncPending("tester")
 
         assertEquals(listOf("again"), api.requests.single().records.map { it.id })
         assertEquals(SyncStatus.SYNCED, dao.get("again").syncStatus)
@@ -337,7 +288,7 @@ class CboSyncProcessorTest {
     fun nothingToSync_makesNoRequest() = runTest {
         dao.rows.value = listOf(record("done", SyncStatus.SYNCED))
 
-        assertEquals(SyncRunResult.DONE, processor.syncPending())
+        assertEquals(SyncRunResult.DONE, processor.syncPending("tester"))
         assertEquals(0, api.requests.size)
     }
 }

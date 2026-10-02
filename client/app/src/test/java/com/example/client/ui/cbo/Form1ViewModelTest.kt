@@ -43,7 +43,7 @@ class Form1ViewModelTest {
         trigger = CountingCboSyncTrigger()
         storage = FakeAttachmentStorage()
         session = SessionManager(FakeTokenStorage())
-        session.startSession("jwt", UserRole.CBO_COLLECTION, "cbo-7")
+        session.startSession("jwt", UserRole.CBO_COLLECTION, "cbo-7", "collector_one")
         viewModel = Form1ViewModel(repository, trigger, session, storage)
     }
 
@@ -155,9 +155,31 @@ class Form1ViewModelTest {
         assertEquals("cbo-7", repository.saved.single().first.cboId)
     }
 
+    // #70: only the person who captured a record sends it, so the record has to say who that was.
+    @Test
+    fun theRecord_isStampedWithTheUserWhoCapturedIt() = runTest(dispatcher) {
+        fillValidForm()
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals("collector_one", repository.saved.single().first.authorUsername)
+    }
+
+    @Test
+    fun anAdminsRecord_isStampedWithTheAdmin() = runTest(dispatcher) {
+        session.startSession("jwt-2", UserRole.ADMIN, null, "admin_test_user")
+        fillValidForm()
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals("admin_test_user", repository.saved.single().first.authorUsername)
+    }
+
     @Test
     fun withoutACbo_theRecordIsStoredAsUnassigned() = runTest(dispatcher) {
-        session.startSession("jwt-2", UserRole.ADMIN) // an Admin has no CBO
+        session.startSession("jwt-2", UserRole.ADMIN, null, "admin_test_user") // an Admin has no CBO
         fillValidForm()
 
         viewModel.onSubmit()

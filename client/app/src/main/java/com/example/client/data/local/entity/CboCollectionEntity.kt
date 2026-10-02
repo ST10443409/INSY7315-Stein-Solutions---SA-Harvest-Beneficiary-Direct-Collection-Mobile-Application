@@ -35,6 +35,11 @@ data class CboCollectionEntity(
     // Error code the server gave for the last failed attempt (e.g. DUPLICATE_DETECTED), so the UI can say why.
     // Null while the record is pending or synced, and when the failure had no code (e.g. no usable response).
     val syncErrorCode: String? = null,
+    // The username of the person who captured this record, and the only one it is ever sent as (#70): the server trusts the
+    // token of whoever sends it, so on a shared phone a record sent under another account would be attributed to them.
+    // Device-only: never sent (the server reads the submitter from the token). Null only for a record saved before this
+    // was kept; such a record is sent by whoever is signed in, as it always was.
+    val authorUsername: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

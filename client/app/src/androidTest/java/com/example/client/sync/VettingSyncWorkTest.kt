@@ -66,8 +66,9 @@ class VettingSyncWorkTest {
     @After
     fun tearDown() = db.close()
 
-    private fun signedInAs(role: UserRole?) = object : RoleProvider {
+    private fun signedInAs(role: UserRole?, username: String? = if (role == null) null else "vetting_test_user") = object : RoleProvider {
         override val currentRole = MutableStateFlow(role)
+        override fun currentUsername() = username
     }
 
     private fun worker(api: SyncApiService, attempt: Int = 0, role: UserRole? = UserRole.VETTING): VettingSyncWorker =

@@ -107,13 +107,13 @@ class ConnectivityScenarioTest {
 
         val processor = processor(productionClient())
         var outcome: SyncRunResult? = null
-        val offlineMs = timed { outcome = processor.syncPending() }
+        val offlineMs = timed { outcome = processor.syncPending("tester") }
         log("airplane.syncWhileOffline", "outcome=$outcome took=${offlineMs}ms")
         assertEquals(SyncRunResult.RETRY_LATER, outcome)
         assertNothingLostOrFailed(pending = 120, synced = 0)
 
         setAirplaneMode(false)
-        val onlineMs = timed { outcome = processor.syncPending() }
+        val onlineMs = timed { outcome = processor.syncPending("tester") }
         log("airplane.syncAfterReconnect", "outcome=$outcome took=${onlineMs}ms")
         assertEquals(SyncRunResult.DONE, outcome)
         assertNothingLostOrFailed(pending = 0, synced = 120)
@@ -144,13 +144,13 @@ class ConnectivityScenarioTest {
             chain.proceed(request.newBuilder().method(request.method, cutOff).build())
         }.build()
 
-        val outcome = processor(client).syncPending()
+        val outcome = processor(client).syncPending("tester")
         log("midUpload.firstRun", "outcome=$outcome requests=${requests.get()} ${countByStatus()}")
         assertEquals(SyncRunResult.RETRY_LATER, outcome)
         assertNothingLostOrFailed(pending = 100, synced = 50)
 
         setAirplaneMode(false)
-        val resumed = processor(productionClient()).syncPending()
+        val resumed = processor(productionClient()).syncPending("tester")
         log("midUpload.resumed", "outcome=$resumed ${countByStatus()}")
         assertEquals(SyncRunResult.DONE, resumed)
         assertNothingLostOrFailed(pending = 0, synced = 150)
@@ -173,11 +173,11 @@ class ConnectivityScenarioTest {
             response
         }).build()
 
-        assertEquals(SyncRunResult.RETRY_LATER, processor(client).syncPending())
+        assertEquals(SyncRunResult.RETRY_LATER, processor(client).syncPending("tester"))
         assertNothingLostOrFailed(pending = 100, synced = 50)
 
         setAirplaneMode(false)
-        assertEquals(SyncRunResult.DONE, processor(productionClient()).syncPending())
+        assertEquals(SyncRunResult.DONE, processor(productionClient()).syncPending("tester"))
         // A duplicate would come back DUPLICATE_DETECTED and be marked FAILED; every record synced means none was.
         assertNothingLostOrFailed(pending = 0, synced = 150)
         assertServerHasEveryRecord()
@@ -223,7 +223,7 @@ class ConnectivityScenarioTest {
         }).build()
         val watchdog = MainThreadWatchdog().apply { start() }
         val started = SystemClock.elapsedRealtime()
-        val outcome = withContext(Dispatchers.IO) { processor(client, withToken = false).syncPending() }
+        val outcome = withContext(Dispatchers.IO) { processor(client, withToken = false).syncPending("tester") }
         val ms = SystemClock.elapsedRealtime() - started
         val stall = watchdog.stop()
         log(label, "outcome=$outcome took=${ms}ms bytesUp=$bytesUp maxMainThreadStall=${stall}ms ${countByStatus()}")

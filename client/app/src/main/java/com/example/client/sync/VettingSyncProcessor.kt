@@ -16,17 +16,21 @@ class VettingSyncProcessor @Inject constructor(
     private val dao: VettingDecisionDao,
     private val api: SyncApiService
 ) {
-    private val runner = BatchSyncRunner(
-        store = DecisionStore(),
-        idOf = { it.id },
-        retryCountOf = { it.retryCount },
-        send = { batch -> api.syncVettingDecisions(VettingSyncRequest(batch.map { it.toSyncDto() })) }
-    )
+    /**
+     * Sends [officer]'s waiting decisions, and only theirs (#70): the request carries the signed-in user's token and the
+     * server records every decision in it as made by that user, so another officer's decisions stay as they are until
+     * they sign in again.
+     */
+    suspend fun syncPending(officer: String, now: () -> Long = System::currentTimeMillis): SyncRunResult =
+        BatchSyncRunner(
+            store = DecisionStore(officer),
+            idOf = { it.id },
+            retryCountOf = { it.retryCount },
+            send = { batch -> api.syncVettingDecisions(VettingSyncRequest(batch.map { it.toSyncDto() })) }
+        ).run(now)
 
-    suspend fun syncPending(now: () -> Long = System::currentTimeMillis): SyncRunResult = runner.run(now)
-
-    private inner class DecisionStore : SyncStore<VettingDecision> {
-        override suspend fun getSyncable(maxRetries: Int) = dao.getSyncable(maxRetries)
+    private inner class DecisionStore(private val officer: String) : SyncStore<VettingDecision> {
+        override suspend fun getSyncable(maxRetries: Int) = dao.getSyncable(maxRetries, officer)
         override suspend fun markSynced(ids: List<String>, now: Long) = dao.markSynced(ids, now)
         override suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long) = dao.markFailed(ids, errorCode, now)
         override suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long) =

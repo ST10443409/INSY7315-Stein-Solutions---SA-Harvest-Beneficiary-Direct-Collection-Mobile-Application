@@ -64,7 +64,7 @@ class VettingDecisionSyncDaoTest {
         assertEquals(SyncStatus.FAILED, a.syncStatus)
         assertEquals(maxRetries, a.retryCount)
         assertEquals("VALIDATION_FAILED", a.syncErrorCode)
-        assertEquals(emptyList<String>(), dao.getSyncable(maxRetries).map { it.id })
+        assertEquals(emptyList<String>(), dao.getSyncable(maxRetries, "tester").map { it.id })
     }
 
     @Test
@@ -86,7 +86,7 @@ class VettingDecisionSyncDaoTest {
         dao.insert(decision("rejected", SyncStatus.FAILED, retryCount = maxRetries, code = "VALIDATION_FAILED", at = 2))
         dao.insert(decision("done", SyncStatus.SYNCED, at = 0))
 
-        assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries).map { it.id })
+        assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries, "tester").map { it.id })
     }
 
     @Test

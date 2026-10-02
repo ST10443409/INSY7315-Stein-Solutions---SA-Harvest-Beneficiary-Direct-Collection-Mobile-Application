@@ -3,6 +3,7 @@ package com.example.client.ui.cbo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -26,7 +27,8 @@ class CboSyncViewModel @Inject constructor(
     private val syncTrigger: CboSyncTrigger,
     private val sessionManager: SessionManager
 ) : ViewModel() {
-    val uiState = repository.observeSubmissions()
+    // Only this user's own work: another account's records on the same phone are theirs to send (#70).
+    val uiState = repository.observeSubmissions(sessionManager.username())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SubmissionsUiState())
 
     /** Queues a sync now; it waits for a network if there is none. */
@@ -53,18 +55,27 @@ fun CboSyncScreen(
 ) = CBOCollectorTheme {
     val online = rememberIsOnline()
     val waiting = state.waiting
+    // Records go first, then their signatures and photos; either is something "Sync now" can still send.
+    val sendable = state.sendable + state.attachmentsWaiting
     SyncTabScreen(
-        subtitle = if (waiting.isEmpty()) stringResource(R.string.sync_all_clear) else stringResource(R.string.sync_waiting, waiting.size),
+        subtitle = when {
+            waiting.isNotEmpty() -> stringResource(R.string.sync_waiting, waiting.size)
+            state.attachmentsWaiting > 0 ->
+                pluralStringResource(R.plurals.sync_pictures_waiting, state.attachmentsWaiting, state.attachmentsWaiting)
+            else -> stringResource(R.string.sync_all_clear)
+        },
         online = online,
         failedMessage = if (state.failed > 0) stringResource(R.string.submissions_panel_failed, state.failed) else null,
         syncLabel = when {
-            state.sendable == 0 -> stringResource(R.string.sync_all_synced)
-            online -> stringResource(R.string.sync_now, state.sendable)
+            sendable == 0 -> stringResource(R.string.sync_all_synced)
+            online -> stringResource(R.string.sync_now, sendable)
             else -> stringResource(R.string.sync_retry_online)
         },
-        syncEnabled = online && state.sendable > 0,
+        syncEnabled = online && sendable > 0,
         onSync = onSync,
-        onSignOut = onSignOut
+        onSignOut = onSignOut,
+        unsentCount = state.unsent,
+        otherAccountsWaiting = state.otherAccountsWaiting
     ) {
         waiting.forEach { SubmissionRow(it) }
     }

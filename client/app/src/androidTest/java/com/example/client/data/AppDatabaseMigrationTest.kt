@@ -87,7 +87,7 @@ class AppDatabaseMigrationTest {
             .fallbackToDestructiveMigrationFrom(FIRST_MIGRATED_VERSION - 1)
             .build()
         try {
-            val syncable = database.cboCollectionDao().getSyncable(maxRetries = 5)
+            val syncable = database.cboCollectionDao().getSyncable(maxRetries = 5, author = "tester")
 
             assertEquals(listOf("pending-1"), syncable.map { it.id })
             assertEquals(SyncStatus.PENDING, syncable.single().syncStatus)

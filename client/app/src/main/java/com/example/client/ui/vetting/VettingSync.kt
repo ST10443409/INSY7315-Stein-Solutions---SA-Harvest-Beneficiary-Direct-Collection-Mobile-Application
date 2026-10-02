@@ -66,7 +66,11 @@ data class DecisionQueueItem(
     val sync: DecisionSyncDisplay
 )
 
-data class VettingSyncUiState(val items: List<DecisionQueueItem> = emptyList()) {
+data class VettingSyncUiState(
+    val items: List<DecisionQueueItem> = emptyList(),
+    /** Decisions some other officer made that are waiting on this phone for that officer to sign in (#70). */
+    val otherAccountsWaiting: Int = 0
+) {
     /** Decisions not yet on the server: waiting to be sent, or failed. */
     val waiting: List<DecisionQueueItem> get() = items.filter { it.sync != DecisionSyncDisplay.SYNCED }
     val failed: Int get() = items.count { it.sync.isFailed }
@@ -84,12 +88,16 @@ class VettingSyncViewModel @Inject constructor(
     private val sessionManager: SessionManager
 ) : ViewModel() {
 
-    val uiState = combine(vetting.observeDecisions(), records.observeRecords()) { decisions, cached ->
+    // Only this officer's own decisions: another officer's on the same phone are theirs to send (#70).
+    private val officer = sessionManager.username()
+
+    val uiState = combine(vetting.observeDecisionsBy(officer), records.observeRecords(), vetting.observeWaitingForOthers(officer)) { decisions, cached, others ->
         val names = cached.associate { it.id to it.legalName }
         VettingSyncUiState(
-            decisions.map {
+            items = decisions.map {
                 DecisionQueueItem(it.id, names[it.foodspaceRecordId] ?: it.foodspaceRecordId, it.outcome, it.decisionTimestamp, it.syncDisplay())
-            }
+            },
+            otherAccountsWaiting = others
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VettingSyncUiState())
 
@@ -125,7 +133,9 @@ fun VettingSyncScreen(
         },
         syncEnabled = online && state.sendable > 0,
         onSync = onSync,
-        onSignOut = onSignOut
+        onSignOut = onSignOut,
+        unsentCount = waiting.size,
+        otherAccountsWaiting = state.otherAccountsWaiting
     ) {
         waiting.forEach { DecisionQueueRow(it) }
     }

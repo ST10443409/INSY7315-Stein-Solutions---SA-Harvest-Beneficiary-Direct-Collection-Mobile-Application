@@ -34,6 +34,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.client.R
+import com.example.client.auth.SessionManager
 import com.example.client.data.local.entity.AttachmentKind
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.CollectionAttachmentEntity
@@ -42,6 +43,7 @@ import com.example.client.data.local.entity.Tone
 import com.example.client.data.repository.CboCollectionRepository
 import com.example.client.network.CboSyncErrorCodes
 import com.example.client.sync.CboSyncProcessor
+import com.example.client.sync.SyncPolicy
 import com.example.client.ui.components.ErrorTagPalette
 import com.example.client.ui.components.TagBadge
 import com.example.client.ui.components.TagPalette
@@ -88,8 +90,21 @@ data class SubmissionItem(
 )
 
 data class SubmissionsUiState(
-    val items: List<SubmissionItem> = emptyList()
+    val items: List<SubmissionItem> = emptyList(),
+    /**
+     * Signatures and photos of records the server already has that are still to be uploaded (they upload separately from
+     * the record, so a record can be "synced" while its pictures are not). Zero for files the server refused for good.
+     */
+    val attachmentsWaiting: Int = 0,
+    /** Records some other account captured that are waiting on this phone for that person to sign in (#70). */
+    val otherAccountsWaiting: Int = 0
 ) {
+    /**
+     * What would be left on this phone, unsent, if the user signed out now: their records not yet on the server, and the
+     * pictures of records that are. It all stays safe, and is sent when they sign in again (#70).
+     */
+    val unsent: Int get() = waiting.size + attachmentsWaiting
+
     val pending: Int get() = items.count { it.display == SubmissionDisplay.PENDING }
     val synced: Int get() = items.count { it.display == SubmissionDisplay.SYNCED }
     val failed: Int get() = items.count { it.display.isFailed }
@@ -124,12 +139,29 @@ fun CboCollectionEntity.toSubmissionItem(attachments: List<CollectionAttachmentE
     photoCount = attachments.count { it.kind == AttachmentKind.PHOTO }
 )
 
-/** Every collection on this device with its signature and photo counts, as the screens show them. Updates live. */
-fun CboCollectionRepository.observeSubmissions(): Flow<SubmissionsUiState> =
-    combine(observeAll(), observeAttachments()) { records, attachments ->
+/**
+ * What [author] captured on this device, with its signature and photo counts, as the screens show them. Updates live.
+ * Only their own work: on a phone other people sign in to, someone else's records are not theirs to see or send (#70),
+ * though how many are waiting for their author is counted.
+ */
+fun CboCollectionRepository.observeSubmissions(author: String?): Flow<SubmissionsUiState> =
+    combine(observeByAuthor(author), observeAttachments(), observeWaitingForOthers(author)) { records, attachments, others ->
         val byCollection = attachments.groupBy { it.collectionId }
-        SubmissionsUiState(records.map { it.toSubmissionItem(byCollection[it.id].orEmpty()) })
+        val serverHas = records.filter { it.serverHasIt() }.map { it.id }.toSet()
+        SubmissionsUiState(
+            items = records.map { it.toSubmissionItem(byCollection[it.id].orEmpty()) },
+            attachmentsWaiting = attachments.count { it.collectionId in serverHas && it.isDueForUpload() },
+            otherAccountsWaiting = others
+        )
     }
+
+/** The server holds this record: delivered, or kept there as a suspected duplicate for an Admin to review. Pictures upload for these. */
+internal fun CboCollectionEntity.serverHasIt() =
+    syncStatus == SyncStatus.SYNCED || (syncStatus == SyncStatus.FAILED && syncErrorCode == CboSyncErrorCodes.DUPLICATE_DETECTED)
+
+/** Still to upload: not on the server yet, and not one the server refused for good. */
+internal fun CollectionAttachmentEntity.isDueForUpload() =
+    syncStatus == SyncStatus.PENDING || (syncStatus == SyncStatus.FAILED && retryCount < SyncPolicy.MAX_RETRIES)
 
 /**
  * A thin UI layer over [CboCollectionRepository]: the same flows the rest of the app uses, no second query. Room
@@ -140,9 +172,10 @@ fun CboCollectionRepository.observeSubmissions(): Flow<SubmissionsUiState> =
  */
 @HiltViewModel
 class SubmissionsViewModel @Inject constructor(
-    repository: CboCollectionRepository
+    repository: CboCollectionRepository,
+    sessionManager: SessionManager
 ) : ViewModel() {
-    val uiState = repository.observeSubmissions()
+    val uiState = repository.observeSubmissions(sessionManager.username())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SubmissionsUiState())
 }
 

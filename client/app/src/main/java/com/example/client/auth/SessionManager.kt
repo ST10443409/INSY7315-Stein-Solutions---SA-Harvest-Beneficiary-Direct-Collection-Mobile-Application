@@ -17,7 +17,9 @@ class SessionManager @Inject constructor(
     private val storage: TokenStorage
 ) : RoleProvider {
 
-    private val session = MutableStateFlow(storage.load())
+    // A session restored without a username (kept from before it was recorded) cannot be tied to the records its owner
+    // captures, so it is ended and the user signs in again (#70): nothing may be attributed to "nobody".
+    private val session = MutableStateFlow(restore(storage))
     private val role = MutableStateFlow(session.value?.role)
     private val expired = MutableStateFlow(false)
 
@@ -32,8 +34,10 @@ class SessionManager @Inject constructor(
     /** The CBO the signed-in user collects for, or null when signed out or the user has none. */
     fun cboId(): String? = session.value?.cboId
 
-    /** The username the signed-in user logged in with, or null when signed out (or the session predates it). */
+    /** The username the signed-in user logged in with, or null when signed out. */
     fun username(): String? = session.value?.username
+
+    override fun currentUsername(): String? = username()
 
     @Synchronized
     fun startSession(token: String, userRole: UserRole, cboId: String? = null, username: String? = null) {
@@ -67,5 +71,14 @@ class SessionManager @Inject constructor(
         storage.clear()
         session.value = null
         role.value = null
+    }
+
+    private companion object {
+        fun restore(storage: TokenStorage): Session? {
+            val stored = storage.load() ?: return null
+            if (!stored.username.isNullOrBlank()) return stored
+            storage.clear()
+            return null
+        }
     }
 }

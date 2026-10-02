@@ -254,6 +254,8 @@ class Form1ViewModel @Inject constructor(
             shots = form.shots,
             latitude = null,
             longitude = null,
+            // Whoever is signed in captured it, and only they send it (#70).
+            authorUsername = sessionManager.username(),
             createdAt = now,
             updatedAt = now
         )

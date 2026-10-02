@@ -65,12 +65,27 @@ abstract class CboCollectionDao {
     @Query("SELECT * FROM cbo_collections ORDER BY createdAt DESC")
     abstract fun observeAllNewestFirst(): Flow<List<CboCollectionEntity>>
 
-    /** Records the sync worker should send: PENDING ones, plus FAILED ones that still have retries left. */
+    /**
+     * The collections [author] captured, most recent submission first. What a person sees of their own work on a phone that
+     * other people also sign in to (#70). A record saved before authors were kept (NULL) shows for everyone, as it can be sent
+     * by anyone. Usernames are compared ignoring case, as the server does at sign-in.
+     */
     @Query(
-        "SELECT * FROM cbo_collections WHERE syncStatus = 'PENDING' " +
-            "OR (syncStatus = 'FAILED' AND retryCount < :maxRetries) ORDER BY createdAt ASC"
+        "SELECT * FROM cbo_collections WHERE authorUsername = :author COLLATE NOCASE OR authorUsername IS NULL " +
+            "ORDER BY createdAt DESC"
     )
-    abstract suspend fun getSyncable(maxRetries: Int): List<CboCollectionEntity>
+    abstract fun observeByAuthorNewestFirst(author: String?): Flow<List<CboCollectionEntity>>
+
+    /**
+     * What the sync worker should send for [author]: their PENDING records, plus their FAILED ones that still have retries
+     * left. Never another user's: the server attributes a record to whoever sends it (#70). Records with no recorded author
+     * (saved before it was kept) are sent by whoever is signed in.
+     */
+    @Query(
+        "SELECT * FROM cbo_collections WHERE (syncStatus = 'PENDING' OR (syncStatus = 'FAILED' AND retryCount < :maxRetries)) " +
+            "AND (authorUsername = :author COLLATE NOCASE OR authorUsername IS NULL) ORDER BY createdAt ASC"
+    )
+    abstract suspend fun getSyncable(maxRetries: Int, author: String): List<CboCollectionEntity>
 
     @Query("UPDATE cbo_collections SET syncStatus = 'SYNCED', syncErrorCode = NULL, updatedAt = :now WHERE id IN (:ids)")
     abstract suspend fun markSynced(ids: List<String>, now: Long)
@@ -94,4 +109,40 @@ abstract class CboCollectionDao {
 
     @Query("SELECT COUNT(*) FROM cbo_collections WHERE syncStatus = :status")
     abstract fun observeCountByStatus(status: SyncStatus): Flow<Int>
+
+    /**
+     * How many records some other account captured that are still waiting to be sent: they stay on this phone until their
+     * author signs in (#70), and whoever is signed in now is told so rather than left to wonder where they went.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM cbo_collections WHERE (syncStatus = 'PENDING' OR (syncStatus = 'FAILED' AND retryCount < :maxRetries)) " +
+            "AND authorUsername IS NOT NULL AND authorUsername <> :author COLLATE NOCASE"
+    )
+    abstract fun observeWaitingForOtherAuthors(author: String?, maxRetries: Int): Flow<Int>
+
+    // ── Uploading the signatures and photos ──────────────────────────────────────────
+
+    /**
+     * The files [author] still has to upload: PENDING ones, plus FAILED ones with retries left, of collections the server
+     * already has (SYNCED, or held by the server as a suspected duplicate for an Admin to review, whose pictures are what
+     * the reviewer needs). A file is never uploaded before its record: the server refuses a file for a collection it has not
+     * received. Oldest first. Same author rule as [getSyncable].
+     */
+    @Query(
+        "SELECT a.* FROM collection_attachments a JOIN cbo_collections c ON c.id = a.collectionId " +
+            "WHERE (c.syncStatus = 'SYNCED' OR (c.syncStatus = 'FAILED' AND c.syncErrorCode = 'DUPLICATE_DETECTED')) " +
+            "AND (a.syncStatus = 'PENDING' OR (a.syncStatus = 'FAILED' AND a.retryCount < :maxRetries)) " +
+            "AND (c.authorUsername = :author COLLATE NOCASE OR c.authorUsername IS NULL) ORDER BY a.createdAt ASC"
+    )
+    abstract suspend fun getUploadableAttachments(maxRetries: Int, author: String): List<CollectionAttachmentEntity>
+
+    @Query("UPDATE collection_attachments SET syncStatus = 'SYNCED', syncErrorCode = NULL, updatedAt = :now WHERE id IN (:ids)")
+    abstract suspend fun markAttachmentsUploaded(ids: List<String>, now: Long)
+
+    /** A refusal resending cannot fix: FAILED with every retry used up, so [getUploadableAttachments] skips it from now on. */
+    @Query(
+        "UPDATE collection_attachments SET syncStatus = 'FAILED', retryCount = :maxRetries, syncErrorCode = :errorCode, " +
+            "updatedAt = :now WHERE id IN (:ids)"
+    )
+    abstract suspend fun markAttachmentsRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long)
 }

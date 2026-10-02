@@ -4,6 +4,7 @@ import com.example.client.data.local.dao.VettingDecisionDao
 import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.data.local.entity.VettingDecision
+import com.example.client.sync.SyncPolicy
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 import javax.inject.Inject
@@ -37,6 +38,11 @@ class VettingRepositoryImpl @Inject constructor(
     }
 
     override fun observeDecisions(): Flow<List<VettingDecision>> = dao.observeAllNewestFirst()
+
+    override fun observeDecisionsBy(officer: String?): Flow<List<VettingDecision>> = dao.observeByOfficerNewestFirst(officer)
+
+    override fun observeWaitingForOthers(officer: String?): Flow<Int> =
+        dao.observeWaitingForOtherOfficers(officer, SyncPolicy.MAX_RETRIES)
 
     override fun observeDecisionsFor(recordId: String): Flow<List<VettingDecision>> = dao.observeForRecord(recordId)
 }

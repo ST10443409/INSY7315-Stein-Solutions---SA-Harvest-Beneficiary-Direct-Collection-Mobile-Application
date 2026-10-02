@@ -6,6 +6,7 @@ import com.example.client.data.local.dao.VettingDecisionDao
 import com.example.client.data.local.entity.DecisionOutcome
 import com.example.client.data.local.entity.FoodspaceBeneficiaryRecord
 import com.example.client.data.local.entity.SyncStatus
+import com.example.client.data.local.entity.UNKNOWN_OFFICER
 import com.example.client.data.local.entity.VettingDecision
 import com.example.client.data.repository.AdminSyncStatusRepository
 import com.example.client.data.repository.FormSyncCounts
@@ -151,6 +152,14 @@ class FakeVettingRepository : VettingRepository {
     }
 
     override fun observeDecisions(): Flow<List<VettingDecision>> = decisions
+
+    override fun observeDecisionsBy(officer: String?): Flow<List<VettingDecision>> =
+        decisions.map { l -> l.filter { it.officerId == UNKNOWN_OFFICER || it.officerId.equals(officer, ignoreCase = true) } }
+
+    override fun observeWaitingForOthers(officer: String?): Flow<Int> = decisions.map { l ->
+        l.count { it.syncStatus == SyncStatus.PENDING && it.officerId != UNKNOWN_OFFICER && !it.officerId.equals(officer, ignoreCase = true) }
+    }
+
     override fun observeDecisionsFor(recordId: String): Flow<List<VettingDecision>> =
         decisions.map { l -> l.filter { it.foodspaceRecordId == recordId } }
 }
@@ -193,9 +202,20 @@ class FakeVettingDecisionDao : VettingDecisionDao {
     override fun observeForRecord(recordId: String): Flow<List<VettingDecision>> =
         observeAllNewestFirst().map { l -> l.filter { it.foodspaceRecordId == recordId } }
 
-    override suspend fun getSyncable(maxRetries: Int): List<VettingDecision> = rows.value
+    override fun observeByOfficerNewestFirst(officer: String?): Flow<List<VettingDecision>> =
+        observeAllNewestFirst().map { l -> l.filter { it.officerId == UNKNOWN_OFFICER || it.officerId.equals(officer, ignoreCase = true) } }
+
+    override suspend fun getSyncable(maxRetries: Int, officer: String): List<VettingDecision> = rows.value
         .filter { it.syncStatus == SyncStatus.PENDING || (it.syncStatus == SyncStatus.FAILED && it.retryCount < maxRetries) }
+        .filter { it.officerId == UNKNOWN_OFFICER || it.officerId.equals(officer, ignoreCase = true) }
         .sortedWith(compareBy({ it.decisionTimestamp }, { it.createdAt }))
+
+    override fun observeWaitingForOtherOfficers(officer: String?, maxRetries: Int): Flow<Int> = rows.map { l ->
+        l.count {
+            (it.syncStatus == SyncStatus.PENDING || (it.syncStatus == SyncStatus.FAILED && it.retryCount < maxRetries)) &&
+                it.officerId != UNKNOWN_OFFICER && !it.officerId.equals(officer, ignoreCase = true)
+        }
+    }
 
     override suspend fun markSynced(ids: List<String>, now: Long) {
         rows.value = rows.value.map { if (it.id in ids) it.copy(syncStatus = SyncStatus.SYNCED, syncErrorCode = null, updatedAt = now) else it }

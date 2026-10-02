@@ -81,7 +81,7 @@ class VettingDecisionMigrationTest {
             .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
         try {
-            val syncable = database.vettingDecisionDao().getSyncable(maxRetries = 5)
+            val syncable = database.vettingDecisionDao().getSyncable(maxRetries = 5, officer = "tester")
 
             assertEquals(listOf("pending-1"), syncable.map { it.id })
             assertEquals(0, syncable.single().retryCount)

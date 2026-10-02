@@ -100,6 +100,21 @@
     <string name="sync_all_synced">All synced</string>
     <string name="sync_retry_online">Retry when online</string>
     <string name="sync_sign_out">Sign out</string>
+    <string name="sync_sign_out_title">Sign out with unsent work?</string>
+    <plurals name="sync_sign_out_body">
+        <item quantity="one">%1$d item has not reached the server yet. It stays safe on this phone and is only sent when you sign in again. Nobody else who signs in here can send it for you.</item>
+        <item quantity="other">%1$d items have not reached the server yet. They stay safe on this phone and are only sent when you sign in again. Nobody else who signs in here can send them for you.</item>
+    </plurals>
+    <string name="sync_sign_out_stay">Stay signed in</string>
+    <string name="sync_sign_out_anyway">Sign out anyway</string>
+    <plurals name="sync_pictures_waiting">
+        <item quantity="one">Records are sent. %1$d signature or photo is still to upload.</item>
+        <item quantity="other">Records are sent. %1$d signatures and photos are still to upload.</item>
+    </plurals>
+    <plurals name="sync_other_accounts_waiting">
+        <item quantity="one">%1$d item from another account is waiting on this phone. It is sent when that person signs in.</item>
+        <item quantity="other">%1$d items from other accounts are waiting on this phone. They are sent when those people sign in.</item>
+    </plurals>
     <string name="sync_row_attachments">%1$d signatures · %2$d photos</string>
 
     <!-- Admin overview and reports -->

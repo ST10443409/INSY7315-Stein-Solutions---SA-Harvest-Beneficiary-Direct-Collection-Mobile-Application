@@ -27,8 +27,9 @@ enum class AttachmentKind {
  * where it is, so it stays with the collection when the collection is queued for sync. (Image bytes are deliberately not
  * kept in the row: Room reads a row through a ~2 MB window, which a photo can exceed.)
  *
- * Uploading the file to cloud storage is not built yet, so [syncStatus] stays PENDING; it exists so the upload can be
- * added without another migration.
+ * The file is uploaded to the backend (and from there to blob storage) separately from the collection record, once the
+ * server has that record, so a slow photo never holds back records. [syncStatus] is PENDING until the server has the file
+ * (SYNCED), or FAILED when the server refused it for good (see [retryCount] and [syncErrorCode]).
  */
 @Entity(tableName = "collection_attachments", indices = [Index("collectionId")])
 data class CollectionAttachmentEntity(
@@ -48,6 +49,11 @@ data class CollectionAttachmentEntity(
     val sizeBytes: Long,
 
     val syncStatus: SyncStatus = SyncStatus.PENDING,
+    // Uploads the server refused for good (too big, not an image, ...) use up every retry so they are not sent again; a
+    // network failure is not counted, it just waits for the next run.
+    val retryCount: Int = 0,
+    // The server's error code for the last refusal, so the UI can say why. Null otherwise.
+    val syncErrorCode: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

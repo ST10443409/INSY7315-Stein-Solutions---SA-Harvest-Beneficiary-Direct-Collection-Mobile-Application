@@ -77,7 +77,7 @@ class CboHomeViewModel @Inject constructor(
     repository: CboCollectionRepository,
     sessionManager: SessionManager
 ) : ViewModel() {
-    val uiState = repository.observeSubmissions()
+    val uiState = repository.observeSubmissions(sessionManager.username())
         .map { CboHomeUiState(username = sessionManager.username(), submissions = it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CboHomeUiState(username = sessionManager.username()))
 }

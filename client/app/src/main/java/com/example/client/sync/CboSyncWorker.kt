@@ -20,5 +20,5 @@ class CboSyncWorker @AssistedInject constructor(
     /** Who POST /api/cbo-collection/sync accepts. */
     override val syncRoles = setOf(UserRole.CBO_COLLECTION, UserRole.ADMIN)
 
-    override suspend fun performSync(): SyncRunResult = processor.syncPending()
+    override suspend fun performSync(username: String): SyncRunResult = processor.syncPending(username)
 }

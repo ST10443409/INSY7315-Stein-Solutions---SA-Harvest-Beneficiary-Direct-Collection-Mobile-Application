@@ -69,7 +69,7 @@ class CboCollectionDaoSyncTest {
         assertEquals(SyncStatus.FAILED, a.syncStatus)
         assertEquals(maxRetries, a.retryCount)
         assertEquals("DUPLICATE_DETECTED", a.syncErrorCode)
-        assertEquals(emptyList<String>(), dao.getSyncable(maxRetries).map { it.id })
+        assertEquals(emptyList<String>(), dao.getSyncable(maxRetries, "tester").map { it.id })
     }
 
     @Test
@@ -91,7 +91,7 @@ class CboCollectionDaoSyncTest {
         dao.insert(record("rejected", SyncStatus.FAILED, retryCount = maxRetries, code = "VALIDATION_FAILED").copy(createdAt = 2))
         dao.insert(record("done", SyncStatus.SYNCED).copy(createdAt = 0))
 
-        assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries).map { it.id })
+        assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries, "tester").map { it.id })
     }
 
     @Test

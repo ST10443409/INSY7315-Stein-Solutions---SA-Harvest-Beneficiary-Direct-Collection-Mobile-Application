@@ -19,20 +19,24 @@ class CboSyncProcessor @Inject constructor(
     private val productLineDao: ProductLineDao,
     private val api: SyncApiService
 ) {
-    private val runner = BatchSyncRunner(
-        store = CollectionStore(),
-        idOf = { it.id },
-        retryCountOf = { it.retryCount },
-        send = { batch ->
-            val linesByCollection = productLineDao.getForCollections(batch.map { it.id }).groupBy { it.collectionId }
-            api.syncCboCollections(CboSyncRequest(batch.map { it.toSyncDto(linesByCollection[it.id].orEmpty()) }))
-        }
-    )
+    /**
+     * Sends [author]'s waiting collections, and only theirs (#70): the request carries the signed-in user's token and the
+     * server attributes every record in it to that user, so another user's records stay as they are until their author
+     * signs in again.
+     */
+    suspend fun syncPending(author: String, now: () -> Long = System::currentTimeMillis): SyncRunResult =
+        BatchSyncRunner(
+            store = CollectionStore(author),
+            idOf = { it.id },
+            retryCountOf = { it.retryCount },
+            send = { batch ->
+                val linesByCollection = productLineDao.getForCollections(batch.map { it.id }).groupBy { it.collectionId }
+                api.syncCboCollections(CboSyncRequest(batch.map { it.toSyncDto(linesByCollection[it.id].orEmpty()) }))
+            }
+        ).run(now)
 
-    suspend fun syncPending(now: () -> Long = System::currentTimeMillis): SyncRunResult = runner.run(now)
-
-    private inner class CollectionStore : SyncStore<CboCollectionEntity> {
-        override suspend fun getSyncable(maxRetries: Int) = collectionDao.getSyncable(maxRetries)
+    private inner class CollectionStore(private val author: String) : SyncStore<CboCollectionEntity> {
+        override suspend fun getSyncable(maxRetries: Int) = collectionDao.getSyncable(maxRetries, author)
 
         override suspend fun markSynced(ids: List<String>, now: Long) {
             collectionDao.markSynced(ids, now)

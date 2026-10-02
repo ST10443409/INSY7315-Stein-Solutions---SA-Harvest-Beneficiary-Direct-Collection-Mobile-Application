@@ -1,6 +1,6 @@
 package com.example.client.data.repository
 
-import com.example.client.data.local.dao.CboCollectionDao
+import com.example.client.testing.InMemoryCboCollectionDao
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.CollectionAttachmentEntity
 import com.example.client.data.local.entity.ProductLineEntity
@@ -26,45 +26,7 @@ import java.io.IOException
 
 class CboCollectionRepositoryTest {
 
-    private class FakeCboCollectionDao : CboCollectionDao() {
-        val collections = MutableStateFlow<List<CboCollectionEntity>>(emptyList())
-        val productLines = mutableListOf<ProductLineEntity>()
-
-        override suspend fun insert(collection: CboCollectionEntity) {
-            collections.value = collections.value.filterNot { it.id == collection.id } + collection
-        }
-
-        override suspend fun insertProductLines(productLines: List<ProductLineEntity>) {
-            productLines.forEach { line ->
-                this.productLines.removeAll { it.id == line.id }
-                this.productLines += line
-            }
-        }
-
-        override suspend fun update(collection: CboCollectionEntity) = insert(collection)
-
-        override suspend fun insertAttachments(attachments: List<CollectionAttachmentEntity>) = Unit
-        override suspend fun getAttachmentsForCollections(collectionIds: List<String>): List<CollectionAttachmentEntity> = emptyList()
-        override fun observeAttachments(): Flow<List<CollectionAttachmentEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
-
-        override fun getBySyncStatus(status: SyncStatus): Flow<List<CboCollectionEntity>> =
-            collections.map { list -> list.filter { it.syncStatus == status } }
-
-        override fun getAll(): Flow<List<CboCollectionEntity>> = collections
-
-        override fun observeAllNewestFirst(): Flow<List<CboCollectionEntity>> =
-            collections.map { list -> list.sortedByDescending { it.createdAt } }
-
-        override suspend fun getSyncable(maxRetries: Int): List<CboCollectionEntity> = collections.value
-
-        override suspend fun markSynced(ids: List<String>, now: Long) = Unit
-
-        override suspend fun markFailed(ids: List<String>, errorCode: String?, now: Long) = Unit
-        override suspend fun markRejected(ids: List<String>, errorCode: String?, maxRetries: Int, now: Long) = Unit
-
-        override fun observeCountByStatus(status: SyncStatus): Flow<Int> =
-            collections.map { list -> list.count { it.syncStatus == status } }
-    }
+    private class FakeCboCollectionDao : InMemoryCboCollectionDao()
 
     /** A network that is completely unreachable: any call fails, and every attempt is counted. */
     private class UnreachableSyncApi : SyncApiService {

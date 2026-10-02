@@ -25,12 +25,24 @@ interface CboCollectionRepository {
         attachments: List<CollectionAttachmentEntity> = emptyList()
     )
 
-    /** All locally stored collections, most recent submission first. Updates live. */
+    /** All locally stored collections, whoever captured them, most recent submission first. Updates live. */
     fun observeAll(): Flow<List<CboCollectionEntity>>
+
+    /**
+     * The collections [author] captured, most recent first: what a person sees of their own work on a phone other people also
+     * sign in to (#70). Updates live.
+     */
+    fun observeByAuthor(author: String?): Flow<List<CboCollectionEntity>>
 
     /** Every signature and photo stored with a collection on this device. Updates live. */
     fun observeAttachments(): Flow<List<CollectionAttachmentEntity>>
 
     /** Number of locally stored collections currently in [status]. Updates live. */
     fun observeCount(status: SyncStatus): Flow<Int>
+
+    /**
+     * How many records captured by some other account are still waiting on this phone for that person to sign in and send
+     * them (#70). Updates live.
+     */
+    fun observeWaitingForOthers(author: String?): Flow<Int>
 }

@@ -60,6 +60,7 @@ public class VettingController : ApiControllerBase
     /// is the signed-in user, whatever the device sent. See <see cref="VettingDecisionIngestionService"/>.
     /// </summary>
     [HttpPost("sync")]
+    [RequestSizeLimit(VettingDecisionSyncValidator.MaxRequestBytes)]
     public async Task<ActionResult<ApiResponse<VettingSyncResponse>>> Sync(
         [FromBody] VettingDecisionSyncRequest request, CancellationToken cancellationToken)
     {

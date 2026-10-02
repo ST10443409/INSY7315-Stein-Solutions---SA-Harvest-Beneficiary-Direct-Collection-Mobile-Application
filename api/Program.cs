@@ -115,6 +115,10 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+// The app gzips sync batches (#55: about 85% fewer bytes over 2G). Each endpoint's request size limit applies to the
+// decompressed body, so a small compressed "zip bomb" cannot expand past it.
+builder.Services.AddRequestDecompression();
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -213,6 +217,7 @@ if (security.RequireHttps)
     app.UseMiddleware<RequireHttpsMiddleware>(); // refuse, never redirect: see the middleware for why
 }
 
+app.UseRequestDecompression();
 app.UseRateLimiter();
 
 app.UseAuthentication();

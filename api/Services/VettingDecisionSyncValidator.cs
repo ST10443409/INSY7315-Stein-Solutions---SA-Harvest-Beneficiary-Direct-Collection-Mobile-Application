@@ -12,6 +12,9 @@ public static class VettingDecisionSyncValidator
     public const int MaxBatchSize = 100;
     public const int MaxNotesLength = 4000;
 
+    /// <summary>Largest request body accepted, after decompression (see <see cref="CboCollectionSyncValidator.MaxRequestBytes"/>).</summary>
+    public const long MaxRequestBytes = 4 * 1024 * 1024;
+
     private const int MaxIdLength = 64;
     private const int MaxRecordIdLength = 200;
 

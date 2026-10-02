@@ -41,6 +41,9 @@ public sealed class ExceptionHandlingMiddleware
 
             var (status, code, message) = ex switch
             {
+                // A body over the endpoint's size limit (checked after decompression, so a small gzip bomb lands here too).
+                BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
+                    (StatusCodes.Status413PayloadTooLarge, ApiErrorCodes.PayloadTooLarge, "The request is too large."),
                 // Malformed request body / unreadable JSON etc.: the caller's fault, and the message is framework-authored.
                 BadHttpRequestException bad => (bad.StatusCode, ApiErrorCodes.BadRequest, "The request could not be read."),
                 _ => (StatusCodes.Status500InternalServerError, ApiErrorCodes.InternalError,

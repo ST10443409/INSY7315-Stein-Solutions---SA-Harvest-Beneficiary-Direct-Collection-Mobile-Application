@@ -10,6 +10,9 @@ namespace api.Controllers;
 
 public class AuthController : ApiControllerBase
 {
+    /// <summary>A username and password are well under a kilobyte.</summary>
+    public const long MaxLoginRequestBytes = 16 * 1024;
+
     private readonly IAuthService _authService;
     private readonly IJwtTokenService _tokenService;
 
@@ -26,6 +29,7 @@ public class AuthController : ApiControllerBase
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting(SecurityOptions.LoginRateLimitPolicy)]
+    [RequestSizeLimit(MaxLoginRequestBytes)] // anonymous: a compressed body must not expand into megabytes of JSON
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var user = await _authService.AuthenticateAsync(request.Username, request.Password, cancellationToken);

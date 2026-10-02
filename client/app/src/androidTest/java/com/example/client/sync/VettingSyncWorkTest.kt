@@ -13,6 +13,8 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.example.client.auth.RoleProvider
+import com.example.client.auth.UserRole
 import com.example.client.data.AppDatabase
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.network.ApiEnvelope
@@ -24,6 +26,7 @@ import com.example.client.network.SyncRequest
 import com.example.client.network.SyncResponse
 import com.example.client.network.VettingSyncRequest
 import com.example.client.testing.sampleDecision
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -63,12 +66,16 @@ class VettingSyncWorkTest {
     @After
     fun tearDown() = db.close()
 
-    private fun worker(api: SyncApiService, attempt: Int = 0): VettingSyncWorker =
+    private fun signedInAs(role: UserRole?) = object : RoleProvider {
+        override val currentRole = MutableStateFlow(role)
+    }
+
+    private fun worker(api: SyncApiService, attempt: Int = 0, role: UserRole? = UserRole.VETTING): VettingSyncWorker =
         TestListenableWorkerBuilder<VettingSyncWorker>(context)
             .setRunAttemptCount(attempt)
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    VettingSyncWorker(appContext, workerParameters, VettingSyncProcessor(db.vettingDecisionDao(), api))
+                    VettingSyncWorker(appContext, workerParameters, VettingSyncProcessor(db.vettingDecisionDao(), api), signedInAs(role))
             })
             .build()
 
@@ -126,6 +133,41 @@ class VettingSyncWorkTest {
         val saved = db.vettingDecisionDao().getAll().first().single()
         assertEquals(SyncStatus.FAILED, saved.syncStatus)
         assertEquals("VALIDATION_FAILED", saved.syncErrorCode)
+    }
+
+    @Test
+    fun signedOut_theWorkerSendsNothing_andKeepsEveryDecision() = runBlocking {
+        db.vettingDecisionDao().insert(sampleDecision("fs-1").copy(id = "d1"))
+        val api = FakeApi(::ok)
+
+        val result = worker(api, role = null).doWork()
+
+        // Done for now, not retried: every request would be refused. Signing in queues a sync.
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertTrue(api.requests.isEmpty())
+        val saved = db.vettingDecisionDao().getAll().first().single()
+        assertEquals(SyncStatus.PENDING, saved.syncStatus)
+        assertEquals(0, saved.retryCount)
+    }
+
+    @Test
+    fun signedInAsACollector_theDecisionsWorkerSendsNothing() = runBlocking {
+        db.vettingDecisionDao().insert(sampleDecision("fs-1").copy(id = "d1"))
+        val api = FakeApi(::ok)
+
+        assertEquals(ListenableWorker.Result.success(), worker(api, role = UserRole.CBO_COLLECTION).doWork())
+        assertTrue(api.requests.isEmpty())
+        assertEquals(SyncStatus.PENDING, db.vettingDecisionDao().getAll().first().single().syncStatus)
+    }
+
+    @Test
+    fun anAdmin_mayStillSendDecisions() = runBlocking {
+        db.vettingDecisionDao().insert(sampleDecision("fs-1").copy(id = "d1"))
+        val api = FakeApi(::ok)
+
+        worker(api, role = UserRole.ADMIN).doWork()
+
+        assertEquals(1, api.requests.size)
     }
 
     @Test

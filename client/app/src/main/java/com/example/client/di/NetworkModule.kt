@@ -1,5 +1,6 @@
 package com.example.client.di
 
+import com.example.client.BuildConfig
 import com.example.client.network.AdminApiService
 import com.example.client.network.AuthApiService
 import com.example.client.network.AuthInterceptor
@@ -19,9 +20,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-    // Note: Use 10.0.2.2 for localhost when testing on Android Emulator
-    // TODO: move to a per-build-type config once a real backend URL exists.
-    private const val BASE_URL = "http://10.0.2.2:5000/"
+    // The API address comes from the build (see API_BASE_URL in app/build.gradle.kts), not from code.
 
     @Provides
     @Singleton
@@ -44,7 +43,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(BuildConfig.API_BASE_URL)
         .addConverterFactory(GsonConverterFactory.create())
         .client(client)
         .build()

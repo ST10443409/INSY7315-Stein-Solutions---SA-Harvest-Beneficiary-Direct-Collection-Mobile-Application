@@ -131,10 +131,10 @@
     <string name="admin_activity_role_vetting">Vetting</string>
     <string name="admin_activity_role_admin">Admins</string>
     <string name="admin_activity_filter_dates">Dates</string>
-    <string name="admin_activity_filter_from">From 2026-09-01</string>
-    <string name="admin_activity_filter_to">To 2026-09-20</string>
+    <string name="admin_activity_filter_from">From (YYYY-MM-DD)</string>
+    <string name="admin_activity_filter_to">To (YYYY-MM-DD)</string>
     <string name="admin_activity_dates_hint">Leave both empty for the last 7 days. Days are South African days and the last day is included.</string>
-    <string name="admin_activity_date_error">Enter dates like 2026-09-20, with the first day not after the last.</string>
+    <string name="admin_activity_date_error">Enter dates as YYYY-MM-DD, with the first day not after the last.</string>
     <string name="admin_activity_apply">Apply</string>
     <string name="admin_activity_clear">Clear</string>
     <string name="admin_activity_window_between">%1$s to %2$s</string>

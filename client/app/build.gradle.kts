@@ -15,6 +15,10 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        // Where the app talks to the API. Override per machine or build with -PapiBaseUrl=https://host/ (it must end in "/").
+        // The default is the host machine as seen from the Android emulator.
+        val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "http://10.0.2.2:5000/"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -33,6 +37,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     sourceSets {
         // Room exports its schemas here; the migration test replays old versions from them.

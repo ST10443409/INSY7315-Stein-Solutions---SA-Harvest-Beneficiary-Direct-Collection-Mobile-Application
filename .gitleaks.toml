@@ -1,0 +1,28 @@
+# gitleaks configuration (#54): the default rules, plus the exceptions below. Every exception says why it is safe.
+# Add one only after checking the finding by hand, and record it in docs/security/security-review.md.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test code: deliberately fake credentials (ApiFactory's test-only signing key and password, 'leaky-db-password' used to prove nothing leaks, fake tokens)"
+paths = [
+  '''^api\.Tests/''',
+  '''^client/app/src/(test|androidTest|sharedTest)/''',
+]
+
+[[allowlists]]
+description = "UserSecretsId names the folder dotnet user-secrets uses on each developer's machine; it is not a secret"
+regexTarget = "line"
+regexes = ['''<UserSecretsId>[0-9a-fA-F-]{36}</UserSecretsId>''']
+
+[[allowlists]]
+description = "Placeholders, not values"
+regexTarget = "line"
+regexes = ['''SET_VIA_USER_SECRETS''', '''<your password>''']
+
+[[allowlists]]
+description = "The dev-only SEED_TEST_PASSWORD committed in .env.example by d90c094. It is public and retired: removed and rotated in #54 (see docs/security/security-review.md)"
+condition = "AND"
+commits = ["d90c094c351b5244fcd3c4795d7dd941e39e2017"]
+paths = ['''^\.env\.example$''']

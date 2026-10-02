@@ -3,6 +3,9 @@ package com.example.client.data
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+/** The oldest schema a device can upgrade from. Version 1 only ever existed on development builds (Sprint 1). */
+const val FIRST_MIGRATED_VERSION = 2
+
 /** v2 -> v3: cbo_collections.syncErrorCode, the reason the last sync attempt for a record failed. */
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -34,3 +37,11 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_collection_attachments_collectionId` ON `collection_attachments` (`collectionId`)")
     }
 }
+
+/**
+ * Every migration, oldest first: what DatabaseModule registers. There is no destructive fallback for these versions, so
+ * an app update can never silently wipe records that have not synced yet (#55); a missing migration fails loudly
+ * instead, and MigrationsTest fails before that can ship. Add each new migration here (below its declaration, since
+ * top-level values initialise in file order), with a test that keeps PENDING records.
+ */
+val ALL_MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

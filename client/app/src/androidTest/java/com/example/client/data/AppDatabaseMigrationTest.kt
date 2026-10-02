@@ -74,6 +74,44 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    // #70 / attachment upload: v5 -> v6 adds the author of a collection and the upload bookkeeping of an attachment.
+    @Test
+    fun migrate5To6_keepsPendingRecordsAndFiles_withNoAuthor_andNoUploadsTried() {
+        helper.createDatabase(dbName, 5).apply {
+            execSQL(
+                "INSERT INTO cbo_collections (id, cboId, arrivalTime, departureTime, donorName, donorSigned, cboSigned, " +
+                    "deliveryNote, noteAttached, collectNotes, shots, latitude, longitude, syncStatus, retryCount, syncErrorCode, createdAt, updatedAt) " +
+                    "VALUES ('pending-1', 'cbo-1', '09:00', NULL, 'Jane Donor', 1, 1, 'DN-1', 0, '', 'true', NULL, NULL, 'PENDING', 0, NULL, 1, 1)"
+            )
+            execSQL(
+                "INSERT INTO collection_attachments (id, collectionId, kind, slot, filePath, mimeType, sizeBytes, syncStatus, createdAt, updatedAt) " +
+                    "VALUES ('att-1', 'pending-1', 'DONOR_SIGNATURE', 0, '/files/sig.png', 'image/png', 1234, 'PENDING', 1, 1)"
+            )
+            close()
+        }
+
+        // Also validates the migrated schema against the exported 6.json.
+        val db = helper.runMigrationsAndValidate(dbName, 6, true, MIGRATION_5_6)
+
+        db.query("SELECT id, syncStatus, authorUsername, donorName FROM cbo_collections").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertEquals("pending-1", c.getString(0))
+            assertEquals("PENDING", c.getString(1)) // still waiting to be sent
+            assertNull(c.getString(2)) // written before authors were kept, so anyone signed in may send it
+            assertEquals("Jane Donor", c.getString(3))
+        }
+        db.query("SELECT id, syncStatus, retryCount, syncErrorCode, sizeBytes FROM collection_attachments").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertEquals("att-1", c.getString(0))
+            assertEquals("PENDING", c.getString(1))
+            assertEquals(0, c.getInt(2))
+            assertNull(c.getString(3))
+            assertEquals(1234, c.getInt(4))
+        }
+    }
+
     @Test
     fun aMigratedDatabase_opensThroughRoom_andTheRecordsStillSync() = runBlocking {
         helper.createDatabase(dbName, 2).apply {

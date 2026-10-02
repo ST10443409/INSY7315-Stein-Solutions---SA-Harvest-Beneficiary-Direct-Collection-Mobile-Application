@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.client.data.local.dao.VettingDecisionDao
 import com.example.client.data.local.entity.SyncStatus
+import com.example.client.data.local.entity.UNKNOWN_OFFICER
 import com.example.client.testing.sampleDecision
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -64,7 +65,7 @@ class VettingDecisionSyncDaoTest {
         assertEquals(SyncStatus.FAILED, a.syncStatus)
         assertEquals(maxRetries, a.retryCount)
         assertEquals("VALIDATION_FAILED", a.syncErrorCode)
-        assertEquals(emptyList<String>(), dao.getSyncable(maxRetries, "tester").map { it.id })
+        assertEquals(emptyList<String>(), dao.getSyncable(maxRetries, "vetting_test_user").map { it.id })
     }
 
     @Test
@@ -78,6 +79,39 @@ class VettingDecisionSyncDaoTest {
         assertNull(a.syncErrorCode)
     }
 
+    // ── #70: who may send a decision ──────────────────────────────────────────────────
+
+    private fun by(officer: String, id: String, at: Long = 1_000, status: SyncStatus = SyncStatus.PENDING) =
+        sampleDecision(recordId = "fs-$id", at = at, officer = officer).copy(id = id, syncStatus = status)
+
+    @Test
+    fun getSyncable_returnsOnlyTheOfficersOwnDecisions_andThoseWithNoRecordedOfficer() = runBlocking {
+        dao.insert(by("officer_one", "mine", at = 1))
+        dao.insert(by("officer_two", "theirs", at = 2))
+        dao.insert(by(UNKNOWN_OFFICER, "legacy", at = 3))
+
+        assertEquals(listOf("mine", "legacy"), dao.getSyncable(maxRetries, "officer_one").map { it.id })
+        assertEquals(listOf("theirs", "legacy"), dao.getSyncable(maxRetries, "officer_two").map { it.id })
+    }
+
+    @Test
+    fun theOfficerIsComparedIgnoringCase() = runBlocking {
+        dao.insert(by("Officer_One", "mine"))
+
+        assertEquals(listOf("mine"), dao.getSyncable(maxRetries, "officer_one").map { it.id })
+        assertEquals(listOf("mine"), dao.observeByOfficerNewestFirst("OFFICER_ONE").first().map { it.id })
+    }
+
+    @Test
+    fun otherOfficersWaitingDecisions_areCounted_butNotMineOrSentOnes() = runBlocking {
+        dao.insert(by("officer_two", "theirs"))
+        dao.insert(by("officer_two", "theirs-done", status = SyncStatus.SYNCED))
+        dao.insert(by("officer_one", "mine"))
+        dao.insert(by(UNKNOWN_OFFICER, "legacy"))
+
+        assertEquals(1, dao.observeWaitingForOtherOfficers("officer_one", maxRetries).first())
+    }
+
     @Test
     fun getSyncable_returnsPending_andFailedWithRetriesLeft_oldestFirst() = runBlocking {
         dao.insert(decision("pending", at = 3))
@@ -86,7 +120,7 @@ class VettingDecisionSyncDaoTest {
         dao.insert(decision("rejected", SyncStatus.FAILED, retryCount = maxRetries, code = "VALIDATION_FAILED", at = 2))
         dao.insert(decision("done", SyncStatus.SYNCED, at = 0))
 
-        assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries, "tester").map { it.id })
+        assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries, "vetting_test_user").map { it.id })
     }
 
     @Test

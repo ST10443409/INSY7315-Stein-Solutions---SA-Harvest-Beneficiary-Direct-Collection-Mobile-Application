@@ -115,6 +115,45 @@ class CboTabsTest {
         composeRule.onNodeWithText(text(R.string.submissions_panel_failed, 1)).performScrollTo().assertIsDisplayed()
     }
 
+    // #70: unsent work stays on the phone but is only sent by whoever captured it, so signing out says so first.
+    @Test
+    fun sync_signOutWithUnsentWork_asksFirst_andOnlySignsOutWhenConfirmed() {
+        var signedOut = 0
+        val state = SubmissionsUiState(listOf(item("a", SubmissionDisplay.PENDING), item("b", SubmissionDisplay.PENDING)))
+        composeRule.setContent { CboSyncScreen(state, {}, { signedOut++ }) }
+
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT).performScrollTo().performClick()
+
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT_DIALOG).assertIsDisplayed()
+        assertEquals(0, signedOut) // nothing happened yet
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT_STAY).performClick()
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT_DIALOG).assertDoesNotExist()
+        assertEquals(0, signedOut)
+
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT_ANYWAY).performClick()
+        assertEquals(1, signedOut)
+    }
+
+    @Test
+    fun sync_picturesStillToUpload_alsoCountAsUnsent() {
+        var signedOut = 0
+        val state = SubmissionsUiState(listOf(item("a", SubmissionDisplay.SYNCED)), attachmentsWaiting = 2)
+        composeRule.setContent { CboSyncScreen(state, {}, { signedOut++ }) }
+
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT).performScrollTo().performClick()
+
+        composeRule.onNodeWithTag(SyncTabTags.SIGN_OUT_DIALOG).assertIsDisplayed()
+        assertEquals(0, signedOut)
+    }
+
+    @Test
+    fun sync_otherAccountsWork_isMentioned() {
+        composeRule.setContent { CboSyncScreen(SubmissionsUiState(otherAccountsWaiting = 3), {}, {}) }
+
+        composeRule.onNodeWithTag(SyncTabTags.OTHER_ACCOUNTS).performScrollTo().assertIsDisplayed()
+    }
+
     @Test
     fun sync_signOut_isOfferedAndWorks() {
         var signedOut = 0

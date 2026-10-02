@@ -94,6 +94,48 @@ class CboCollectionDaoSyncTest {
         assertEquals(listOf("again", "pending"), dao.getSyncable(maxRetries, "tester").map { it.id })
     }
 
+    // ── #70: who may send a record ────────────────────────────────────────────────────
+
+    @Test
+    fun getSyncable_returnsOnlyTheAuthorsOwnRecords_andThoseWithNoRecordedAuthor() = runBlocking {
+        dao.insert(record("mine").copy(authorUsername = "collector_one", createdAt = 1))
+        dao.insert(record("theirs").copy(authorUsername = "collector_two", createdAt = 2))
+        dao.insert(record("legacy").copy(authorUsername = null, createdAt = 3))
+
+        assertEquals(listOf("mine", "legacy"), dao.getSyncable(maxRetries, "collector_one").map { it.id })
+        assertEquals(listOf("theirs", "legacy"), dao.getSyncable(maxRetries, "collector_two").map { it.id })
+        assertEquals(listOf("legacy"), dao.getSyncable(maxRetries, "nobody_else").map { it.id })
+    }
+
+    @Test
+    fun theAuthorIsComparedIgnoringCase_asTheServerDoesAtSignIn() = runBlocking {
+        dao.insert(record("mine").copy(authorUsername = "Collector_One"))
+
+        assertEquals(listOf("mine"), dao.getSyncable(maxRetries, "collector_one").map { it.id })
+        assertEquals(listOf("mine"), dao.observeByAuthorNewestFirst("COLLECTOR_ONE").first().map { it.id })
+    }
+
+    @Test
+    fun aPersonSeesOnlyTheirOwnRecords_newestFirst() = runBlocking {
+        dao.insert(record("old").copy(authorUsername = "collector_one", createdAt = 1))
+        dao.insert(record("new").copy(authorUsername = "collector_one", createdAt = 3))
+        dao.insert(record("theirs").copy(authorUsername = "collector_two", createdAt = 2))
+
+        assertEquals(listOf("new", "old"), dao.observeByAuthorNewestFirst("collector_one").first().map { it.id })
+    }
+
+    @Test
+    fun otherAccountsWaitingRecords_areCounted_butNotMineOrSyncedOrExhaustedOnes() = runBlocking {
+        dao.insert(record("theirs-pending").copy(authorUsername = "collector_two"))
+        dao.insert(record("theirs-retry", SyncStatus.FAILED, retryCount = 2).copy(authorUsername = "collector_two"))
+        dao.insert(record("theirs-done", SyncStatus.SYNCED).copy(authorUsername = "collector_two"))
+        dao.insert(record("theirs-dead", SyncStatus.FAILED, retryCount = maxRetries).copy(authorUsername = "collector_two"))
+        dao.insert(record("mine").copy(authorUsername = "collector_one"))
+        dao.insert(record("legacy").copy(authorUsername = null))
+
+        assertEquals(2, dao.observeWaitingForOtherAuthors("collector_one", maxRetries).first())
+    }
+
     @Test
     fun updates_touchOnlyTheGivenIds() = runBlocking {
         dao.insert(record("a"))

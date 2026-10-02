@@ -8,9 +8,11 @@ namespace api.Data;
 /// <summary>
 /// Creates one known test user per role so the Android login (#27), RBAC checks (#52) and UAT (#60) have
 /// credentials without a registration flow. Opt-in only: it runs when Seed:Enabled is true (set in
-/// compose.yaml for local dev), never by default. The shared password comes from configuration
-/// (Seed:TestUserPassword / SEED_TEST_PASSWORD in .env), so no password literal lives in source.
-/// Idempotent: existing users are left untouched.
+/// compose.yaml for local dev), never by default, and the app refuses to start with it outside Development
+/// (SecurityStartupChecks). The shared password comes from configuration (Seed:TestUserPassword /
+/// SEED_TEST_PASSWORD in .env), so no password literal lives in source.
+/// Idempotent: existing users keep their data, but their password always follows the configured one, so changing
+/// SEED_TEST_PASSWORD (e.g. after one was committed, #54) really retires the old password.
 /// </summary>
 public static class TestUserSeeder
 {
@@ -42,6 +44,11 @@ public static class TestUserSeeder
             {
                 // Users seeded before CBOs existed get theirs, so the collector flow works on an existing dev database.
                 if (role == UserRole.CBO_COLLECTION && string.IsNullOrWhiteSpace(existing.CboId)) existing.CboId = TestCboId;
+                if (hasher.VerifyHashedPassword(existing, existing.PasswordHash, password) == PasswordVerificationResult.Failed)
+                {
+                    existing.PasswordHash = hasher.HashPassword(existing, password);
+                    logger.LogWarning("Reset the password of TEST user {Username} to Seed:TestUserPassword.", username);
+                }
                 continue;
             }
 

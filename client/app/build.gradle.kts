@@ -5,6 +5,10 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+// Where the app talks to the API. Override per machine or build with -PapiBaseUrl=https://host/ (it must end in "/").
+// The default is the host machine as seen from the Android emulator.
+val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "http://10.0.2.2:5000/"
+
 android {
     namespace = "com.example.client"
     compileSdk = 34
@@ -15,9 +19,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        // Where the app talks to the API. Override per machine or build with -PapiBaseUrl=https://host/ (it must end in "/").
-        // The default is the host machine as seen from the Android emulator.
-        val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "http://10.0.2.2:5000/"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -54,6 +55,17 @@ android {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// #54: a release build must reach the API over HTTPS. Its network security config refuses plain HTTP anyway, so an http://
+// address would only show up as every request failing on a phone; stop the build instead. Checked only when a release
+// variant is actually built, so debug builds and tests keep the emulator default.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        check(apiBaseUrl.startsWith("https://")) {
+            "Release builds need an https:// API address: pass -PapiBaseUrl=https://<host>/ (got $apiBaseUrl)."
+        }
+    }
 }
 
 dependencies {

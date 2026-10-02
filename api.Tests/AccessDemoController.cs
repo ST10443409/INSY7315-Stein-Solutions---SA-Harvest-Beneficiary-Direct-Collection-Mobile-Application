@@ -1,13 +1,16 @@
+using api.Controllers;
 using api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace api.Controllers;
+namespace api.Tests;
 
 /// <summary>
-/// PLACEHOLDER demonstrating the authorization pattern later controllers follow (#36, #43, #47, #49-#51):
-/// [Authorize] for "any signed-in user" and [Authorize(Roles = ...)] for role-scoped endpoints.
-/// Delete once real endpoints use the pattern.
+/// Test-only endpoints (registered by <see cref="ApiFactory"/>, never part of the real API) that show each way of
+/// restricting access: [Authorize] for "any signed-in user" and [Authorize(Roles = ...)] for role-scoped endpoints.
+/// <see cref="AuthEndpointTests"/> uses them to prove how tokens and roles are enforced without depending on a real
+/// endpoint's behaviour. They used to ship in the API as a placeholder; the role audit (#52) moved them here so the
+/// deployed surface is only real endpoints.
 /// </summary>
 [Authorize] // every action below requires a valid token; the role attributes narrow it further
 public class AccessDemoController : ApiControllerBase

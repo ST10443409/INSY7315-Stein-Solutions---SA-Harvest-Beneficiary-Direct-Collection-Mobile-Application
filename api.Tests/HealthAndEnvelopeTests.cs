@@ -153,7 +153,7 @@ public class HealthAndEnvelopeTests : IClassFixture<ApiFactory>
         var paths = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("paths");
         Assert.True(paths.TryGetProperty("/api/health", out _));
         Assert.True(paths.TryGetProperty("/api/auth/login", out _));
-        Assert.True(paths.TryGetProperty("/api/access-demo/any", out _));
+        Assert.True(paths.TryGetProperty("/api/cbo-collection/sync", out _));
     }
 
     [Fact]

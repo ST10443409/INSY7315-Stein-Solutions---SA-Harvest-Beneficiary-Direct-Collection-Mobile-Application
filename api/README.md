@@ -97,7 +97,7 @@ return `401 {"error":"Invalid username or password."}`. Send the token as `Autho
 
 - **Role claim:** the JWT carries a `role` claim whose value is exactly the Android `UserRole` name
   (`CBO_COLLECTION`, `VETTING`, `ADMIN`). `api.Tests` fails if the two enums drift. Use
-  `[Authorize(Roles = AppRoles.Admin)]` etc.; `Controllers/AccessDemoController.cs` shows the pattern (delete it once real endpoints exist).
+  `[Authorize(Roles = AppRoles.Admin)]` etc.; every endpoint says its roles explicitly, and `docs/role-audit-checklist.md` is the audited table (`RoleAuthorizationMatrixTests` fails if an endpoint is added without a row).
 - **CBO:** a `CBO_COLLECTION` user belongs to one CBO (`users.cbo_id`, set by whoever creates the account; Vetting and Admin
   users have none). It is returned in the login response (`cboId`) and carried in the token as the `cbo_id` claim.
 - **Configuration** (section `Jwt`): `Issuer`, `Audience`, `ExpiryMinutes` (default 60) live in `appsettings.json`.

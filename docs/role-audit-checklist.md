@@ -1,19 +1,81 @@
-# Endpoint Role Audit
+# Endpoint role audit (#52)
 
-| Endpoint Path | Intended Role(s) | Actual Attribute | Verified (Tests) |
-| --- | --- | --- | --- |
-| `/api/cbo-collection/sync` | `CboCollection`, `Admin` | `[Authorize(Roles = $"{AppRoles.CboCollection},{AppRoles.Admin}")]` | Yes (CboCollectionSyncEndpointTests) |
-| `/api/vetting/sync` | `Vetting`, `Admin` | `[Authorize(Roles = $"{AppRoles.Vetting},{AppRoles.Admin}")]` | Yes (VettingDecisionSyncEndpointTests) |
-| `/api/vetting/records` | `Vetting`, `Admin` | `[Authorize(Roles = $"{AppRoles.Vetting},{AppRoles.Admin}")]` | Yes (VettingRecordsEndpointTests) |
-| `/api/admin/sync-status` | `Admin` | `[Authorize(Roles = AppRoles.Admin)]` | Yes (AdminSyncStatusEndpointTests) |
-| `/api/admin/sync-status/attention` | `Admin` | `[Authorize(Roles = AppRoles.Admin)]` | Yes (AdminSyncResolutionEndpointTests) |
-| `/api/admin/sync-status/{id}` | `Admin` | `[Authorize(Roles = AppRoles.Admin)]` | Yes (AdminSyncResolutionEndpointTests) |
-| `/api/admin/sync-status/{id}/retry` | `Admin` | `[Authorize(Roles = AppRoles.Admin)]` | Yes (AdminSyncResolutionEndpointTests) |
-| `/api/admin/sync-status/{id}/dismiss` | `Admin` | `[Authorize(Roles = AppRoles.Admin)]` | Yes (AdminSyncResolutionEndpointTests) |
-| `/api/admin/user-activity` | `Admin` | `[Authorize(Roles = AppRoles.Admin)]` | Yes (AdminUserActivityEndpointTests) |
-| `/api/sync` | `CboCollection`, `Vetting`, `Admin` | `[Authorize(Roles = $"{AppRoles.CboCollection},{AppRoles.Vetting},{AppRoles.Admin}")]` | Yes (SyncControllerEndpointTests) |
-| `/api/health` | (Open) | `[AllowAnonymous]` | Yes |
-| `/api/auth/login` | (Open) | `[AllowAnonymous]` | Yes |
-| `/api/auth/me` | Any valid user | `[Authorize]` | Yes |
+Backend enforcement of "each user only reaches the forms and functionality of their role". The Android app's role routing
+(#26) and the `role` claim (#30) are not enforcement on their own: a modified client or a raw `curl` skips both. This is
+what stops them, and the audit of it.
 
-*Note: The `/api/sync` endpoint was missing role checks but has been corrected in this PR.*
+The table is a **test as well as a document**. `api.Tests/RoleAuthorizationMatrixTests.cs` reads every endpoint from the
+running API and fails when:
+
+- an endpoint exists that has no row below (add the row, in the test and here, and decide its roles on purpose);
+- the roles on an endpoint's `[Authorize]` differ from its row, or an endpoint that should be open does not say
+  `[AllowAnonymous]`;
+- an endpoint, called with no token, does not answer `401`; called with a role not in its row, does not answer `403`; or called
+  with a role in its row, answers `401`/`403`;
+- a validly signed token whose role is missing, unknown or the wrong case (`admin`) gets into any role-restricted endpoint;
+- this document is missing a row.
+
+Roles are the wire names the API issues: `CBO_COLLECTION`, `VETTING`, `ADMIN`.
+
+## Audit table
+
+| Method | Endpoint | Intended role(s) | Attribute | Verified by |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/cbo-collection/sync` | `CBO_COLLECTION`, `ADMIN` | `[Authorize(Roles = "CBO_COLLECTION,ADMIN")]` on the controller | matrix + `CboCollectionSyncEndpointTests` |
+| `POST` | `/api/vetting/sync` | `VETTING`, `ADMIN` | `[Authorize(Roles = "VETTING,ADMIN")]` on the controller | matrix + `VettingDecisionSyncEndpointTests` |
+| `GET` | `/api/vetting/records` | `VETTING`, `ADMIN` | `[Authorize(Roles = "VETTING,ADMIN")]` on the controller | matrix + `VettingRecordsEndpointTests` |
+| `GET` | `/api/admin/user-activity` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminUserActivityEndpointTests` |
+| `GET` | `/api/admin/sync-status` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncStatusEndpointTests` |
+| `GET` | `/api/admin/sync-status/attention` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
+| `GET` | `/api/admin/sync-status/{id}` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
+| `POST` | `/api/admin/sync-status/{id}/retry` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
+| `POST` | `/api/admin/sync-status/{id}/dismiss` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
+| `POST` | `/api/sync` | `CBO_COLLECTION`, `VETTING`, `ADMIN` | `[Authorize(Roles = "CBO_COLLECTION,VETTING,ADMIN")]` on the controller | matrix + `SyncControllerEndpointTests` |
+| `GET` | `/api/health` | open (platform probes) | `[AllowAnonymous]` | matrix + `HealthAndEnvelopeTests` |
+| `POST` | `/api/auth/login` | open (it issues the token) | `[AllowAnonymous]` | matrix + `AuthEndpointTests` |
+| `GET` | `/api/auth/me` | any signed-in user | `[Authorize]` | matrix + `AuthEndpointTests` |
+
+## Deliberate choices (not oversights)
+
+**Admin may call the two form endpoints and `/api/sync`.** The Admin role gets Form 1 and Form 2 inside the Android app
+(`docs/decisions/0001-admin-lives-in-the-android-app.md`: the dashboard links to both workflows), so the backend has to accept
+what those screens send, for support and for testing a flow end to end. An Admin's record is stamped with the Admin as its
+submitter (the server reads it from the token, never from the request), so the activity oversight (#51) shows who really did it.
+The reverse is not allowed: a collector or an officer never reaches an Admin endpoint, and collectors and officers never reach
+each other's.
+
+**Collectors and officers are kept apart in both directions.** `CBO_COLLECTION` is refused by every Vetting endpoint and
+`VETTING` by every Collection endpoint (and by all of Admin), asserted for every pair by the matrix.
+
+**`/api/sync` is open to the three roles.** It is the original generic queue endpoint from Sprint 1: it queues an arbitrary
+payload and a background worker posts it to the external API's `/api/external/sync` (the simulator today). Nothing in the app
+calls it any more (`SyncApiService.syncData` is declared but unused; the real endpoints replaced it). It was open to any valid
+token until #52; it now needs one of the three roles, which is every role there is, so the effective change is that a token
+with no recognised role is refused. **Recommendation: remove it** (with `QueueService`, `QueueBackgroundWorker`,
+`SyncPayload` and the client declaration) once nobody needs it; a dormant endpoint that forwards what it is given to another
+system is attack surface for no benefit. Left in place here because removing it also touches the Room/EF parity tests.
+
+**`/api/auth/me` is any signed-in user.** It only echoes the caller's own identity and role.
+
+**Wrong-role and wrong-token results.** A role-restricted endpoint answers `401` with no (or an invalid/expired) token and
+`403` with a valid token of a role that is not allowed. The app treats a `403` as "not this record's fault, try later" and
+never marks a record failed because of it (`BatchSyncRunner`).
+
+## What changed in this audit
+
+- Every endpoint of Sprints 2 and 3 (#36, #37, #38, #43, #47, #49, #50, #51) already carried an explicit role; none relied on a
+  bare `[Authorize]` where a restriction was intended.
+- `/api/sync` had no role check (fixed earlier in this audit).
+- The placeholder `AccessDemoController` (`/api/access-demo/*`), kept "until real endpoints use the pattern", was still part of
+  the deployed API. It moved to the test project (`api.Tests/AccessDemoController.cs`) so the authentication tests still use it
+  but the production surface is only real endpoints.
+- New: the matrix test above, so the audit cannot silently go stale.
+
+## Checking a running server by hand
+
+```bash
+export CBO_TOKEN=...  VETTING_TOKEN=...  ADMIN_TOKEN=...   # from POST /api/auth/login
+API=http://localhost:5000 bash docs/verify-roles.sh        # prints every endpoint x role with the expected and actual status
+```
+
+The script exits non-zero if any answer differs from the table, so it can gate a deployment (#58, #60).

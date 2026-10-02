@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.client.data.local.entity.CboCollectionEntity
+import com.example.client.data.local.entity.CollectionAttachmentEntity
 import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.local.entity.SyncStatus
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +29,28 @@ abstract class CboCollectionDao {
         insert(collection)
         insertProductLines(productLines)
     }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertAttachments(attachments: List<CollectionAttachmentEntity>)
+
+    /** Writes a collection with its product lines and captured signatures and photos atomically. */
+    @Transaction
+    open suspend fun insertWithChildren(
+        collection: CboCollectionEntity,
+        productLines: List<ProductLineEntity>,
+        attachments: List<CollectionAttachmentEntity>
+    ) {
+        insertWithProductLines(collection, productLines)
+        if (attachments.isNotEmpty()) insertAttachments(attachments)
+    }
+
+    /** The signatures and photos stored for the given collections. */
+    @Query("SELECT * FROM collection_attachments WHERE collectionId IN (:collectionIds)")
+    abstract suspend fun getAttachmentsForCollections(collectionIds: List<String>): List<CollectionAttachmentEntity>
+
+    /** Every signature and photo stored on this device. Updates live. */
+    @Query("SELECT * FROM collection_attachments ORDER BY createdAt ASC")
+    abstract fun observeAttachments(): Flow<List<CollectionAttachmentEntity>>
 
     @Update
     abstract suspend fun update(collection: CboCollectionEntity)

@@ -1,6 +1,7 @@
 package com.example.client.ui.navigation
 
 import com.example.client.auth.UserRole
+import com.example.client.data.local.entity.AttachmentKind
 
 /**
  * Route names. Every role-specific destination is namespaced by its graph so no route
@@ -9,12 +10,18 @@ import com.example.client.auth.UserRole
 object Routes {
     // CBO Collection graph
     const val CBO_GRAPH = "cbo_graph"
+    const val CBO_HOME = "cbo_home"
     const val CBO_FORM1 = "cbo_form1"
+    const val CBO_SIGN = "cbo_sign/{kind}"
+    const val CBO_PHOTOS = "cbo_photos"
+    const val CBO_DONE = "cbo_done"
     const val CBO_SUBMISSIONS = "cbo_submissions"
+    const val CBO_SYNC = "cbo_sync"
 
     // Vetting graph
     const val VETTING_GRAPH = "vetting_graph"
     const val VETTING_FORM2 = "vetting_form2"
+    const val VETTING_SYNC = "vetting_sync"
     const val VETTING_RECORD = "vetting_record/{id}"
     const val VETTING_DECISION = "vetting_decision/{id}"
 
@@ -22,7 +29,11 @@ object Routes {
     const val ADMIN_GRAPH = "admin_graph"
     const val ADMIN_DASHBOARD = "admin_dashboard"
     const val ADMIN_FORM1 = "admin_form1"
+    const val ADMIN_SIGN = "admin_sign/{kind}"
+    const val ADMIN_PHOTOS = "admin_photos"
+    const val ADMIN_DONE = "admin_done"
     const val ADMIN_FORM2 = "admin_form2"
+    const val ADMIN_REPORTS = "admin_reports"
     const val ADMIN_RECORD = "admin_record/{id}"
     const val ADMIN_DECISION = "admin_decision/{id}"
     const val ADMIN_SYNC_MONITOR = "admin_sync_monitor"
@@ -40,7 +51,7 @@ fun UserRole.graphRoute(): String = when (this) {
 
 /** The screen a role lands on when the app opens. */
 fun UserRole.startDestination(): String = when (this) {
-    UserRole.CBO_COLLECTION -> Routes.CBO_FORM1
+    UserRole.CBO_COLLECTION -> Routes.CBO_HOME
     UserRole.VETTING -> Routes.VETTING_FORM2
     UserRole.ADMIN -> Routes.ADMIN_DASHBOARD
 }
@@ -50,3 +61,6 @@ fun String.withRecordId(id: String): String = replace("{id}", android.net.Uri.en
 
 /** The concrete route for one failed-sync record, from [Routes.ADMIN_FAILED_SYNC_RECORD]: its kind (a SyncForm name) and its id. */
 fun String.withFailedSyncRecord(form: String, id: String): String = replace("{form}", form).withRecordId(id)
+
+/** The concrete route for the signature pad, from [Routes.CBO_SIGN] or [Routes.ADMIN_SIGN]: which signature it is for. */
+fun String.withSignatureKind(kind: AttachmentKind): String = replace("{kind}", kind.name)

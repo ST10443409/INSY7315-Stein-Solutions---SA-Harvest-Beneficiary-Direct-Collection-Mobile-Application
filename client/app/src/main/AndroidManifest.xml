@@ -5,6 +5,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Photos of a donation are taken with the camera; the user is asked at the moment they tap "Take a photo". -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Not required: a device with no camera can still attach photos from the gallery. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Lets the app see that a camera app exists, so "Take a photo" can say so when none does. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".SaHarvestApplication"
         android:allowBackup="true"
@@ -23,6 +35,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lets the camera app write a photo into the app's private attachments folder (and nothing else). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- WorkManager is initialised by SaHarvestApplication (Hilt worker factory), not auto-started. -->
         <provider

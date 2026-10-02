@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 
 /** Each way a submission can end up is shown to the collector with its own explanation. */
 @RunWith(AndroidJUnit4::class)
-class MySubmissionsScreenTest {
+class HistoryScreenTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
@@ -23,7 +23,7 @@ class MySubmissionsScreenTest {
         SubmissionItem(id = id, donorName = "Donor $id", createdAt = 1_700_000_000_000L, display = display)
 
     private fun show(vararg items: SubmissionItem) {
-        composeRule.setContent { MySubmissionsScreen(SubmissionsUiState(items.toList()), onBack = {}) }
+        composeRule.setContent { HistoryScreen(SubmissionsUiState(items.toList())) }
     }
 
     private fun text(id: Int) = composeRule.activity.getString(id)

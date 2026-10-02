@@ -3,7 +3,12 @@ package com.example.client.ui.cbo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.client.auth.SessionManager
+import com.example.client.data.attachments.AttachmentStorage
+import com.example.client.data.attachments.CaptureTarget
+import com.example.client.data.attachments.StoredFile
+import com.example.client.data.local.entity.AttachmentKind
 import com.example.client.data.local.entity.CboCollectionEntity
+import com.example.client.data.local.entity.CollectionAttachmentEntity
 import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.repository.CboCollectionRepository
 import com.example.client.sync.CboSyncTrigger
@@ -42,21 +47,55 @@ data class ProductDraft(
     val kgError: Form1Error? = null
 )
 
-/** Field-for-field mirror of CboCollectionEntity (plus its product lines). */
+/** Where a signature or photo goes on the form: what it is, and (for the numbered photos) which one. */
+data class AttachmentSlot(val kind: AttachmentKind, val index: Int = 0) {
+    companion object {
+        val DonorSignature = AttachmentSlot(AttachmentKind.DONOR_SIGNATURE)
+        val CboSignature = AttachmentSlot(AttachmentKind.CBO_SIGNATURE)
+        val DeliveryNote = AttachmentSlot(AttachmentKind.DELIVERY_NOTE)
+        fun photo(index: Int) = AttachmentSlot(AttachmentKind.PHOTO, index)
+        fun signatureOf(kind: AttachmentKind) = AttachmentSlot(kind)
+    }
+}
+
+/** A signature or photo already stored on the device but not yet saved with a collection. */
+data class DraftAttachment(
+    val id: String = UUID.randomUUID().toString(),
+    val path: String,
+    val mimeType: String,
+    val sizeBytes: Long
+)
+
+/** Field-for-field mirror of CboCollectionEntity (plus its product lines and attachments). */
 data class Form1FormState(
     val arrivalTime: String = "",
     val departureTime: String? = null,
     val productLines: List<ProductLineInput> = emptyList(),
     val donorName: String = "",
-    val donorSigned: Boolean = false,
-    val cboSigned: Boolean = false,
-    val shots: List<Boolean> = List(PHOTO_SHOT_COUNT) { false },
+    val attachments: Map<AttachmentSlot, DraftAttachment> = emptyMap(),
     val deliveryNote: String = "",
-    val noteAttached: Boolean = false,
     val collectNotes: String = ""
 ) {
     val totalKg: Double get() = productLines.sumOf { Form1Validator.parseKg(it.kg) ?: 0.0 }
+
+    // What the server is told (see CboCollectionSyncDto): that something was signed or photographed.
+    val donorSigned: Boolean get() = AttachmentSlot.DonorSignature in attachments
+    val cboSigned: Boolean get() = AttachmentSlot.CboSignature in attachments
+    val noteAttached: Boolean get() = AttachmentSlot.DeliveryNote in attachments
+    val shots: List<Boolean> get() = List(PHOTO_SHOT_COUNT) { AttachmentSlot.photo(it) in attachments }
 }
+
+/** What the Done screen says about the collection that was just saved, taken from the saved record. */
+data class CollectionReceipt(
+    val reference: String,
+    val donorName: String,
+    val totalKg: Double,
+    val arrivalTime: String,
+    val departureTime: String?,
+    val signatureCount: Int,
+    val photoCount: Int,
+    val deliveryNote: String
+)
 
 data class Form1UiState(
     val form: Form1FormState = Form1FormState(),
@@ -64,18 +103,26 @@ data class Form1UiState(
     val productDraft: ProductDraft? = null,
     val isSaving: Boolean = false,
     val saveFailed: Boolean = false,
-    val submitted: Boolean = false
-)
+    /** A signature or photo could not be stored; cleared by the next successful one. */
+    val attachmentFailed: Boolean = false,
+    val receipt: CollectionReceipt? = null
+) {
+    val submitted: Boolean get() = receipt != null
+}
 
 @HiltViewModel
 class Form1ViewModel @Inject constructor(
     private val repository: CboCollectionRepository,
     private val syncTrigger: CboSyncTrigger,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val storage: AttachmentStorage
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(Form1UiState(form = Form1FormState(arrivalTime = nowTime())))
     val uiState: StateFlow<Form1UiState> = _uiState.asStateFlow()
+
+    // The slot the camera is currently writing a photo for, and the file it was given.
+    private var pendingCapture: Pair<AttachmentSlot, String>? = null
 
     // An edit clears that field's error and any previous save failure.
     private fun editForm(clears: Form1Field? = null, block: (Form1FormState) -> Form1FormState) =
@@ -90,15 +137,62 @@ class Form1ViewModel @Inject constructor(
     fun onDonorNameChange(value: String) = editForm(Form1Field.DONOR_NAME) { it.copy(donorName = value) }
     fun onDeliveryNoteChange(value: String) = editForm { it.copy(deliveryNote = value) }
     fun onCollectNotesChange(value: String) = editForm { it.copy(collectNotes = value) }
-    fun onToggleNoteAttached() = editForm { it.copy(noteAttached = !it.noteAttached) }
 
     fun onStampDeparture() = editForm(Form1Field.DEPARTURE) { it.copy(departureTime = nowTime()) }
 
-    // Signature pad and camera capture are separate work; these record that it happened.
-    fun onToggleDonorSigned() = editForm(Form1Field.SIGNATURES) { it.copy(donorSigned = !it.donorSigned) }
-    fun onToggleCboSigned() = editForm(Form1Field.SIGNATURES) { it.copy(cboSigned = !it.cboSigned) }
-    fun onToggleShot(index: Int) = editForm(Form1Field.PHOTOS) { f ->
-        f.copy(shots = f.shots.mapIndexed { i, taken -> if (i == index) !taken else taken })
+    // --- Signatures and photos ---
+
+    /** The signature pad was accepted: stores the drawn signature (PNG) for [kind]'s slot. */
+    fun onSignatureCaptured(kind: AttachmentKind, png: ByteArray) {
+        require(kind == AttachmentKind.DONOR_SIGNATURE || kind == AttachmentKind.CBO_SIGNATURE) { "$kind is not a signature" }
+        viewModelScope.launch { attach(AttachmentSlot.signatureOf(kind), runCatching { storage.saveSignature(png) }.getOrNull()) }
+    }
+
+    /** The user picked a picture from the gallery for [slot]. */
+    fun onPhotoPicked(slot: AttachmentSlot, sourceUri: String) {
+        viewModelScope.launch { attach(slot, runCatching { storage.savePhoto(sourceUri) }.getOrNull()) }
+    }
+
+    /** The camera is about to be opened for [slot]: reserves the file it should write to. */
+    fun newCaptureTarget(slot: AttachmentSlot): CaptureTarget {
+        pendingCapture?.let { (_, path) -> storage.delete(path) } // an earlier attempt that never reported back
+        return storage.newCaptureTarget().also { pendingCapture = slot to it.path }
+    }
+
+    /** The camera finished: [success] is false if the user backed out without taking a photo. */
+    fun onCaptureResult(success: Boolean) {
+        val (slot, path) = pendingCapture ?: return
+        pendingCapture = null
+        if (!success) {
+            storage.delete(path)
+            return
+        }
+        viewModelScope.launch { attach(slot, runCatching { storage.finishCapture(path) }.getOrNull()) }
+    }
+
+    fun onRemoveAttachment(slot: AttachmentSlot) {
+        val removed = _uiState.value.form.attachments[slot] ?: return
+        editForm(slot.errorField()) { it.copy(attachments = it.attachments - slot) }
+        storage.delete(removed.path)
+    }
+
+    private fun attach(slot: AttachmentSlot, stored: StoredFile?) {
+        if (stored == null) {
+            _uiState.update { it.copy(attachmentFailed = true) }
+            return
+        }
+        val replaced = _uiState.value.form.attachments[slot]
+        editForm(slot.errorField()) {
+            it.copy(attachments = it.attachments + (slot to DraftAttachment(path = stored.path, mimeType = stored.mimeType, sizeBytes = stored.sizeBytes)))
+        }
+        _uiState.update { it.copy(attachmentFailed = false) }
+        replaced?.let { storage.delete(it.path) }
+    }
+
+    private fun AttachmentSlot.errorField(): Form1Field? = when (kind) {
+        AttachmentKind.DONOR_SIGNATURE, AttachmentKind.CBO_SIGNATURE -> Form1Field.SIGNATURES
+        AttachmentKind.PHOTO -> Form1Field.PHOTOS
+        AttachmentKind.DELIVERY_NOTE -> null
     }
 
     // --- Product line dialog ---
@@ -173,21 +267,60 @@ class Form1ViewModel @Inject constructor(
                 updatedAt = now
             )
         }
+        val attachments = form.attachments.map { (slot, draft) ->
+            CollectionAttachmentEntity(
+                id = draft.id,
+                collectionId = collection.id,
+                kind = slot.kind,
+                slot = slot.index,
+                filePath = draft.path,
+                mimeType = draft.mimeType,
+                sizeBytes = draft.sizeBytes,
+                createdAt = now,
+                updatedAt = now
+            )
+        }
         viewModelScope.launch {
             try {
-                repository.save(collection, lines)
+                repository.save(collection, lines, attachments)
                 // Queued, not awaited: it waits for a network if there is none, and the save never depends on it.
                 syncTrigger.syncCboCollectionsNow()
-                _uiState.update { it.copy(isSaving = false, submitted = true) }
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        // The files now belong to the saved collection, so the draft must not delete them.
+                        form = it.form.copy(attachments = emptyMap()),
+                        receipt = CollectionReceipt(
+                            reference = "COL-" + collection.id.take(8).uppercase(Locale.US),
+                            donorName = collection.donorName,
+                            totalKg = form.totalKg,
+                            arrivalTime = collection.arrivalTime,
+                            departureTime = collection.departureTime,
+                            signatureCount = listOf(form.donorSigned, form.cboSigned).count { signed -> signed },
+                            photoCount = form.shots.count { taken -> taken },
+                            deliveryNote = collection.deliveryNote
+                        )
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, saveFailed = true) }
             }
         }
     }
 
-    /** Clears the form for the next collection after the success state. */
+    /** Clears the form for the next collection after the receipt has been seen. */
     fun onStartNew() {
+        discardDraftFiles()
         _uiState.value = Form1UiState(form = Form1FormState(arrivalTime = nowTime()))
+    }
+
+    override fun onCleared() = discardDraftFiles()
+
+    // Files that were captured but never saved with a collection are of no use to anyone.
+    private fun discardDraftFiles() {
+        _uiState.value.form.attachments.values.forEach { storage.delete(it.path) }
+        pendingCapture?.let { (_, path) -> storage.delete(path) }
+        pendingCapture = null
     }
 
     private fun nowTime(): String = SimpleDateFormat("HH:mm", Locale.US).format(Date())

@@ -20,17 +20,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -39,9 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.client.R
+import com.example.client.data.local.entity.AttachmentKind
+import com.example.client.ui.components.AttachmentImage
 import com.example.client.ui.components.FilledPillButton
 import com.example.client.ui.components.OutlinePillButton
 import com.example.client.ui.components.SaDashedActionButton
@@ -58,7 +66,8 @@ import com.example.client.ui.theme.Poppins
 import com.example.client.ui.theme.SaColors
 import com.example.client.ui.theme.StrokeIcon
 
-// Visual design follows the CBO Collector UI demo (CollectScreen, PhotosScreen, AddProductSheet, DoneScreen).
+// Visual design follows the CBO Collector UI demo (CollectScreen, AddProductSheet). The demo's Sign, Photos and Done
+// screens are separate screens here too (SignaturePadScreen, PhotosScreen, CollectionDoneScreen).
 
 object Form1Tags {
     const val DONOR_NAME = "form1_donor_name"
@@ -69,12 +78,12 @@ object Form1Tags {
     const val DRAFT_CONFIRM = "form1_draft_confirm"
     const val SIGN_DONOR = "form1_sign_donor"
     const val SIGN_CBO = "form1_sign_cbo"
-    const val PHOTO_PREFIX = "form1_photo_"
+    const val PHOTOS_ROW = "form1_photos_row"
+    const val NOTE_PHOTO = "form1_note_photo"
     const val STAMP_DEPARTURE = "form1_stamp_departure"
     const val SUBMIT = "form1_submit"
-    const val SUCCESS = "form1_success"
-    const val NEW_COLLECTION = "form1_new_collection"
     const val SAVE_FAILED = "form1_save_failed"
+    const val ATTACHMENT_FAILED = "form1_attachment_failed"
     fun error(field: Form1Field) = "form1_error_${field.name.lowercase()}"
 }
 
@@ -89,20 +98,34 @@ private fun Form1Error.message(): Int = when (this) {
     Form1Error.PHOTO_REQUIRED -> R.string.form1_err_photos
 }
 
-/** Hilt-backed entry point for Form 1. */
+/**
+ * Hilt-backed entry point for Form 1. [onSubmitted] is called once the collection is saved (the receipt screen takes
+ * over from there); [onBack] is null where the form is a top-level tab with nothing behind it.
+ */
 @Composable
-fun Form1Route(viewModel: Form1ViewModel = hiltViewModel()) {
+fun Form1Route(
+    onOpenSignature: (AttachmentKind) -> Unit = {},
+    onOpenPhotos: () -> Unit = {},
+    onSubmitted: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
+    viewModel: Form1ViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsState()
+    LaunchedEffect(state.submitted) { if (state.submitted) onSubmitted() }
     Form1Screen(
         state = state,
         onDonorNameChange = viewModel::onDonorNameChange,
         onDeliveryNoteChange = viewModel::onDeliveryNoteChange,
         onCollectNotesChange = viewModel::onCollectNotesChange,
-        onToggleNoteAttached = viewModel::onToggleNoteAttached,
         onStampDeparture = viewModel::onStampDeparture,
-        onToggleDonorSigned = viewModel::onToggleDonorSigned,
-        onToggleCboSigned = viewModel::onToggleCboSigned,
-        onToggleShot = viewModel::onToggleShot,
+        onOpenSignature = onOpenSignature,
+        onOpenPhotos = onOpenPhotos,
+        attachmentActions = AttachmentActions(
+            onPhotoPicked = viewModel::onPhotoPicked,
+            onNewCaptureTarget = viewModel::newCaptureTarget,
+            onCaptureResult = viewModel::onCaptureResult,
+            onRemove = viewModel::onRemoveAttachment
+        ),
         onOpenAddProduct = viewModel::onOpenAddProduct,
         onRemoveProduct = viewModel::onRemoveProduct,
         onDraftCategoryChange = viewModel::onDraftCategoryChange,
@@ -111,7 +134,7 @@ fun Form1Route(viewModel: Form1ViewModel = hiltViewModel()) {
         onConfirmAddProduct = viewModel::onConfirmAddProduct,
         onDismissAddProduct = viewModel::onDismissAddProduct,
         onSubmit = viewModel::onSubmit,
-        onStartNew = viewModel::onStartNew
+        onBack = onBack
     )
 }
 
@@ -121,11 +144,10 @@ fun Form1Screen(
     onDonorNameChange: (String) -> Unit,
     onDeliveryNoteChange: (String) -> Unit,
     onCollectNotesChange: (String) -> Unit,
-    onToggleNoteAttached: () -> Unit,
     onStampDeparture: () -> Unit,
-    onToggleDonorSigned: () -> Unit,
-    onToggleCboSigned: () -> Unit,
-    onToggleShot: (Int) -> Unit,
+    onOpenSignature: (AttachmentKind) -> Unit,
+    onOpenPhotos: () -> Unit,
+    attachmentActions: AttachmentActions,
     onOpenAddProduct: () -> Unit,
     onRemoveProduct: (String) -> Unit,
     onDraftCategoryChange: (String) -> Unit,
@@ -134,13 +156,12 @@ fun Form1Screen(
     onConfirmAddProduct: () -> Unit,
     onDismissAddProduct: () -> Unit,
     onSubmit: () -> Unit,
-    onStartNew: () -> Unit
+    onBack: (() -> Unit)? = null
 ) = CBOCollectorTheme {
-    if (state.submitted) {
-        SuccessContent(onStartNew)
-    } else {
     val form = state.form
     val errors = state.errors
+    // Whether the delivery-note photo sheet is open; saved so the camera app returning does not close it.
+    var noteSheetOpen by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -150,9 +171,9 @@ fun Form1Screen(
     ) {
         ScreenHeader(
             title = stringResource(R.string.form1_title),
+            onBack = onBack,
             modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 14.dp)
         )
-
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -183,7 +204,6 @@ fun Form1Screen(
                 FieldError(Form1Field.ARRIVAL, errors)
                 FieldError(Form1Field.DEPARTURE, errors)
             }
-
             // Products
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -231,7 +251,6 @@ fun Form1Screen(
                     )
                 }
             }
-
             // Donor name
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 FieldLabel(stringResource(R.string.form1_donor_name), required = true)
@@ -244,23 +263,22 @@ fun Form1Screen(
                 )
                 FieldError(Form1Field.DONOR_NAME, errors)
             }
-
             // Signatures
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 FieldLabel(stringResource(R.string.form1_signatures), required = true)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     SignatureButton(
                         title = stringResource(R.string.form1_sign_donor),
-                        signed = form.donorSigned,
-                        onClick = onToggleDonorSigned,
+                        signaturePath = form.attachments[AttachmentSlot.DonorSignature]?.path,
+                        onClick = { onOpenSignature(AttachmentKind.DONOR_SIGNATURE) },
                         modifier = Modifier
                             .weight(1f)
                             .testTag(Form1Tags.SIGN_DONOR)
                     )
                     SignatureButton(
                         title = stringResource(R.string.form1_sign_cbo),
-                        signed = form.cboSigned,
-                        onClick = onToggleCboSigned,
+                        signaturePath = form.attachments[AttachmentSlot.CboSignature]?.path,
+                        onClick = { onOpenSignature(AttachmentKind.CBO_SIGNATURE) },
                         modifier = Modifier
                             .weight(1f)
                             .testTag(Form1Tags.SIGN_CBO)
@@ -268,33 +286,47 @@ fun Form1Screen(
                 }
                 FieldError(Form1Field.SIGNATURES, errors)
             }
-
             // Photos
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 FieldLabel(stringResource(R.string.form1_photos), required = true)
-                Text(
-                    stringResource(R.string.form1_photos_progress, form.shots.count { it }),
-                    fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight
-                )
-                val labels = stringArrayResource(R.array.form1_photo_labels)
-                form.shots.chunked(2).forEachIndexed { row, pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        pair.forEachIndexed { col, taken ->
-                            val index = row * 2 + col
-                            PhotoShot(
-                                label = labels.getOrElse(index) { "" },
-                                taken = taken,
-                                onClick = { onToggleShot(index) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag(Form1Tags.PHOTO_PREFIX + index)
-                            )
-                        }
+                val shotCount = form.shots.count { it }
+                val firstPhoto = form.attachments[AttachmentSlot.photo(form.shots.indexOfFirst { it }.coerceAtLeast(0))]
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SaColors.White)
+                        .border(1.dp, SaColors.inkAlpha(0.12f), RoundedCornerShape(12.dp))
+                        .clickable(onClick = onOpenPhotos)
+                        .padding(16.dp, 14.dp)
+                        .testTag(Form1Tags.PHOTOS_ROW),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Brush.linearGradient(colors = listOf(SaColors.AppBg, SaColors.Divider)))
+                    ) {
+                        if (shotCount > 0) AttachmentImage(path = firstPhoto?.path, modifier = Modifier.fillMaxSize(), maxEdgePx = 160)
                     }
+                    Column(modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp)) {
+                        Text(
+                            if (shotCount > 0) stringResource(R.string.form1_photos_row_count, shotCount)
+                            else stringResource(R.string.form1_photos_row_empty),
+                            fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = SaColors.Ink
+                        )
+                        Text(
+                            stringResource(R.string.form1_photos_row_hint),
+                            fontFamily = Figtree, fontSize = 11.5.sp, color = SaColors.MutedLight
+                        )
+                    }
+                    StrokeIcon(pathData = GlyphPaths.ChevronRight, tint = SaColors.Faint, modifier = Modifier.size(18.dp))
                 }
                 FieldError(Form1Field.PHOTOS, errors)
             }
-
             // Delivery note
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 FieldLabel(stringResource(R.string.form1_delivery_note))
@@ -304,9 +336,24 @@ fun Form1Screen(
                     placeholder = stringResource(R.string.form1_delivery_note),
                     fieldTestTag = Form1Tags.DELIVERY_NOTE
                 )
+                val notePhoto = form.attachments[AttachmentSlot.DeliveryNote]
+                if (notePhoto != null) {
+                    AttachmentImage(
+                        path = notePhoto.path,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SaColors.White)
+                            .border(1.dp, SaColors.inkAlpha(0.12f), RoundedCornerShape(12.dp))
+                    )
+                }
                 OutlinePillButton(
-                    onClick = onToggleNoteAttached,
-                    modifier = Modifier.padding(top = 4.dp),
+                    onClick = { noteSheetOpen = true },
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .testTag(Form1Tags.NOTE_PHOTO),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Text(
@@ -315,7 +362,6 @@ fun Form1Screen(
                     )
                 }
             }
-
             // Notes
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 FieldLabel(stringResource(R.string.form1_notes))
@@ -327,7 +373,6 @@ fun Form1Screen(
                     fieldTestTag = Form1Tags.NOTES
                 )
             }
-
             OutlinePillButton(
                 onClick = onStampDeparture,
                 modifier = Modifier
@@ -341,9 +386,16 @@ fun Form1Screen(
                     fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = SaColors.Ink
                 )
             }
-
             if (errors.isNotEmpty()) {
                 Notice(stringResource(R.string.form1_fix_errors), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+            if (state.attachmentFailed) {
+                Notice(
+                    stringResource(R.string.form1_attachment_failed),
+                    Modifier
+                        .testTag(Form1Tags.ATTACHMENT_FAILED)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
+                )
             }
             if (state.saveFailed) {
                 Notice(
@@ -353,7 +405,6 @@ fun Form1Screen(
                         .semantics { liveRegion = LiveRegionMode.Polite }
                 )
             }
-
             FilledPillButton(
                 onClick = onSubmit,
                 enabled = !state.isSaving,
@@ -370,9 +421,8 @@ fun Form1Screen(
             }
         }
     }
-
     state.productDraft?.let { draft ->
-        AddProductDialog(
+        AddProductSheet(
             draft = draft,
             onCategoryChange = onDraftCategoryChange,
             onKgChange = onDraftKgChange,
@@ -381,54 +431,13 @@ fun Form1Screen(
             onDismiss = onDismissAddProduct
         )
     }
-    }
-}
-
-/** Mirrors the demo's DoneScreen: yellow check, big Poppins title, short explanation. */
-@Composable
-private fun SuccessContent(onStartNew: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SaColors.Surface)
-            .testTag(ScreenTags.FORM1)
-            .verticalScroll(rememberScrollState())
-            .padding(26.dp, 32.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(SaColors.Yellow),
-            contentAlignment = Alignment.Center
-        ) {
-            StrokeIcon(pathData = GlyphPaths.Check, tint = SaColors.Ink, strokeWidth = 2.75f, modifier = Modifier.size(34.dp))
-        }
-        Text(
-            stringResource(R.string.form1_success_title),
-            fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 30.sp, color = SaColors.Ink,
-            modifier = Modifier
-                .padding(top = 24.dp, bottom = 10.dp)
-                .testTag(Form1Tags.SUCCESS)
+    if (noteSheetOpen) {
+        PhotoSourceSheet(
+            slot = AttachmentSlot.DeliveryNote,
+            hasPhoto = AttachmentSlot.DeliveryNote in form.attachments,
+            actions = attachmentActions,
+            onDismiss = { noteSheetOpen = false }
         )
-        Text(
-            stringResource(R.string.form1_success_body),
-            fontFamily = Figtree, fontSize = 14.5.sp, lineHeight = 23.sp, color = SaColors.Muted
-        )
-        FilledPillButton(
-            onClick = onStartNew,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 28.dp)
-                .testTag(Form1Tags.NEW_COLLECTION),
-            contentPadding = PaddingValues(16.dp)
-        ) {
-            Text(
-                stringResource(R.string.form1_new_collection),
-                fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = SaColors.Ink
-            )
-        }
     }
 }
 
@@ -525,9 +534,11 @@ private fun ProductLineCard(line: ProductLineInput, onRemove: () -> Unit) {
     }
 }
 
+/** Opens the signature pad. Once signed it shows the signature itself, so the collector can see what was captured. */
 @Composable
-private fun SignatureButton(title: String, signed: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SignatureButton(title: String, signaturePath: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(12.dp)
+    val signed = signaturePath != null
     Column(
         modifier = modifier
             .clip(shape)
@@ -545,46 +556,25 @@ private fun SignatureButton(title: String, signed: Boolean, onClick: () -> Unit,
             fontFamily = Figtree, fontSize = 11.5.sp, color = SaColors.Ink.copy(alpha = 0.8f),
             modifier = Modifier.padding(top = 3.dp)
         )
-    }
-}
-
-/** One photo slot, styled like a tile on the demo's photos screen. */
-@Composable
-private fun PhotoShot(label: String, taken: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(SaColors.White)
-            .border(1.dp, SaColors.inkAlpha(0.08f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp)
-                .background(
-                    Brush.linearGradient(
-                        colors = if (taken) listOf(SaColors.SurfaceAlt, SaColors.Divider) else listOf(SaColors.SurfaceAlt, SaColors.AppBg)
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (taken) StrokeIcon(pathData = GlyphPaths.Check, tint = SaColors.TagOkText, modifier = Modifier.size(24.dp))
-        }
-        Column(modifier = Modifier.padding(13.dp, 11.dp)) {
-            Text(label, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, color = SaColors.Ink)
-            Text(
-                stringResource(if (taken) R.string.form1_photo_taken else R.string.form1_photo_tap),
-                fontFamily = Figtree, fontSize = 11.sp, color = if (taken) SaColors.TagOkText else SaColors.Faint,
-                modifier = Modifier.padding(top = 2.dp)
+        if (signed) {
+            AttachmentImage(
+                path = signaturePath,
+                contentScale = ContentScale.Fit,
+                maxEdgePx = 400,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
             )
         }
     }
 }
 
-/** The demo's "Add product" sheet, shown as a rounded dialog. */
+/** The demo's "Add product" sheet. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddProductDialog(
+private fun AddProductSheet(
     draft: ProductDraft,
     onCategoryChange: (String) -> Unit,
     onKgChange: (String) -> Unit,
@@ -592,19 +582,23 @@ private fun AddProductDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 28.dp),
+        containerColor = SaColors.Surface,
+        scrimColor = SaColors.inkAlpha(0.42f)
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(SaColors.Surface)
                 .verticalScroll(rememberScrollState())
-                .padding(22.dp, 22.dp, 22.dp, 20.dp)
+                .imePadding()
+                .padding(22.dp, 4.dp, 22.dp, 26.dp)
         ) {
             Text(
                 stringResource(R.string.form1_dialog_title),
                 fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = SaColors.Ink,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {

@@ -34,3 +34,26 @@ val Figtree = FontFamily(
         }
     }
 )
+
+/**
+ * Splash face (from the CBO Collector design). A variable font (wdth, wght); like [Figtree], it falls back to the
+ * font's default weight below API 26.
+ */
+@OptIn(ExperimentalTextApi::class)
+val Roboto = FontFamily(
+    listOf(
+        FontWeight.Light to 300,
+        FontWeight.Normal to 400,
+        FontWeight.Medium to 500,
+        FontWeight.Bold to 700,
+    ).map { (weight, wght) ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Font(
+                R.font.roboto, weight,
+                variationSettings = FontVariation.Settings(FontVariation.weight(wght), FontVariation.width(100f))
+            )
+        } else {
+            Font(R.font.roboto, weight)
+        }
+    }
+)

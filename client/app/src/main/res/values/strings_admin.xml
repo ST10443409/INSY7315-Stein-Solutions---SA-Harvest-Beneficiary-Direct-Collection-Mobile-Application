@@ -1,15 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="admin_title">Admin</string>
-    <string name="admin_subtitle">Manage the workflows and keep an eye on the app</string>
 
-    <string name="admin_group_workflows">Workflows</string>
     <string name="admin_group_oversight">Oversight</string>
 
-    <string name="admin_form1_title">CBO collections (Form 1)</string>
-    <string name="admin_form1_desc">Record a collection from a donor, as a collector would.</string>
-    <string name="admin_form2_title">Vetting (Form 2)</string>
-    <string name="admin_form2_desc">Review beneficiary records and record decisions, as a vetting officer would.</string>
 
     <string name="admin_sync_title">Sync monitoring</string>
     <string name="admin_sync_desc">See what has reached the server and Foodspace, and what is still waiting.</string>

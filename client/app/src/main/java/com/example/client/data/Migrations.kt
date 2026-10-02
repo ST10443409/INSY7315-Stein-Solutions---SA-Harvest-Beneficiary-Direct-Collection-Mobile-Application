@@ -18,3 +18,19 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE vetting_decisions ADD COLUMN syncErrorCode TEXT")
     }
 }
+
+/**
+ * v4 -> v5: collection_attachments, the signatures and photos captured for a collection (Form 1). Existing collections
+ * have none, so there is nothing to copy; the table starts empty.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `collection_attachments` (`id` TEXT NOT NULL, `collectionId` TEXT NOT NULL, " +
+                "`kind` TEXT NOT NULL, `slot` INTEGER NOT NULL, `filePath` TEXT NOT NULL, `mimeType` TEXT NOT NULL, " +
+                "`sizeBytes` INTEGER NOT NULL, `syncStatus` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_collection_attachments_collectionId` ON `collection_attachments` (`collectionId`)")
+    }
+}

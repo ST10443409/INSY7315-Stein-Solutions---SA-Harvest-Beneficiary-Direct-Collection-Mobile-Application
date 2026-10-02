@@ -1,5 +1,7 @@
 package com.example.client.di
 
+import com.example.client.data.attachments.AttachmentStorage
+import com.example.client.data.attachments.FileAttachmentStorage
 import com.example.client.auth.AuthRepository
 import com.example.client.auth.AuthRepositoryImpl
 import com.example.client.data.repository.AdminSyncResolutionRepository
@@ -36,6 +38,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCboCollectionRepository(impl: CboCollectionRepositoryImpl): CboCollectionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAttachmentStorage(impl: FileAttachmentStorage): AttachmentStorage
 
     @Binds
     abstract fun bindCboSyncTrigger(impl: SyncScheduler): CboSyncTrigger

@@ -12,10 +12,14 @@ class Form1ValidatorTest {
         departureTime = "10:26",
         productLines = listOf(ProductLineInput(category = "Fruit", kg = "42.5", notes = "")),
         donorName = "Jane Doe",
-        donorSigned = true,
-        cboSigned = true,
-        shots = listOf(true, false, false, false)
+        attachments = mapOf(
+            AttachmentSlot.DonorSignature to draft(),
+            AttachmentSlot.CboSignature to draft(),
+            AttachmentSlot.photo(0) to draft()
+        )
     )
+
+    private fun draft() = DraftAttachment(path = "/fake/file", mimeType = "image/png", sizeBytes = 1)
 
     @Test
     fun validForm_hasNoErrors() {
@@ -39,7 +43,7 @@ class Form1ValidatorTest {
 
     @Test
     fun bothSignaturesRequired() {
-        val errors = Form1Validator.validate(validForm().copy(cboSigned = false))
+        val errors = Form1Validator.validate(validForm().let { it.copy(attachments = it.attachments - AttachmentSlot.CboSignature) })
         assertEquals(Form1Error.SIGNATURE_REQUIRED, errors[Form1Field.SIGNATURES])
     }
 

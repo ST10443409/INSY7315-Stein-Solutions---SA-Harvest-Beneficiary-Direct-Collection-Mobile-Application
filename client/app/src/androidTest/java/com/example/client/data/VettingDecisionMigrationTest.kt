@@ -78,7 +78,7 @@ class VettingDecisionMigrationTest {
         }
         val context = ApplicationProvider.getApplicationContext<Context>()
         val database = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
         try {
             val syncable = database.vettingDecisionDao().getSyncable(maxRetries = 5)

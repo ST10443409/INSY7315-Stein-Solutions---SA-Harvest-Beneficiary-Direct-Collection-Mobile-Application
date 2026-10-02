@@ -158,7 +158,7 @@ class VettingListAndDecisionTest {
         records.outcome = RefreshOutcome.OFFLINE
         val vetting = FakeVettingRepository()
         composeRule.setContent {
-            val vm = androidx.compose.runtime.remember { VettingListViewModel(records, vetting) }
+            val vm = androidx.compose.runtime.remember { VettingListViewModel(records, vetting, com.example.client.auth.SessionManager(com.example.client.testing.InMemoryTokenStorage())) }
             val state by vm.uiState.collectAsState()
             VettingListScreen(state, vm::refresh, {})
         }

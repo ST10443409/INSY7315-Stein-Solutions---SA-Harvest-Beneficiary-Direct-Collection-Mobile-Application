@@ -2,7 +2,11 @@ package com.example.client.ui.vetting
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +22,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import com.example.client.auth.SessionManager
+import com.example.client.data.local.entity.Tone
+import com.example.client.ui.components.ErrorTagPalette
+import com.example.client.ui.components.GreetingHeader
+import com.example.client.ui.components.palette
+import com.example.client.ui.util.displayName
+import com.example.client.ui.util.initialsOf
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -39,7 +53,6 @@ import com.example.client.data.repository.VettingRecordsRepository
 import com.example.client.data.repository.VettingRepository
 import com.example.client.ui.components.CardButton
 import com.example.client.ui.components.FilledPillButton
-import com.example.client.ui.components.ScreenHeader
 import com.example.client.ui.theme.CBOCollectorTheme
 import com.example.client.ui.theme.Figtree
 import com.example.client.ui.theme.Poppins
@@ -79,6 +92,8 @@ data class RecordItem(
 )
 
 data class VettingListUiState(
+    /** The username the officer signed in with, for the greeting; null for a session restored from before it was kept. */
+    val username: String? = null,
     /** False until the device's cache has answered, so an empty cache is not announced before it is known to be empty. */
     val loaded: Boolean = false,
     val items: List<RecordItem> = emptyList(),
@@ -96,7 +111,8 @@ data class VettingListUiState(
 @HiltViewModel
 class VettingListViewModel @Inject constructor(
     private val records: VettingRecordsRepository,
-    vetting: VettingRepository
+    vetting: VettingRepository,
+    sessionManager: SessionManager
 ) : ViewModel() {
 
     private data class Refresh(val running: Boolean = false, val outcome: RefreshOutcome? = null)
@@ -111,6 +127,7 @@ class VettingListViewModel @Inject constructor(
     ) { cached, decisions, meta, refresh ->
         val latest = latestDecisionByRecord(decisions)
         VettingListUiState(
+            username = sessionManager.username(),
             loaded = true,
             items = cached.map { it.toItem(latest[it.id]) },
             refreshing = refresh.running,
@@ -166,28 +183,46 @@ fun VettingListScreen(
     onOpen: (String) -> Unit,
     now: () -> Long = System::currentTimeMillis
 ) = CBOCollectorTheme {
+    val dateText = remember { SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()) }
+    val name = displayName(state.username)
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(SaColors.Surface)
-            .padding(20.dp, 20.dp, 20.dp, 0.dp)
             .testTag(ListTags.SCREEN)
     ) {
-        ScreenHeader(
-            title = stringResource(R.string.vetting_title),
-            subtitle = subtitleFor(state, now),
-            modifier = Modifier.padding(bottom = 12.dp),
-            trailing = { SyncButton(state.refreshing, onSync) }
+        GreetingHeader(
+            date = dateText,
+            title = if (name != null) stringResource(R.string.greeting_hello, name) else stringResource(R.string.vetting_title),
+            subtitle = stringResource(R.string.role_vetting),
+            initials = initialsOf(state.username)
         )
+        // What is on the list and how fresh it is, with the one action: fetch the latest records.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                subtitleFor(state, now) ?: stringResource(R.string.vetting_title),
+                fontFamily = Figtree, fontSize = 12.5.sp, color = SaColors.MutedLight,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp)
+            )
+            SyncButton(state.refreshing, onSync)
+        }
 
-        state.notice?.let { Notice(it, state.meta) }
+        Column(modifier = Modifier.padding(horizontal = 22.dp)) { state.notice?.let { Notice(it, state.meta) } }
 
         when {
             !state.loaded -> Unit
-            state.items.isEmpty() -> EmptyState(state.refreshing, onSync)
+            state.items.isEmpty() -> Column(modifier = Modifier.padding(horizontal = 22.dp)) { EmptyState(state.refreshing, onSync) }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag(ListTags.LIST),
-                contentPadding = PaddingValues(top = 6.dp, bottom = 26.dp),
+                contentPadding = PaddingValues(start = 22.dp, top = 6.dp, end = 22.dp, bottom = 26.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(state.items, key = { it.id }) { RecordRow(it, onOpen) }
@@ -282,14 +317,35 @@ private fun RecordRow(item: RecordItem, onOpen: (String) -> Unit) {
             DecisionOutcome.FLAG -> R.string.vetting_outcome_flag
         }
     )
+    // The demo's task row: a round marker (here the organisation's initial, tinted by the decision), then name and place.
+    val marker = when (item.decision) {
+        DecisionOutcome.APPROVE -> Tone.OK.palette()
+        DecisionOutcome.REJECT -> ErrorTagPalette
+        DecisionOutcome.FLAG -> Tone.WARN.palette()
+        null -> Tone.NEW.palette()
+    }
     CardButton(
         onClick = { onOpen(item.id) },
         modifier = Modifier
             .fillMaxWidth()
             .testTag(ListTags.item(item.id))
             .semantics(mergeDescendants = true) { contentDescription = "${item.legalName}, ${item.province}, $decisionText" },
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(marker.bg),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                item.legalName.trim().take(1).uppercase(),
+                fontFamily = Figtree, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = marker.text
+            )
+        }
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 13.dp)) {
             Text(
                 item.legalName,
                 fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = SaColors.Ink,

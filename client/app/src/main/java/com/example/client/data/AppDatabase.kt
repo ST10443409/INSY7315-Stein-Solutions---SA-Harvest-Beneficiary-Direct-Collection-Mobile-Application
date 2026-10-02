@@ -10,6 +10,7 @@ import com.example.client.data.local.converter.Converters
 import com.example.client.data.local.entity.CboCollectionEntity
 import com.example.client.data.local.entity.CboEntity
 import com.example.client.data.local.entity.ProductLineEntity
+import com.example.client.data.local.entity.CollectionAttachmentEntity
 
 import com.example.client.data.local.entity.FoodspaceBeneficiaryRecord
 import com.example.client.data.local.entity.VettingDecision
@@ -26,10 +27,11 @@ import com.example.client.data.local.dao.VettingDecisionDao
         CboEntity::class,
         CboCollectionEntity::class,
         ProductLineEntity::class,
+        CollectionAttachmentEntity::class,
         FoodspaceBeneficiaryRecord::class,
         VettingDecision::class
-    ], 
-    version = 4,
+    ],
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

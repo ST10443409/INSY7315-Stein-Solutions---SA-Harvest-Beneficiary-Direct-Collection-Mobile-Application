@@ -2,6 +2,7 @@ package com.example.client.data.repository
 
 import com.example.client.data.local.dao.CboCollectionDao
 import com.example.client.data.local.entity.CboCollectionEntity
+import com.example.client.data.local.entity.CollectionAttachmentEntity
 import com.example.client.data.local.entity.ProductLineEntity
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.network.ApiEnvelope
@@ -41,6 +42,10 @@ class CboCollectionRepositoryTest {
         }
 
         override suspend fun update(collection: CboCollectionEntity) = insert(collection)
+
+        override suspend fun insertAttachments(attachments: List<CollectionAttachmentEntity>) = Unit
+        override suspend fun getAttachmentsForCollections(collectionIds: List<String>): List<CollectionAttachmentEntity> = emptyList()
+        override fun observeAttachments(): Flow<List<CollectionAttachmentEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
 
         override fun getBySyncStatus(status: SyncStatus): Flow<List<CboCollectionEntity>> =
             collections.map { list -> list.filter { it.syncStatus == status } }

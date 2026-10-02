@@ -29,6 +29,7 @@
     <string name="vetting_outcome_flag">Flagged</string>
 
     <!-- Whether a decision has reached the server -->
+    <string name="vetting_sync_panel_failed">%1$d decisions need attention. They are still saved on this device.</string>
     <string name="vetting_sync_pending">Saved on this device. Waiting to send.</string>
     <string name="vetting_sync_synced">Sent.</string>
     <string name="vetting_sync_retry">Could not send yet. Will try again automatically.</string>

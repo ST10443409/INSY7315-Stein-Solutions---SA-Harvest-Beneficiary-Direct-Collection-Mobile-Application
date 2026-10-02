@@ -63,7 +63,7 @@ class VettingFlowTest {
                 role, navController,
                 vetting = VettingScreens(
                     list = { onOpen ->
-                        val vm = remember { VettingListViewModel(records, vetting) }
+                        val vm = remember { VettingListViewModel(records, vetting, com.example.client.auth.SessionManager(com.example.client.testing.InMemoryTokenStorage())) }
                         val state by vm.uiState.collectAsState()
                         VettingListScreen(state, vm::refresh, onOpen = { id -> selected = id; onOpen(id) })
                     },
@@ -77,7 +77,9 @@ class VettingFlowTest {
                         val state by vm.uiState.collectAsState()
                         DecisionScreen(state, onBack, vm::onOutcomeChange, vm::onNotesChange, vm::onSave)
                     }
-                )
+                ),
+                // The Admin's own screens are not under test here; the Overview needs Hilt, so it is left empty.
+                admin = com.example.client.ui.navigation.AdminScreens(overview = { })
             )
         }
     }
@@ -136,7 +138,7 @@ class VettingFlowTest {
     fun anAdmin_reachesTheSameThreeScreens() {
         launch(UserRole.ADMIN)
 
-        composeRule.onNodeWithTag(com.example.client.ui.admin.AdminTags.entry(com.example.client.ui.admin.AdminDestination.FORM2)).performClick()
+        composeRule.onNodeWithTag(com.example.client.ui.components.bottomNavTag(com.example.client.ui.navigation.Routes.ADMIN_FORM2)).performClick()
         composeRule.onNodeWithTag(ListTags.item("a")).performClick()
         composeRule.onNodeWithTag(DetailTags.SCREEN).assertIsDisplayed()
         composeRule.onNodeWithTag(DetailTags.RECORD_DECISION).performClick()

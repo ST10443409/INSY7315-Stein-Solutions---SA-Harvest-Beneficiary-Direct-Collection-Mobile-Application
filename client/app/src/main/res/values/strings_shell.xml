@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash -->
+    <string name="splash_logo_description">SA Harvest logo</string>
+    <string name="splash_title">Beneficiary Direct Collection &amp; Vetting Application</string>
+    <string name="splash_tagline">Capture vettings and collections on site. Works without signal.</string>
+    <string name="splash_continue">Continue</string>
+    <string name="splash_footer">Field operations</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_runs">Runs</string>
+    <string name="nav_collect">Collect</string>
+    <string name="nav_history">History</string>
+    <string name="nav_sync">Sync</string>
+    <string name="nav_records">Records</string>
+    <string name="nav_overview">Overview</string>
+    <string name="nav_vetting">Vetting</string>
+    <string name="nav_reports">Reports</string>
+
+    <!-- Shared status wording -->
+    <string name="status_online">Online · syncing in background</string>
+    <string name="status_offline">Offline · working from the device</string>
+    <string name="status_view_queue">View queue</string>
+    <string name="status_queue">Queue</string>
+    <string name="status_failed_count">%1$d need attention</string>
+    <string name="greeting_hello">Sawubona, %1$s</string>
+    <string name="greeting_hello_anonymous">Sawubona</string>
+    <string name="role_cbo_collection">CBO collector</string>
+    <string name="role_vetting">Vetting officer</string>
+    <string name="role_admin">Administrator</string>
+
+    <!-- CBO home ("Runs") -->
+    <string name="home_start_title">Start a collection</string>
+    <string name="home_start_body">Stamps arrival time, logs products and both signatures</string>
+    <string name="home_past_title">Past collections</string>
+    <string name="home_past_body">Everything saved on this device, and where it has got to</string>
+    <string name="home_today">Today · %1$d collections</string>
+    <string name="home_today_empty">No collections yet today</string>
+
+    <!-- Collect (Form 1) additions -->
+    <string name="form1_photos_row_empty">Capture donation photos</string>
+    <string name="form1_photos_row_count">%1$d of 4 photos attached</string>
+    <string name="form1_photos_row_hint">Stock on the vehicle, then on the CBO floor</string>
+    <string name="form1_attachment_failed">That picture could not be saved. Please try again.</string>
+
+    <!-- Signature pad -->
+    <string name="sign_donor_title">Donor signature</string>
+    <string name="sign_cbo_title">CBO signature</string>
+    <string name="sign_instructions">Sign inside the box with a finger. The signature is saved with the collection on this device.</string>
+    <string name="sign_pad_description">Signature pad. Draw your signature with a finger.</string>
+    <string name="sign_pad_hint">Draw here</string>
+    <string name="sign_pad_captured">Signature captured</string>
+    <string name="sign_clear">Clear</string>
+    <string name="sign_accept">Accept signature</string>
+    <string name="sign_footer_donor">%1$s · %2$s</string>
+    <string name="sign_footer_donor_unnamed">Donor signatory · %1$s</string>
+    <string name="sign_footer_cbo">CBO · %1$s</string>
+
+    <!-- Photos screen and the photo source chooser -->
+    <string name="photos_title">Photos</string>
+    <string name="photos_subtitle">%1$d of 4 captured · saved on this device</string>
+    <string name="photos_take_next">Take the next photo</string>
+    <string name="photos_all_taken">All four slots are filled</string>
+    <string name="photos_hint">Photos are compressed on this device and kept with the collection until it is synced.</string>
+    <string name="photo_source_title">Add a photo</string>
+    <string name="photo_take">Take a photo</string>
+    <string name="photo_choose">Choose from gallery</string>
+    <string name="photo_remove">Remove photo</string>
+    <string name="photo_permission_denied">Camera access was denied. You can still choose a photo from the gallery, or allow the camera in the phone\'s settings.</string>
+    <string name="photo_no_camera">No camera app is available on this device. Choose a photo from the gallery instead.</string>
+
+    <!-- Done receipt -->
+    <string name="done_title">Collection recorded</string>
+    <string name="done_body_online">Saved on this device and being sent to the server now.</string>
+    <string name="done_body_offline">Saved on the device and queued. It uploads by itself as soon as you have signal.</string>
+    <string name="done_receipt_donor">Donor signatory</string>
+    <string name="done_receipt_weight">Total weight</string>
+    <string name="done_receipt_times">Arrival · departure</string>
+    <string name="done_receipt_signatures">Signatures</string>
+    <string name="done_receipt_photos">Photos</string>
+    <string name="done_receipt_note">Delivery note</string>
+    <string name="done_receipt_reference">Reference</string>
+    <string name="done_of_two">%1$d of 2</string>
+    <string name="done_of_four">%1$d of 4</string>
+    <string name="done_not_stamped">Not stamped</string>
+    <string name="done_view_queue">View sync queue</string>
+    <string name="done_back_today">Back to today</string>
+    <string name="done_new_collection">Start another collection</string>
+    <string name="done_back_overview">Back to overview</string>
+
+    <!-- History and Sync tabs -->
+    <string name="history_title">Collections</string>
+    <string name="history_subtitle">%1$d saved on this device</string>
+    <string name="sync_title">Sync</string>
+    <string name="sync_waiting">%1$d waiting to be sent</string>
+    <string name="sync_all_clear">Everything on this device is on the server</string>
+    <string name="sync_online_body">Connected. Records go first and send by themselves in the background.</string>
+    <string name="sync_offline_body">Work carries on offline. Nothing is lost: items leave the device the moment a connection returns.</string>
+    <string name="sync_now">Sync %1$d items now</string>
+    <string name="sync_all_synced">All synced</string>
+    <string name="sync_retry_online">Retry when online</string>
+    <string name="sync_sign_out">Sign out</string>
+    <string name="sync_row_attachments">%1$d signatures · %2$d photos</string>
+
+    <!-- Admin overview and reports -->
+    <string name="admin_overview_title">Overview</string>
+    <string name="admin_overview_hero_loading">Checking the server…</string>
+    <string name="admin_overview_hero_unknown">Could not check the server</string>
+    <string name="admin_overview_hero_attention">%1$d records need attention</string>
+    <string name="admin_overview_hero_clear">Nothing needs attention</string>
+    <string name="admin_overview_hero_body_unknown">Open the sync monitor to try again</string>
+    <string name="admin_overview_hero_body_attention">Sent by a device, but not accepted by Foodspace. Open the failed syncs.</string>
+    <string name="admin_overview_hero_body_clear">Every record has reached the server or is on its way</string>
+    <string name="admin_overview_collections">collections received</string>
+    <string name="admin_overview_decisions">vetting decisions received</string>
+    <string name="admin_overview_attention">Needs attention</string>
+    <string name="admin_overview_alerts_none">Nothing needs attention right now.</string>
+    <string name="admin_overview_alerts_unknown">The server\'s counts are not available yet.</string>
+    <string name="admin_alert_collections">%1$d collections need attention</string>
+    <string name="admin_alert_decisions">%1$d vetting decisions need attention</string>
+    <string name="admin_alert_attention_meta">The server has stopped retrying. Open the failed syncs.</string>
+    <string name="admin_alert_duplicates">%1$d suspected duplicate collections</string>
+    <string name="admin_alert_duplicates_meta">Held for review, never sent to Foodspace</string>
+    <string name="admin_alert_waiting">%1$d records waiting or retrying</string>
+    <string name="admin_alert_waiting_meta">On their way to Foodspace. Open the sync monitor.</string>
+    <string name="admin_notice_offline">You are offline. The counts come from the server.</string>
+    <string name="admin_notice_denied">The server did not accept this account. Sign in again as an Admin.</string>
+    <string name="admin_notice_failed">Could not load the counts just now.</string>
+    <string name="reports_title">Reports</string>
+    <string name="reports_subtitle">Collections and vetting decisions on this device</string>
+    <string name="reports_collections">collections recorded</string>
+    <string name="reports_approved">Vettings approved</string>
+    <string name="reports_flagged">Vettings flagged</string>
+    <string name="reports_denied">Vettings denied</string>
+    <string name="reports_note">Each record counts once, by its current decision. Denied are the vettings an officer rejected. These figures come from the records stored on this device.</string>
+</resources>

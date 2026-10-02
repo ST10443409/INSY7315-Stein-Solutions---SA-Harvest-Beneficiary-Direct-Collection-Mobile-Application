@@ -16,7 +16,7 @@ class RoutesTest {
 
     @Test
     fun startDestination_mapsEachRoleToItsLandingScreen() {
-        assertEquals(Routes.CBO_FORM1, UserRole.CBO_COLLECTION.startDestination())
+        assertEquals(Routes.CBO_HOME, UserRole.CBO_COLLECTION.startDestination())
         assertEquals(Routes.VETTING_FORM2, UserRole.VETTING.startDestination())
         assertEquals(Routes.ADMIN_DASHBOARD, UserRole.ADMIN.startDestination())
     }

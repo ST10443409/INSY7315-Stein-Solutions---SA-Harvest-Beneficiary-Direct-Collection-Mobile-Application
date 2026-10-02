@@ -56,7 +56,7 @@ class VettingViewModelsTest {
 
     // ── list ───────────────────────────────────────────────────────────────────────
 
-    private fun listVm() = VettingListViewModel(records, vetting)
+    private fun listVm() = VettingListViewModel(records, vetting, session)
 
     @Test
     fun theListShowsTheCachedRecords_withTheCurrentDecisionOnEach() = runTest {

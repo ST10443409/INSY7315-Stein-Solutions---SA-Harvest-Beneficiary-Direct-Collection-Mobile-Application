@@ -1,6 +1,8 @@
 package com.example.client.ui.cbo
 
+import com.example.client.data.local.entity.AttachmentKind
 import com.example.client.data.local.entity.CboCollectionEntity
+import com.example.client.data.local.entity.CollectionAttachmentEntity
 import com.example.client.data.local.entity.SyncStatus
 import com.example.client.network.CboSyncErrorCodes
 import com.example.client.sync.CboSyncProcessor
@@ -84,5 +86,34 @@ class SubmissionsTest {
         val all = SyncStatus.values().map { record(it.name, it).toSubmissionItem() }
 
         assertEquals(SyncStatus.values().size, SubmissionsUiState(all).items.size)
+    }
+
+    
+    fun theQueue_isEverythingNotYetOnTheServer_andASyncOnlySendsWhatCanStillSucceed() {
+        val state = SubmissionsUiState(
+            listOf(
+                record("1", SyncStatus.PENDING), record("2", SyncStatus.SYNCED),
+                record("3", SyncStatus.FAILED, 1), record("4", SyncStatus.FAILED, CboSyncProcessor.MAX_RETRIES)
+            ).map { it.toSubmissionItem() }
+        )
+
+        assertEquals(listOf("1", "3", "4"), state.waiting.map { it.id })
+        assertEquals(2, state.sendable) // the pending one and the one with retries left
+    }
+
+    
+    fun aSubmission_knowsHowManySignaturesAndPhotosWereCaptured() {
+        fun attachment(kind: AttachmentKind, slot: Int = 0) =
+            CollectionAttachmentEntity(collectionId = "1", kind = kind, slot = slot, filePath = "/f", mimeType = "image/png", sizeBytes = 1)
+
+        val item = record("1", SyncStatus.PENDING).toSubmissionItem(
+            listOf(
+                attachment(AttachmentKind.DONOR_SIGNATURE), attachment(AttachmentKind.CBO_SIGNATURE),
+                attachment(AttachmentKind.PHOTO, 0), attachment(AttachmentKind.PHOTO, 1), attachment(AttachmentKind.DELIVERY_NOTE)
+            )
+        )
+
+        assertEquals(2, item.signatureCount)
+        assertEquals(2, item.photoCount) // the delivery note photo is not one of the donation photos
     }
 }

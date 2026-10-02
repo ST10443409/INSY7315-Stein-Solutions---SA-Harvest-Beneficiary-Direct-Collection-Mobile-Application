@@ -38,9 +38,6 @@
     <string name="form1_saving">Saving…</string>
     <string name="form1_save_failed">Could not save on this device. Please try again.</string>
     <string name="form1_fix_errors">Some fields need attention. Check the items marked in red.</string>
-    <string name="form1_success_title">Collection saved</string>
-    <string name="form1_success_body">Saved on this device and queued to sync when you are online.</string>
-    <string name="form1_new_collection">Start a new collection</string>
     <string name="form1_dialog_title">Add product</string>
     <string name="form1_dialog_category">Category</string>
     <string name="form1_dialog_kg">Weight (kg)</string>
@@ -55,15 +52,7 @@
     <string name="form1_err_signatures">Both the donor and the CBO must sign.</string>
     <string name="form1_err_photos">Capture at least one photo.</string>
 
-    <string name="submissions_title">My submissions</string>
-    <string name="submissions_back">Back</string>
     <string name="submissions_empty">No submissions yet. Records you complete will appear here.</string>
-    <string name="submissions_summary_safe">All %1$d saved on this device</string>
-    <string name="submissions_badge_pending">%1$d waiting to sync</string>
-    <string name="submissions_badge_synced">%1$d synced</string>
-    <string name="submissions_badge_failed">%1$d need attention</string>
-    <string name="submissions_badge_none">No submissions yet</string>
-    <string name="submissions_view_all">View all</string>
     <string name="submissions_status_pending">Pending</string>
     <string name="submissions_status_synced">Synced</string>
     <string name="submissions_status_failed">Failed</string>
@@ -76,8 +65,6 @@
     <string name="submissions_hint_duplicate">The server already has this collection (same donor, date and delivery note). It was kept for admin review, so there is nothing to resend. Your data is still saved on this device.</string>
     <string name="submissions_hint_rejected">The server refused this record, so sending it again will not help. Ask your admin for help. Your data is still saved on this device.</string>
     <string name="submissions_panel_failed">%1$d need attention. Your data is still saved on this device.</string>
-    <string name="submissions_panel_pending">%1$d waiting to sync. They send by themselves as soon as you have signal.</string>
-    <string name="submissions_panel_synced">Everything on this device is on the server.</string>
     <string-array name="form1_photo_labels">
         <item>Stock on vehicle</item>
         <item>Stock delivered</item>
@@ -87,6 +74,5 @@
     <string name="form1_lines_count">%1$d lines</string>
     <string name="form1_line_count_one">1 line</string>
     <string name="form1_departure_stamped">Departure stamped at %1$s</string>
-    <string name="form1_photos_progress">%1$d of 4 captured</string>
     <string name="form1_dialog_add_to_collection">Add to collection</string>
 </resources>

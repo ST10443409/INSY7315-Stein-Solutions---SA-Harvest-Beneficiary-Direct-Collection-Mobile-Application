@@ -110,8 +110,30 @@ return `401 {"error":"Invalid username or password."}`. Send the token as `Autho
 - **Passwords** are hashed with ASP.NET Core's `PasswordHasher` (PBKDF2, per-user salt).
 - **Test users** (development only): with `Seed:Enabled=true` (set in `compose.yaml`) the app creates
   `cbo_test_user` (CBO `cbo-test-001`), `vetting_test_user` and `admin_test_user`, all using the password in `SEED_TEST_PASSWORD`
-  (`.env.example` has a dev-only value). For `dotnet run` set `Seed:Enabled` and `Seed:TestUserPassword` via user-secrets.
+  (choose your own in `.env`; the value once committed in `.env.example` is public, never reuse it). Their password follows the
+  configured one on every start. The API refuses to start with `Seed:Enabled` outside Development. For `dotnet run` set
+  `Seed:Enabled` and `Seed:TestUserPassword` via user-secrets.
+- **Rate limit:** 10 login attempts per client address per minute (`Security:LoginPermitLimit`, `LoginWindowSeconds`); over it,
+  `429 TOO_MANY_REQUESTS` with `Retry-After`.
 - **Ports:** in Docker the API is on `http://localhost:5000` (what the Android emulator reaches as `10.0.2.2:5000`).
+
+## Security (#54)
+
+The review, its findings and what each change is for: [`docs/security/security-review.md`](../docs/security/security-review.md).
+
+- **HTTPS is required** outside Development (`Security:RequireHttps`, off only in `appsettings.Development.json`). A plain-HTTP
+  call gets `403 HTTPS_REQUIRED`; it is never redirected (the token would already have crossed the network). `/api/health` is
+  exempt for platform probes. HTTPS responses carry HSTS.
+- **Behind a TLS-terminating proxy** (Azure, #58) the app sees plain HTTP and relies on `X-Forwarded-Proto`, which it believes only
+  from `Security:KnownNetworks` (CIDR list; loopback always). Set it to the ingress range, e.g. `Security__KnownNetworks__0=10.0.0.0/8`,
+  or `0.0.0.0/0` and `::/0` when the container has no public port. If it is wrong, every call fails with `HTTPS_REQUIRED`: loud,
+  never silently insecure. The same setting gives the login rate limit the client's real address rather than the proxy's.
+- **The API refuses to start** (listing every problem) outside Development with `Seed:Enabled`, and whenever HTTPS is required
+  with a non-`https://` Foodspace address or an unencrypted database connection (add `SSL Mode=VerifyFull`, or `Require`, unless
+  the database is on the same host). See `Infrastructure/SecurityStartupChecks.cs`.
+- **Compressed requests:** the app gzips sync batches (`Content-Encoding: gzip`), about 85% smaller; `UseRequestDecompression`
+  unpacks them. Size limits apply after decompression: 16 KB for login, 4 MB for the sync endpoints (`413 PAYLOAD_TOO_LARGE`).
+- **Local Docker** (`compose.yaml`) runs as Development on purpose: plain HTTP for the emulator, and the seeded test users.
 
 ## Forwarding to Foodspace
 
@@ -198,7 +220,8 @@ GET /api/vetting/records?page=1&pageSize=50&province=Gauteng
 about **76 KB** of JSON (1.5 KB per record) and about **3.2 KB** gzipped. Treat the gzip figure as a best case: the test
 records are near-identical, so real data will compress less. The API compresses responses (gzip/brotli) when the client asks;
 OkHttp on Android does this automatically. It is not applied to HTTPS requests that reach Kestrel directly (the framework's
-BREACH precaution), only behind a TLS-terminating host or over plain HTTP. If Foodspace's `kitchenImages`, `facilityPhotos` or
+BREACH precaution), only behind a TLS-terminating host or over plain HTTP. In the other direction, the app gzips its sync
+batches (see "Security" above). If Foodspace's `kitchenImages`, `facilityPhotos` or
 `certificates` hold image data rather than links, pages will be far larger: see `docs/OPEN-DECISIONS.md`.
 
 ## Vetting decisions endpoint (#47)

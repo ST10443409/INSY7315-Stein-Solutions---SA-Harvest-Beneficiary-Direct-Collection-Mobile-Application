@@ -30,7 +30,9 @@ then remove it. If it is a false positive, add a commented exception to `.gitlea
 [`docs/security/security-review.md`](docs/security/security-review.md).
 
 **Release builds of the app** need an HTTPS API address: `./gradlew assembleRelease -PapiBaseUrl=https://<host>/`. Without
-one the build stops, because release builds refuse plain HTTP.
+one the build stops, because release builds refuse plain HTTP. Release builds are minified (R8), signed with a keystore that is
+never in the repository, and every Android pull request builds the release variant (unsigned) so a broken keep rule is caught
+early. How to sign, version, verify and check a release: [docs/android-release.md](docs/android-release.md).
 
 Run the same checks locally before opening a PR:
 

@@ -32,7 +32,7 @@ These override the matching rows further down (sections 2 and 8 were written bef
 | Observability | Missing | No Application Insights/OpenTelemetry, no alerts (#57). |
 | CI | Partial | Backend and Android CI exist and are good, but only on PRs to `main`, and nothing runs on a `development` branch. |
 | CD | **Missing** | `cd-backend.yml` is CI with a docker build; "Add registry login + push steps here" is still a comment. |
-| Android release | **Missing** | No signing config, R8 off, `proguard-rules.pro` does not exist, `applicationId` is `com.example.client`, version hard-coded to 1 / "1.0". |
+| Android release | **Mostly done** (items 1-5 and 13 of section 4, on `feat/android-release-config`) | Id `za.org.saharvest.collectionvetting`, R8 on with keep rules, signing from environment variables, version from CI, release build in PR CI, all verified on an emulator. Still open: the keystore itself (yours to create), the signed build in the pipeline, pinning, SQLCipher, app lock, signature self-check, distribution. See `docs/android-release.md`. |
 | Repo governance | Missing | `main` is not protected; no `development` branch; no GitHub environments, secrets or variables. |
 
 ## 1. Blockers found while reading the code (fix before the first deploy)
@@ -53,7 +53,7 @@ These override the matching rows further down (sections 2 and 8 were written bef
 4. **`Security:KnownNetworks`, `AllowedHosts` and the database TLS mode must be set or every call fails.** (Documented in
    `security-review.md` S3, repeated here because it is the usual first-deploy failure.) `AllowedHosts` must include the
    *staging slot* host name too (use `*.azurewebsites.net` or list both), or the slot's health check and smoke test get a 400.
-5. **Release build config is incomplete** (section 4): until it is fixed the APK that CI could produce is unsigned,
+5. **Release build config. DONE on `feat/android-release-config`** (section 4): application id, R8 with keep rules, signing from environment variables, CI-derived version, and a release build in every Android pull request. The release keystore and the signed pipeline build are still to do.
    un-minified and named `com.example.client`.
 
 ## 2. Azure resources to provision
@@ -165,11 +165,11 @@ Baseline `assembleRelease` result: see "Verified" at the end.
 
 | # | Item | Detail |
 |---|---|---|
-| 1 | **Application id** | `com.example.client` is the template default. It cannot change after the first APK is installed (a new id is a different app and strands unsynced data). Pick the real one now (e.g. `za.org.saharvest.collection`). Keep `namespace` as is; only `applicationId` needs to move. The FileProvider authority follows it automatically. **Decision.** |
-| 2 | **Signing** | No `signingConfigs`. Create a release keystore, store it in a vault *and* an offline backup (losing it means staff must uninstall to update, losing unsynced records). Read passwords from environment variables in `build.gradle.kts`; CI decodes a base64 secret to a temp file. Add `*.jks`, `*.keystore` and `keystore.properties` to `.gitignore` (currently absent, and gitleaks will not flag a binary keystore). |
-| 3 | **Versioning** | `versionCode = 1`, `versionName = "1.0"`. Derive `versionCode` from the CI run number (must strictly increase) and `versionName` from the tag. |
-| 4 | **R8 / minify** | `isMinifyEnabled = false`. The document requires obfuscation (B9.4, risk register). Turn on `isMinifyEnabled` and `isShrinkResources` and **create `proguard-rules.pro`** (referenced but missing). Gson serialises the DTOs in `network/*Dtos.kt` reflectively; with renamed fields, requests and responses silently break. Add keep rules (or `@SerializedName`) for the DTO packages, plus Retrofit/Room/Hilt/WorkManager defaults. Test the **release** variant on a device and an emulator; the existing instrumented tests only run the debug build. |
-| 5 | **API address** | `API_BASE_URL` is baked in at build time (`-PapiBaseUrl=https://.../`) and the release build already refuses `http://`. A custom domain on the API means a later host change does not need a new APK. Pass it from a GitHub variable per environment. |
+| 1 | **Application id. DONE** | `za.org.saharvest.collectionvetting` (display name `SAH Collection & Vetting`), confirmed by the team. `namespace` stays `com.example.client`. |
+| 2 | **Signing. DONE in the build; keystore still to create** | `signingConfigs.release` reads `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (or the gitignored `client/keystore.properties`). `-PrequireReleaseSigning=true` fails the build rather than producing an unsigned APK. `.gitignore` now refuses `*.jks`, `*.keystore`, `keystore.properties`. **The person who owns releases must create the keystore and back it up** (steps in `docs/android-release.md`); losing it strands every installed phone. |
+| 3 | **Versioning. DONE** | `-PappVersionCode` / `-PappVersionName`; the pipeline passes the run number. Local default `1` / `1.0`. |
+| 4 | **R8 / minify. DONE and verified** | `isMinifyEnabled` + `isShrinkResources`, `proguard-rules.pro` created (Gson fields of the `network` package and the Room entities used as bodies, enums, Retrofit full-mode rules). APK 11.5 MB to 4.4 MB. Verified on an emulator through the non-shipping `r8Check` build type against the real API (sign-in, 3 beneficiary records downloaded and shown, a decision saved and forwarded, no crash). Not hand-driven: collector form upload and admin screens. |
+| 5 | **API address. Unchanged, decided** | Baked in at build time; the release build refuses `http://`. Pass it from a GitHub variable per environment once the host exists. |
 | 6 | **Certificate pinning (#73)** | Not done, deliberately. `*.azurewebsites.net` certificates are Microsoft-managed and rotate. Pin the issuing CA with a backup pin, or use a custom domain with your own certificate. Decide **before** the first APK ships, because pins cannot be added to installed apps without an update. Include an expiry-safe fallback (a pinning failure must not mark records as failed; the app already treats connectivity errors as "retry"). |
 | 7 | **Local DB encryption (#71)** | The document says SQLCipher (B9.4, risk register); the code relies on Android file-based encryption. Needs a decision (POPIA, shared phones). Encrypting later requires a data migration on devices with unsynced records, so decide before rollout. |
 | 8 | **App lock** | The document requires a PIN/biometric lock, especially for Admin (B9.4). Not implemented (no `androidx.biometric`). |
@@ -177,7 +177,7 @@ Baseline `assembleRelease` result: see "Verified" at the end.
 | 10 | **`security-crypto` (#72)** | Deprecated; works. Fine for the pilot, schedule the replacement. |
 | 11 | **Photo upload** | Android side of 3.2: a Retrofit upload method, an `AttachmentUploadWorker` using the existing DAO queries (`getUploadableAttachments`, `markAttachmentsUploaded`, `markAttachmentsRejected`), and a `GzipRequestInterceptor` exemption for already-compressed images (it currently gzips any body over 1 KB). Then #75 (test on 2G). |
 | 12 | **Distribution (#62)** | The document says direct APK distribution, no store. **Decision:** where staff download it (private Blob container + short SAS link, Firebase App Distribution, or Intune/managed Google Play). Publish the SHA-256 beside every build (risk register). Android blocks installing over a differently-signed APK, which is another reason signing key custody matters. |
-| 13 | **CI** | Add an `assembleRelease` (unsigned, dummy https URL) and `lintVitalRelease` step to PR builds so an R8 or lint break is caught before the deploy build. |
+| 13 | **CI. DONE** | `ci-android.yml` builds the release variant (R8, `lintVitalRelease`, unsigned, dummy https address) in every Android pull request. |
 
 ## 5. Pipelines: branching, CI and CD
 

@@ -316,3 +316,25 @@ acting user, their role, the time, and a record reference (`form` + `id`, plus a
   out Form 1 records from before submitters were recorded (their `user` is null).
 - The date and user filters run on unindexed columns (`created_at`, `decision_timestamp`, `submitted_by`; only `officer_id` has an index). That is fine at this size; add
   indexes with the rest of #56 if the lists grow.
+
+## User accounts (Admin endpoints and the first-admin bootstrap)
+
+Login accounts are created and managed by an Admin through `/api/admin/users`; the operator guide, with `curl` examples, the password
+and username rules and the guard rails, is [docs/user-accounts.md](../docs/user-accounts.md).
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/admin/users` | list, filter by `role`, `active`, `search`; paged |
+| `GET /api/admin/users/{id}` | one account with its history (newest first) |
+| `POST /api/admin/users` | create (201); a collector needs a `cboId`, the other roles must not have one |
+| `PATCH /api/admin/users/{id}` | change `role`, `cboId` and/or `isActive`; absent fields are left alone |
+| `POST /api/admin/users/{id}/reset-password` | set a new password |
+
+- **Sessions end at once.** A token carries a `stamp` claim, `TokenAccountCheck` compares it with the account's current
+  `AppUser.SecurityStamp` on every authenticated request, and the stamp changes on deactivate/reactivate, role or CBO change and password
+  reset. A token for an account that is gone, deactivated or re-stamped is a 401. Cost: one indexed two-column lookup per request.
+- **Audit.** Every change writes a `user_audit` row in the same save (actor, action, target, detail; never a secret).
+- **First admin.** `Bootstrap:AdminUsername` and `Bootstrap:AdminPassword` (a secret) create the first Admin at start-up, once, and only
+  if no active Admin exists; they never change an existing account, and a half-set or unacceptable value stops the start-up
+  (`AdminBootstrapper`). Remove the settings after the first sign-in. The test-user seeder remains Development-only.
+- Rules live in one place, `AccountRules`, shared by the bootstrap and the endpoints.

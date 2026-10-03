@@ -37,7 +37,7 @@ public class RoomParityTests
     private static readonly HashSet<string> IgnoredRoomTables = new() { "sync_payloads" };
 
     // Backend tables with no Room counterpart on purpose.
-    private static readonly HashSet<string> ServerOnlyTables = new() { "users", "admin_actions" };
+    private static readonly HashSet<string> ServerOnlyTables = new() { "users", "admin_actions", "user_audit" };
 
     private record KotlinField(string Name, string Type, bool Nullable);
 

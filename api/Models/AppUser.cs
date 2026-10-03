@@ -28,4 +28,12 @@ public class AppUser
     public bool IsActive { get; set; } = true;
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// Copied into every token this user is given (the "stamp" claim) and compared with this value on every request. A new
+    /// value is written whenever something that must end existing sessions changes: the account is deactivated or
+    /// reactivated, the role or CBO changes, or the password is reset. A token carrying an old stamp is refused (401), so a
+    /// lost phone or a leaver is locked out at once instead of when the 60-minute token runs out. Never sent to a client.
+    /// </summary>
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
 }

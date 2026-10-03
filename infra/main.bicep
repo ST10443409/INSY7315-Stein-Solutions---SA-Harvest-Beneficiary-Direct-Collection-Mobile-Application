@@ -47,6 +47,12 @@ param foodspaceApiKeySecretExists bool = false
 @description('Whether the background loop sends records to Foodspace. Keep false until Foodspace is reachable and its authentication is settled (docs/OPEN-DECISIONS.md).')
 param foodspaceForwardingEnabled bool = false
 
+@description('Username of the FIRST administrator, created once at start-up when nobody can manage accounts yet (see docs/user-accounts.md). Set it together with bootstrapAdminPasswordSecretExists: the API refuses to start with only one of the two. Empty once the first admin exists.')
+param bootstrapAdminUsername string = ''
+
+@description('Set true once the Bootstrap-- AdminPassword secret exists in Key Vault (same reason as the Foodspace key: a reference to a missing secret reaches the app as literal text). Turn it back to false, and delete the secret, after the first admin has signed in.')
+param bootstrapAdminPasswordSecretExists bool = false
+
 @description('Apply EF migrations when the API starts. Fine for one instance; the migration lock makes an overlap during a restart safe. Switch to a pipeline step when the database is reachable from the runners.')
 param migrateOnStartup bool = true
 
@@ -177,7 +183,8 @@ var secretSettings = concat(
     { name: 'ConnectionStrings__Default', value: secretRef(keyVaultName, 'ConnectionStrings--Default') }
     { name: 'DOCKER_REGISTRY_SERVER_PASSWORD', value: secretRef(keyVaultName, 'Registry--PullToken') }
   ],
-  foodspaceApiKeySecretExists ? [{ name: 'Foodspace__ApiKey', value: secretRef(keyVaultName, 'Foodspace--ApiKey') }] : []
+  foodspaceApiKeySecretExists ? [{ name: 'Foodspace__ApiKey', value: secretRef(keyVaultName, 'Foodspace--ApiKey') }] : [],
+  bootstrapAdminPasswordSecretExists ? [{ name: 'Bootstrap__AdminPassword', value: secretRef(keyVaultName, 'Bootstrap--AdminPassword') }] : []
 )
 
 var plainSettings = concat(
@@ -200,7 +207,8 @@ var plainSettings = concat(
     { name: 'Storage__Container', value: attachmentsContainer }
     { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
   ],
-  empty(foodspaceBaseUrl) ? [] : [{ name: 'Foodspace__BaseUrl', value: foodspaceBaseUrl }]
+  empty(foodspaceBaseUrl) ? [] : [{ name: 'Foodspace__BaseUrl', value: foodspaceBaseUrl }],
+  empty(bootstrapAdminUsername) ? [] : [{ name: 'Bootstrap__AdminUsername', value: bootstrapAdminUsername }]
 )
 
 resource webApp 'Microsoft.Web/sites@2023-12-01' = {

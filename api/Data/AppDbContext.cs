@@ -31,6 +31,7 @@ namespace api.Data;
 ///     and queue it fed are gone, the device table is dropped with the next Room schema change).
 ///   * "users" is server-only (login accounts); the device holds a JWT, not a user record.
 ///   * "admin_actions" is server-only (the audit trail of Admin retries and dismissals, #50).
+///   * "user_audit" is server-only (the append-only trail of account changes: created, role changed, deactivated, password reset).
 /// </summary>
 public class AppDbContext : DbContext
 {
@@ -53,12 +54,16 @@ public class AppDbContext : DbContext
     /// <summary>Server-only audit trail of what Admins did to records that would not sync (#50).</summary>
     public DbSet<AdminAction> AdminActions => Set<AdminAction>();
 
+    /// <summary>Server-only, append-only trail of account changes (who created, changed, deactivated or reset whom).</summary>
+    public DbSet<UserAuditEntry> UserAudit => Set<UserAuditEntry>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<SyncStatus>().HaveConversion<UpperCaseEnumConverter<SyncStatus>>();
         configurationBuilder.Properties<ForwardingStatus>().HaveConversion<UpperSnakeEnumConverter<ForwardingStatus>>();
         configurationBuilder.Properties<SyncForm>().HaveConversion<UpperSnakeEnumConverter<SyncForm>>();
         configurationBuilder.Properties<AdminActionType>().HaveConversion<UpperSnakeEnumConverter<AdminActionType>>();
+        configurationBuilder.Properties<UserAuditAction>().HaveConversion<UpperSnakeEnumConverter<UserAuditAction>>();
         configurationBuilder.Properties<DecisionOutcome>().HaveConversion<UpperCaseEnumConverter<DecisionOutcome>>();
         configurationBuilder.Properties<Tone>().HaveConversion<UpperCaseEnumConverter<Tone>>();
         // UserRole names are already the wire values (CBO_COLLECTION, ...), so plain string conversion is exact.
@@ -132,6 +137,14 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             // "What has been done to this record": the history shown with it.
             e.HasIndex(x => new { x.Form, x.RecordId }).HasDatabaseName("ix_admin_actions_form_record_id");
+        });
+
+        modelBuilder.Entity<UserAuditEntry>(e =>
+        {
+            e.ToTable("user_audit");
+            e.HasKey(x => x.Id);
+            // "What has been done to this account": the history shown with it.
+            e.HasIndex(x => x.TargetUserId).HasDatabaseName("ix_user_audit_target_user_id");
         });
 
         ApplySnakeCaseNames(modelBuilder);

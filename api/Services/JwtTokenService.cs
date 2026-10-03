@@ -23,6 +23,12 @@ public class JwtTokenService : IJwtTokenService
     /// <summary>The JWT claim carrying the user's CBO (CBO_COLLECTION users only). The sync endpoint trusts this, not the request body.</summary>
     public const string CboIdClaim = "cbo_id";
 
+    /// <summary>
+    /// The JWT claim carrying the user's <see cref="AppUser.SecurityStamp"/>. Every request compares it with the account's current
+    /// stamp (see Program.cs), which is how deactivating a user, resetting a password or changing a role ends their sessions.
+    /// </summary>
+    public const string StampClaim = "stamp";
+
     private readonly JwtOptions _options;
     private readonly TimeProvider _time;
 
@@ -44,6 +50,7 @@ public class JwtTokenService : IJwtTokenService
             // Exactly CBO_COLLECTION | VETTING | ADMIN (the enum names), matching the Android UserRole.
             new(RoleClaim, user.Role.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(StampClaim, user.SecurityStamp.ToString()),
         };
         if (!string.IsNullOrWhiteSpace(user.CboId)) claims.Add(new Claim(CboIdClaim, user.CboId));
 

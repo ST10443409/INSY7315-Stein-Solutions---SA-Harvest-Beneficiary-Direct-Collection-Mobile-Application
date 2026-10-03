@@ -1,0 +1,189 @@
+name: Deploy (main)
+
+# Everything pushed to `main` ships, but only what changed, and only after the same build and test sequence a pull request goes
+# through (design document B10.3/B10.4). The sequence is not copied here: this workflow CALLS the CI workflows, so the
+# commit that is deployed passed exactly those files' checks, and they cannot drift apart.
+#
+#   push to main
+#     ├─ ci-backend        (cd-backend.yml)        restore, build, tests incl. real PostgreSQL migrations, Docker build  ┐
+#     ├─ ci-android        (ci-android.yml)        build, lint, unit tests, release build check, emulator tests         │
+#     ├─ secret-scan       (secret-scan.yml)       gitleaks                                                             ├─ all must pass
+#     └─ validate-pipeline (validate-pipeline.yml) actionlint, shellcheck, Bicep compile and lint                       ┘
+#          │
+#          ├─ backend changed → publish-image (GHCR, tagged with the commit) → deploy-backend (Azure, smoke test, auto-rollback)
+#          └─ Android changed → android-release (signed APK + SHA-256 + R8 mapping as a downloadable artifact)
+#
+# A failing gate stops everything after it. The first Azure deployment needs infra/README.md done first.
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+# Releases queue up and are never cancelled half way: cancelling a deployment or a database migration in the middle is how
+# environments end up in between versions. (The CI workflows below cancel superseded runs themselves, which is safe.)
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  ci-backend:
+    uses: ./.github/workflows/cd-backend.yml
+
+  ci-android:
+    uses: ./.github/workflows/ci-android.yml
+
+  secret-scan:
+    uses: ./.github/workflows/secret-scan.yml
+
+  validate-pipeline:
+    uses: ./.github/workflows/validate-pipeline.yml
+
+  # ── Backend ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  publish-image:
+    needs: [ci-backend, ci-android, secret-scan, validate-pipeline]
+    if: needs.ci-backend.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write # push to GitHub Container Registry with the workflow's own token; no extra secret
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Work out the image name
+      id: meta
+      run: |
+        owner="${GITHUB_REPOSITORY_OWNER,,}" # registry names must be lowercase
+        echo "image=ghcr.io/${owner}/saharvest-api:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+    - name: Build the API image
+      run: >
+        docker build ./api
+        --tag "${{ steps.meta.outputs.image }}"
+        --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+        --label "org.opencontainers.image.revision=${{ github.sha }}"
+
+    - name: Push to GitHub Container Registry
+      env:
+        REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+        docker push "${{ steps.meta.outputs.image }}"
+        echo "### Image" >> "$GITHUB_STEP_SUMMARY"
+        echo "Published \`${{ steps.meta.outputs.image }}\` (commit \`${GITHUB_SHA::12}\`). Roll back or forward to any published tag with the *Redeploy backend* workflow." >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-backend:
+    needs: publish-image
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_deploy-backend.yml
+    with:
+      image: ${{ needs.publish-image.outputs.image }}
+      environment: production
+    secrets: inherit
+
+  # ── Android ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  # Builds the signed APK and keeps it, its SHA-256 and the R8 mapping file as a downloadable artifact. Where staff download
+  # it from is still to be decided (#62); until then the artifact is the hand-off. Skipped with a warning (not a failure) while
+  # the signing secrets or the API address are not configured yet, so the backend can ship first.
+  android-release:
+    needs: [ci-backend, ci-android, secret-scan, validate-pipeline]
+    if: needs.ci-android.outputs.android_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production # where the signing secrets and API_BASE_URL live
+    defaults:
+      run:
+        working-directory: ./client
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Is release signing configured?
+      id: signing
+      working-directory: .
+      env:
+        KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        API_BASE_URL: ${{ vars.API_BASE_URL }}
+      run: |
+        missing=""
+        for v in KEYSTORE_B64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD API_BASE_URL; do
+          [ -n "${!v}" ] || missing="$missing $v"
+        done
+        if [ -n "$missing" ]; then
+          echo "::warning::No signed APK was built: not configured:$missing (see docs/android-release.md)"
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Set up JDK 17
+      if: steps.signing.outputs.ready == 'true'
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Set up Gradle (wrapper + dependency cache)
+      if: steps.signing.outputs.ready == 'true'
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Build the signed release APK
+      if: steps.signing.outputs.ready == 'true'
+      env:
+        ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        API_BASE_URL: ${{ vars.API_BASE_URL }}
+        RUN_NUMBER: ${{ github.run_number }}
+      run: |
+        chmod +x gradlew
+        # The keystore only ever exists as a file for the length of this step, outside the workspace.
+        export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+        echo "$KEYSTORE_B64" | base64 --decode > "$ANDROID_KEYSTORE_FILE"
+        # versionCode must go up with every APK that reaches a phone: the run number of this workflow always does.
+        ./gradlew assembleRelease --stacktrace \
+          -PapiBaseUrl="$API_BASE_URL" -PrequireReleaseSigning=true \
+          -PappVersionCode="$RUN_NUMBER" -PappVersionName="1.0.$RUN_NUMBER" \
+          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+          -Pkotlin.daemon.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m"
+        rm -f "$ANDROID_KEYSTORE_FILE"
+
+    - name: Verify the signature and record the SHA-256
+      if: steps.signing.outputs.ready == 'true'
+      env:
+        RUN_NUMBER: ${{ github.run_number }}
+      run: |
+        mkdir -p ../dist
+        apk="../dist/sah-collection-vetting-1.0.${RUN_NUMBER}.apk"
+        cp app/build/outputs/apk/release/app-release.apk "$apk"
+        cp app/build/outputs/mapping/release/mapping.txt "../dist/mapping-1.0.${RUN_NUMBER}.txt"
+        apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+        "$apksigner" verify --verbose --print-certs "$apk" | tee ../dist/signature.txt | grep -E "Verifies|SHA-256" || { echo "::error::The APK did not verify"; exit 1; }
+        (cd ../dist && sha256sum "$(basename "$apk")" | tee SHA256SUMS)
+        {
+          echo "### Release APK 1.0.${RUN_NUMBER}"
+          echo ""
+          echo "Download it from this run's artifacts. SHA-256 of the APK:"
+          echo '```'
+          cut -d' ' -f1 ../dist/SHA256SUMS
+          echo '```'
+          echo "The signing certificate fingerprint above must equal the one recorded when the keystore was created."
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Keep the APK, its checksum and the R8 mapping
+      if: steps.signing.outputs.ready == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: sah-collection-vetting-1.0.${{ github.run_number }}
+        path: dist/
+        if-no-files-found: error
+        retention-days: 90 # the mapping file is needed to read any crash from this build for as long as phones run it

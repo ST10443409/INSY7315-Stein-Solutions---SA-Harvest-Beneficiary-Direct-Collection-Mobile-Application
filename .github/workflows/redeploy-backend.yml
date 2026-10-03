@@ -1,0 +1,45 @@
+name: Redeploy backend (roll back or forward)
+
+# Puts any already-published API image on the Web App, with the same smoke test and automatic restore as a normal release.
+# Use it to roll back to the last good build ("Rollback is simply a redeploy of the previous tag", design document B10.3) or to
+# retry a deployment without a new commit. Find tags under Packages (the image tag is the first 12 characters of the commit).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy (first 12 characters of the commit, e.g. 1a2b3c4d5e6f)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production # the same queue as a normal release: never two deployments at once
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+    steps:
+    - id: name
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        case "$TAG" in *[!A-Za-z0-9._-]*|"") echo "::error::'$TAG' is not a valid image tag"; exit 1 ;; esac
+        owner="${GITHUB_REPOSITORY_OWNER,,}"
+        echo "image=ghcr.io/${owner}/saharvest-api:${TAG}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: image
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_deploy-backend.yml
+    with:
+      image: ${{ needs.image.outputs.image }}
+      environment: production
+    secrets: inherit

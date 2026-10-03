@@ -1,0 +1,102 @@
+name: Deploy backend (reusable)
+
+# Puts one container image on the Web App, proves it works, and puts the previous image back if it does not. Called by
+# deploy.yml (after a push to main has passed the CI gates and the image is published) and by redeploy-backend.yml (to roll
+# forward or back to any published image by hand). Not run on its own.
+#
+# No slots on the free tier, so there is no blue-green swap (design document B6.5): the new image replaces the old one, the
+# smoke test runs against it, and on failure the previous image is restored. Expect a short gap while the container restarts.
+#
+# Authentication is OIDC: GitHub proves who the workflow is to Azure with a short-lived token, so no Azure password or secret
+# is stored in GitHub. See infra/README.md for the one-time setup.
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Full image reference to deploy, e.g. ghcr.io/owner/saharvest-api:abc123def456"
+        required: true
+        type: string
+      environment:
+        description: "GitHub environment holding the AZURE_* variables"
+        required: false
+        type: string
+        default: production
+
+permissions:
+  id-token: write # to ask GitHub for the OIDC token Azure checks
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    env:
+      IMAGE: ${{ inputs.image }}
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      WEBAPP: ${{ vars.AZURE_WEBAPP_NAME }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check the deployment is configured
+      env:
+        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      run: |
+        missing=""
+        for v in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID RESOURCE_GROUP WEBAPP; do
+          [ -n "${!v}" ] || missing="$missing $v"
+        done
+        if [ -n "$missing" ]; then
+          echo "::error::Missing GitHub environment variables for '${{ inputs.environment }}':$missing (AZURE_* names, see infra/README.md)"
+          exit 1
+        fi
+        echo "Deploying $IMAGE to $WEBAPP in $RESOURCE_GROUP"
+
+    - uses: azure/login@v2
+      with:
+        client-id: ${{ vars.AZURE_CLIENT_ID }}
+        tenant-id: ${{ vars.AZURE_TENANT_ID }}
+        subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+    # What to put back if this goes wrong. For the very first deployment it is the placeholder image infra/main.bicep started with.
+    - name: Remember the running image
+      run: |
+        previous="$(az webapp config show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query linuxFxVersion -o tsv)"
+        [ -n "$previous" ] || { echo "::error::Could not read the Web App's current image"; exit 1; }
+        echo "PREVIOUS_FX=$previous" >> "$GITHUB_ENV"
+        echo "Currently running: $previous"
+
+    - name: Deploy the new image
+      run: |
+        echo "DEPLOY_STARTED=true" >> "$GITHUB_ENV" # from here on a failure must restore the previous image
+        az webapp config set --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --linux-fx-version "DOCKER|$IMAGE" --output none
+        az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP"
+
+    - name: Smoke test
+      env:
+        SMOKE_USERNAME: ${{ secrets.SMOKE_TEST_USERNAME }}
+        SMOKE_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+      run: |
+        host="$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query defaultHostName -o tsv)"
+        bash .github/scripts/smoke-test.sh "https://$host"
+
+    # The smoke test proves an API is answering; this proves it is the one we just deployed and not the previous one still serving.
+    - name: Confirm the new image is the one running
+      run: |
+        running="$(az webapp config show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query linuxFxVersion -o tsv)"
+        [ "$running" = "DOCKER|$IMAGE" ] || { echo "::error::Web App reports '$running', expected 'DOCKER|$IMAGE'"; exit 1; }
+        echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
+        echo "\`$IMAGE\` is running on \`$WEBAPP\` and passed the smoke test." >> "$GITHUB_STEP_SUMMARY"
+
+    # Only once the new image has been put on the app: a failure earlier (not configured, login) changed nothing to undo.
+    - name: Roll back to the previous image
+      if: failure() && env.DEPLOY_STARTED == 'true'
+      run: |
+        echo "::warning::Deployment failed; restoring '$PREVIOUS_FX'"
+        az webapp config set --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --linux-fx-version "$PREVIOUS_FX" --output none
+        az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP"
+        echo "### Rolled back" >> "$GITHUB_STEP_SUMMARY"
+        echo "The deployment of \`$IMAGE\` failed its checks, so \`$PREVIOUS_FX\` was restored. Read the failing step above." >> "$GITHUB_STEP_SUMMARY"

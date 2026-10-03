@@ -1,16 +1,25 @@
 name: Backend CI/CD (Build, Test, Docker)
 
-# Runs for pull requests and pushes on `development` and `main`, but the build only does its work when backend code (or this
-# workflow) changed; Android-only changes skip it. The filter is a job (not `paths:` on the trigger) so that this workflow
-# always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
+# Runs for pull requests into `development` and `main` and pushes to `development`, but the build only does its work when
+# backend code (or this workflow) changed; Android-only changes skip it. The filter is a job (not `paths:` on the trigger) so
+# that this workflow always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
 # The two Room-related paths are here on purpose: api.Tests (RoomParityTests) reads the Kotlin entities
 # and UserRole.kt to make sure the backend models stay in sync with the app.
+#
+# A push to `main` is NOT a trigger of its own: deploy.yml calls this workflow (workflow_call), so the commit that gets
+# deployed went through exactly the build and test sequence a pull request does, in the same file, and the deploy can read
+# whether backend code changed from the `backend_changed` output.
 on:
   pull_request:
     branches: [ "main", "development" ]
   push:
-    branches: [ "main", "development" ]
+    branches: [ "development" ]
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      backend_changed:
+        description: "'true' when this change touched backend code, so the backend should be deployed"
+        value: ${{ jobs.changes.outputs.backend }}
 
 permissions:
   contents: read

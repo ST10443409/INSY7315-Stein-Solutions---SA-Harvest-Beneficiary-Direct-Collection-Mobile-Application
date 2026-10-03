@@ -1,0 +1,81 @@
+name: Validate pipeline
+
+# Checks the files that build and deploy everything else: the workflows, their scripts and the Azure infrastructure. Nothing else
+# exercises them before they matter (deploy.yml only runs on a push to main), so a typo in one would otherwise surface as a failed
+# release. Same shape as the other CI workflows: always starts, a `changes` job decides whether there is anything to check.
+# Called by deploy.yml as one of the gates before a release.
+on:
+  pull_request:
+    branches: [ "main", "development" ]
+  push:
+    branches: [ "development" ]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      pipeline: ${{ steps.filter.outputs.relevant }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # a diff against the base needs the history
+
+    - name: Did the pipeline or the infrastructure change?
+      id: filter
+      env:
+        EVENT: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: |
+        relevant=$(bash .github/scripts/changed-paths.sh '^(\.github/|infra/)')
+        echo "Pipeline relevant: $relevant"
+        echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  validate-pipeline:
+    needs: changes
+    if: needs.changes.outputs.pipeline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install actionlint (pinned version, checksum verified)
+      run: |
+        base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+        tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+        curl -sSfLO "$base/$tarball"
+        curl -sSfL "$base/actionlint_${ACTIONLINT_VERSION}_checksums.txt" | grep " ${tarball}\$" | sha256sum -c -
+        tar -xzf "$tarball" actionlint
+
+    # Workflow syntax, expressions, job wiring, and (through the runner's shellcheck) the shell inside every run: step.
+    - name: Lint the workflows
+      run: ./actionlint -color
+
+    - name: Lint the scripts
+      run: shellcheck .github/scripts/*.sh
+
+    # Compiles the template and its parameter file and fails on any linter warning, so infrastructure that cannot deploy is
+    # caught here. It cannot see what Azure itself will refuse (region, quota, name taken); `what-if` in infra/README.md does.
+    - name: Compile and lint the Azure infrastructure
+      run: |
+        az bicep build --file infra/main.bicep --stdout > /dev/null
+        az bicep build-params --file infra/environments/prod.bicepparam --stdout > /dev/null
+        if az bicep lint --file infra/main.bicep 2>&1 | tee /tmp/bicep-lint.txt | grep -Eq "Warning|Error"; then
+          cat /tmp/bicep-lint.txt
+          echo "::error::Bicep reported warnings or errors"
+          exit 1
+        fi

@@ -25,15 +25,15 @@ These override the matching rows further down (sections 2 and 8 were written bef
 
 | Area | Status | One-line summary |
 |---|---|---|
-| Container image | Partial | Multi-stage, non-root, .NET 10. Works. Not yet pushed anywhere; no registry, no tags. |
-| Key Vault | Missing (cheap) | Config is already env-var driven (`Jwt__SigningKey`, ...), so Key Vault *references* in App Service need **no code change**. Nothing is provisioned. |
+| Container image | **Built, not yet deployed** | Multi-stage, non-root, .NET 10. `deploy.yml` publishes it to GitHub Container Registry (free) tagged with the commit. |
+| Key Vault | **Defined, not yet created** | `infra/main.bicep` creates the vault and the Web App reads secrets through Key Vault references (no code change). Secret values are set by hand (`infra/README.md`). |
 | Blob Storage | **Missing (largest piece of work)** | The API has no photo/signature endpoint, no storage code, no Azure packages. The app keeps the files on the device and its upload worker is not built (#75). |
 | Security hardening of the API | Done | HTTPS-only, HSTS, forwarded headers, login rate limit, startup refusal of unsafe config, body limits (#54). |
 | Observability | Missing | No Application Insights/OpenTelemetry, no alerts (#57). |
-| CI | Partial | Backend and Android CI exist and are good, but only on PRs to `main`, and nothing runs on a `development` branch. |
-| CD | **Missing** | `cd-backend.yml` is CI with a docker build; "Add registry login + push steps here" is still a comment. |
+| CI | **Done** | Backend, Android and secret-scan workflows run for PRs into `development`/`main` and pushes to `development`; `deploy.yml` calls the same three for `main`. |
+| CD | **Written, not yet run** | `deploy.yml` (publish image, deploy to Azure with OIDC, smoke test, auto-rollback, signed APK) and `redeploy-backend.yml`. Needs the one-time setup in `infra/README.md`; never run against a real Azure subscription yet. |
 | Android release | **Mostly done** (items 1-5 and 13 of section 4, on `feat/android-release-config`) | Id `za.org.saharvest.collectionvetting`, R8 on with keep rules, signing from environment variables, version from CI, release build in PR CI, all verified on an emulator. Still open: the keystore itself (yours to create), the signed build in the pipeline, pinning, SQLCipher, app lock, signature self-check, distribution. See `docs/android-release.md`. |
-| Repo governance | Missing | `main` is not protected; no `development` branch; no GitHub environments, secrets or variables. |
+| Repo governance | **Done** for `development`; environment still to create | `development` is protected (PR + 3 checks, 0 approvals, owner may bypass); `main` deliberately is not. The `production` GitHub environment and its variables are created in `infra/README.md` step 5. |
 
 ## 1. Blockers found while reading the code (fix before the first deploy)
 
@@ -56,6 +56,7 @@ These override the matching rows further down (sections 2 and 8 were written bef
    `security-review.md` S3, repeated here because it is the usual first-deploy failure.) `AllowedHosts` must include the
    *staging slot* host name too (use `*.azurewebsites.net` or list both), or the slot's health check and smoke test get a 400.
 5. **Release build config. DONE on `feat/android-release-config`** (section 4): application id, R8 with keep rules, signing from environment variables, CI-derived version, and a release build in every Android pull request. The release keystore and the signed pipeline build are still to do.
+6. **No way to create a user account in any deployed environment. OPEN, needs a decision.** The only code that creates users is `TestUserSeeder`, which the API refuses to run outside Development (`Seed:Enabled`), and there is no admin or provisioning endpoint. A deployed API therefore has an empty `users` table: nobody can sign in, the smoke test cannot sign in, and UAT cannot start. Options, smallest first: (a) a first-admin bootstrap (`Bootstrap:AdminUsername` plus a Key Vault password, created once at start-up if no admin exists) and an Admin-only `POST /api/admin/users` (create, deactivate, reset password) with tests; (b) a one-off command-line verb run through the App Service console; (c) SQL inserts with a hashed password. (a) is the proper answer and also what the document implies ("Admins ... manage users as needed", B12.4). The accounts also need real CBO ids for collectors.
    un-minified and named `com.example.client`.
 
 ## 2. Azure resources to provision
@@ -185,7 +186,15 @@ Baseline `assembleRelease` result: see "Verified" at the end.
 
 ## 5. Pipelines: branching, CI and CD
 
-### 5.1 What exists
+**Status (feat/azure-deploy): section 5.2 is now built.** `deploy.yml` calls `cd-backend.yml`, `ci-android.yml` and
+`secret-scan.yml` as reusable workflows (so the deployed commit went through the PR sequence by construction), publishes the image
+to GHCR, deploys through `_deploy-backend.yml` (OIDC login, image switch, smoke test, automatic restore of the previous image), and
+builds the signed APK. `redeploy-backend.yml` rolls back or forward by tag. Infrastructure is `infra/main.bicep`. Deviations from
+5.2 forced by the free tier: no slots (so no blue-green swap; restore-on-failure instead), GHCR instead of ACR (the registry pull
+uses a token in Key Vault instead of a managed identity), migrations run at start-up instead of a pipeline step (SA Harvest's
+database is probably not reachable from GitHub's runners). None of it has run against a real Azure subscription.
+
+### 5.1 What existed before (kept for the record)
 
 - `cd-backend.yml` (named "CI/CD" but CI only): restore, build, test (in-memory), build the two Docker images. Path-filtered, runs on PRs to `main` and pushes to `main`.
 - `ci-android.yml`: build, lint, unit tests, emulator instrumented tests. Same triggers.

@@ -24,7 +24,21 @@ public static class SecurityStartupChecks
                          $"in Development, not '{environment.EnvironmentName}'.");
         }
 
+        // A storage connection string carries an account key. In a real environment the API uses its managed identity instead.
+        if (!string.IsNullOrWhiteSpace(configuration["Storage:ConnectionString"]) && !environment.IsDevelopment())
+        {
+            problems.Add("Storage:ConnectionString carries a storage account key; it is only allowed in Development (Azurite). " +
+                         "Use Storage:AccountUri with the app's managed identity instead.");
+        }
+
         if (!security.RequireHttps) return problems;
+
+        if (!string.IsNullOrWhiteSpace(configuration["Storage:AccountUri"]) &&
+            !(Uri.TryCreate(configuration["Storage:AccountUri"], UriKind.Absolute, out var storageUri) && storageUri.Scheme == Uri.UriSchemeHttps))
+        {
+            problems.Add("Storage:AccountUri must be an https:// address while Security:RequireHttps is on: signatures and photos " +
+                         "must not cross the network in plain text.");
+        }
 
         if (!Uri.TryCreate(foodspace.BaseUrl, UriKind.Absolute, out var foodspaceUrl) || foodspaceUrl.Scheme != Uri.UriSchemeHttps)
         {

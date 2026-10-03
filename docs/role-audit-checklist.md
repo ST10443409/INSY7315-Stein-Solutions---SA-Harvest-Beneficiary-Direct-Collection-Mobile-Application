@@ -22,6 +22,7 @@ Roles are the wire names the API issues: `CBO_COLLECTION`, `VETTING`, `ADMIN`.
 | Method | Endpoint | Intended role(s) | Attribute | Verified by |
 | --- | --- | --- | --- | --- |
 | `POST` | `/api/cbo-collection/sync` | `CBO_COLLECTION`, `ADMIN` | `[Authorize(Roles = "CBO_COLLECTION,ADMIN")]` on the controller | matrix + `CboCollectionSyncEndpointTests` |
+| `PUT` | `/api/cbo-collection/{collectionId}/attachments/{attachmentId}` | `CBO_COLLECTION`, `ADMIN` | `[Authorize(Roles = "CBO_COLLECTION,ADMIN")]` on the controller | matrix + `AttachmentUploadEndpointTests` |
 | `POST` | `/api/vetting/sync` | `VETTING`, `ADMIN` | `[Authorize(Roles = "VETTING,ADMIN")]` on the controller | matrix + `VettingDecisionSyncEndpointTests` |
 | `GET` | `/api/vetting/records` | `VETTING`, `ADMIN` | `[Authorize(Roles = "VETTING,ADMIN")]` on the controller | matrix + `VettingRecordsEndpointTests` |
 | `GET` | `/api/admin/user-activity` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminUserActivityEndpointTests` |
@@ -35,6 +36,8 @@ Roles are the wire names the API issues: `CBO_COLLECTION`, `VETTING`, `ADMIN`.
 | `POST` | `/api/admin/users` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
 | `PATCH` | `/api/admin/users/{id}` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
 | `POST` | `/api/admin/users/{id}/reset-password` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
+| `GET` | `/api/admin/collections/{collectionId}/attachments` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AttachmentUploadEndpointTests` |
+| `GET` | `/api/admin/attachments/{id}` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AttachmentUploadEndpointTests` |
 | `GET` | `/api/health` | open (platform probes) | `[AllowAnonymous]` | matrix + `HealthAndEnvelopeTests` |
 | `POST` | `/api/auth/login` | open (it issues the token) | `[AllowAnonymous]` | matrix + `AuthEndpointTests` |
 | `GET` | `/api/auth/me` | any signed-in user | `[Authorize]` | matrix + `AuthEndpointTests` |
@@ -58,6 +61,11 @@ was lost on every restart), so `SyncController`, `QueueService`, `QueueBackgroun
 HttpClient are gone, and `AuthEndpointTests.TheRetiredGenericSyncEndpoint_IsGone` keeps it that way. Still to do on the
 Android side, with the next change to the client: delete the unused `SyncApiService.syncData` declaration (five test fakes
 implement it) and the Room `sync_payloads` table, which needs a Room schema version and migration.
+
+**Signatures and photos.** Uploading (`PUT .../attachments/{attachmentId}`) is open to the same two roles as the sync, and on top of the
+role the caller must be the person who submitted that collection (another collector, and an Admin on a collector's record, are told
+"not found"). Reading them back is **Admin only** and read-only, and only through the API: no endpoint returns a storage address or a link.
+Collectors and officers cannot read any file, including their own, because the Android app never needs to.
 
 **`/api/auth/me` is any signed-in user.** It only echoes the caller's own identity and role.
 

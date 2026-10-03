@@ -40,7 +40,7 @@ object HttpClients {
 /**
  * Gzips request bodies of at least [minBytes] (a sync batch of 50 collections goes from about 59 KB to about 9 KB), and
  * marks them `Content-Encoding: gzip`, which the backend decompresses (UseRequestDecompression). Small bodies such as the
- * login request are sent as they are: compressing them saves nothing. Response compression needs nothing here: OkHttp
+ * login request are sent as they are: compressing them saves nothing, and neither do images (JPEG and PNG are compressed already). Response compression needs nothing here: OkHttp
  * already asks for gzip and unpacks it.
  */
 class GzipRequestInterceptor(private val minBytes: Long = MIN_BYTES) : Interceptor {
@@ -51,6 +51,9 @@ class GzipRequestInterceptor(private val minBytes: Long = MIN_BYTES) : Intercept
         if (body == null || request.header(CONTENT_ENCODING) != null || body.isOneShot() || body.isDuplex()) {
             return chain.proceed(request)
         }
+        // Photos and signatures (JPEG, PNG) are compressed already: gzip would save next to nothing and cost battery and time.
+        // They also go to an endpoint that reads the bytes as they are, to check what they really are.
+        if (body.contentType()?.type == "image") return chain.proceed(request)
         val length = body.contentLength()
         if (length in 0 until minBytes) return chain.proceed(request)
 

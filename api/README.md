@@ -194,6 +194,38 @@ Two cases look alike and are handled differently:
   index `WHERE duplicate_of_id IS NULL`: at most one original per real-world collection, even for simultaneous requests.
 - Re-sending a stored duplicate returns `DUPLICATE_DETECTED` again, so the app never mistakes it for a synced record.
 
+## Signatures and photos (Azure Blob Storage)
+
+`PUT /api/cbo-collection/{collectionId}/attachments/{attachmentId}?kind=PHOTO&slot=1` (roles `CBO_COLLECTION` or `ADMIN`) stores one
+file. The body is the raw image with `Content-Type: image/jpeg` or `image/png`; `kind` is `DONOR_SIGNATURE`, `CBO_SIGNATURE`, `PHOTO`
+or `DELIVERY_NOTE`; `slot` is the photo number (0 to 19) and must be 0 for every other kind. `attachmentId` is the id the device gave the
+file. Answers use the standard envelope:
+
+| Status | Meaning | The app |
+|---|---|---|
+| `200` `{ attachmentId, alreadyReceived, sizeBytes }` | Stored, or this exact file was already stored (a retry) | marks it synced |
+| `400` `VALIDATION_FAILED` | Bad id, kind or slot, or an empty body | gives up on this file |
+| `404` `NOT_FOUND` | No such collection **for this user** (the caller must be who submitted it) | gives up on this file |
+| `409` `CONFLICT` | The slot already holds a different file, or the id is used for another | gives up on this file |
+| `413` `PAYLOAD_TOO_LARGE` | Over 512 KB (signatures) or 5 MB (photos) | gives up on this file |
+| `415` `UNSUPPORTED_MEDIA_TYPE` | Not a JPEG or PNG by its bytes, or the bytes do not match the declared type | gives up on this file |
+| `503` `SERVICE_UNAVAILABLE` | Blob storage cannot be reached right now | keeps the file and tries again |
+
+Admins read the files back, read-only and only through the API: `GET /api/admin/collections/{collectionId}/attachments` lists them
+(kind, slot, type, size, SHA-256, uploader, time; no storage address) and `GET /api/admin/attachments/{id}` returns the image with
+`Cache-Control: private, no-store`, `nosniff` and a sandbox content-security policy.
+
+- **Configuration** (`Storage` section): in Azure set `Storage__AccountUri` (the account's blob address, https) and `Storage__Container`
+  (default `attachments`); the Web App's managed identity needs the **Storage Blob Data Contributor** role on that container. No key,
+  connection string or SAS exists anywhere. Locally `compose.yaml` runs the Azurite emulator and sets `Storage__ConnectionString`;
+  the API refuses a connection string outside Development. With neither set the API still starts and uploads answer `503`.
+- **The container is never created by the API** (outside the emulator): the identity's role is on the container only, so create it
+  once (`infra/main.bicep` does, or the portal/CLI).
+- **Why the bytes go first:** the file is written to the container, then its row (`collection_attachments`) is saved. A crash between
+  the two leaves a file with no row, which the retry overwrites; a row pointing at nothing cannot happen. A database unique index on
+  (collection, kind, slot) decides concurrent uploads.
+- Rules and reasoning: [docs/security/security-review.md](../docs/security/security-review.md) (S12).
+
 ## Vetting records endpoint (#43)
 
 `GET /api/vetting/records` (roles `VETTING` or `ADMIN`; a `CBO_COLLECTION` token gets `403`) returns the beneficiary records a

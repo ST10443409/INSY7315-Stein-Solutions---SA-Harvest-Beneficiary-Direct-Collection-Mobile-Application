@@ -29,6 +29,8 @@ namespace api.Data;
 ///     CBO list hasn't been pulled yet.
 ///   * Not modelled: Room's "sync_payloads" (a leftover demo table of the retired queue prototype; the backend endpoint
 ///     and queue it fed are gone, the device table is dropped with the next Room schema change).
+///   * "collection_attachments" is the server's record of each stored signature and photo (the device's table of the same name
+///     holds the file path and upload status instead; the bytes are in blob storage and are not part of the parity check).
 ///   * "users" is server-only (login accounts); the device holds a JWT, not a user record.
 ///   * "admin_actions" is server-only (the audit trail of Admin retries and dismissals, #50).
 ///   * "user_audit" is server-only (the append-only trail of account changes: created, role changed, deactivated, password reset).
@@ -42,6 +44,9 @@ public class AppDbContext : DbContext
     public DbSet<Cbo> Cbos => Set<Cbo>();
     public DbSet<CboCollection> CboCollections => Set<CboCollection>();
     public DbSet<ProductLine> ProductLines => Set<ProductLine>();
+
+    /// <summary>The signatures and photos of collections: the record of each file (the bytes are in blob storage).</summary>
+    public DbSet<CollectionAttachment> CollectionAttachments => Set<CollectionAttachment>();
 
     /// <summary>Read-only cache of Foodspace beneficiary records (fetch-and-replace).</summary>
     public DbSet<FoodspaceBeneficiaryRecord> FoodspaceBeneficiaryRecords => Set<FoodspaceBeneficiaryRecord>();
@@ -64,6 +69,7 @@ public class AppDbContext : DbContext
         configurationBuilder.Properties<SyncForm>().HaveConversion<UpperSnakeEnumConverter<SyncForm>>();
         configurationBuilder.Properties<AdminActionType>().HaveConversion<UpperSnakeEnumConverter<AdminActionType>>();
         configurationBuilder.Properties<UserAuditAction>().HaveConversion<UpperSnakeEnumConverter<UserAuditAction>>();
+        configurationBuilder.Properties<AttachmentKind>().HaveConversion<UpperSnakeEnumConverter<AttachmentKind>>();
         configurationBuilder.Properties<DecisionOutcome>().HaveConversion<UpperCaseEnumConverter<DecisionOutcome>>();
         configurationBuilder.Properties<Tone>().HaveConversion<UpperCaseEnumConverter<Tone>>();
         // UserRole names are already the wire values (CBO_COLLECTION, ...), so plain string conversion is exact.
@@ -103,6 +109,20 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.CollectionId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.CollectionId).HasDatabaseName("ix_product_lines_collection_id");
+        });
+
+        modelBuilder.Entity<CollectionAttachment>(e =>
+        {
+            e.ToTable("collection_attachments");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UploadedAt).HasDefaultValueSql("now()");
+            // Restrict, not cascade: a signature or photo is evidence and must not vanish because its collection was removed.
+            e.HasOne(x => x.Collection)
+                .WithMany()
+                .HasForeignKey(x => x.CollectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // At most one file per collection, kind and slot (one donor signature, one delivery note, one photo per numbered shot).
+            e.HasIndex(x => new { x.CollectionId, x.Kind, x.Slot }).IsUnique().HasDatabaseName("ux_collection_attachments_collection_kind_slot");
         });
 
         modelBuilder.Entity<FoodspaceBeneficiaryRecord>(e =>

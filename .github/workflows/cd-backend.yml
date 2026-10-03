@@ -93,11 +93,29 @@ jobs:
         dotnet build api.Tests/api.Tests.csproj --no-restore --configuration Release
         dotnet build external-api-sim/external-api-sim.csproj --no-restore --configuration Release
 
+    # The Azure Blob Storage emulator, for the tests that run the REAL Azure SDK code path of the signature/photo store
+    # (AzureBlobAttachmentStoreTests). Started with docker run rather than as a service because the SDK's newest API version can be
+    # newer than the emulator's, which --skipApiVersionCheck accepts and a service container cannot be given. It holds nothing but
+    # test files, and listens on this runner only.
+    - name: Start the Azure Blob Storage emulator (Azurite)
+      run: |
+        docker run -d --name azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite \
+          azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+        for _ in $(seq 1 30); do
+          if (echo > /dev/tcp/127.0.0.1/10000) 2>/dev/null; then exit 0; fi
+          sleep 1
+        done
+        echo "::error::Azurite did not start"
+        docker logs azurite
+        exit 1
+
     # Most of api.Tests boots the real API in memory (in-memory database, test-only JWT settings) and needs no database and
-    # no secrets. TEST_POSTGRES switches on the tests that use the PostgreSQL service above; without it they are skipped.
+    # no secrets. TEST_POSTGRES switches on the tests that use the PostgreSQL service above, and TEST_AZURITE the ones that use
+    # the emulator above; without them those tests are skipped.
     - name: Test
       env:
         TEST_POSTGRES: Host=localhost;Port=5432;Username=postgres;Database=postgres
+        TEST_AZURITE: UseDevelopmentStorage=true
       run: dotnet test api.Tests/api.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
 
     - name: Upload test results

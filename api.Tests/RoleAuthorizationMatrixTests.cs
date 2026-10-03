@@ -48,6 +48,7 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     public static readonly IReadOnlyList<(string Method, string Route, string[] Allowed)> Table = new (string, string, string[])[]
     {
         ("POST", "api/cbo-collection/sync", new[] { Cbo, Admin }),
+        ("PUT", "api/cbo-collection/{collectionId}/attachments/{attachmentId}", new[] { Cbo, Admin }),
         ("POST", "api/vetting/sync", new[] { Vetting, Admin }),
         ("GET", "api/vetting/records", new[] { Vetting, Admin }),
         ("GET", "api/admin/user-activity", new[] { Admin }),
@@ -61,6 +62,8 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
         ("POST", "api/admin/users", new[] { Admin }),
         ("PATCH", "api/admin/users/{id}", new[] { Admin }),
         ("POST", "api/admin/users/{id}/reset-password", new[] { Admin }),
+        ("GET", "api/admin/collections/{collectionId}/attachments", new[] { Admin }),
+        ("GET", "api/admin/attachments/{id}", new[] { Admin }),
         ("GET", "api/health", Anyone),
         ("POST", "api/auth/login", Anyone),
         ("GET", "api/auth/me", AnySignedIn),
@@ -244,9 +247,9 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     // call changes anything. A body is sent where the endpoint expects one; authorization runs before it is read.
     private static Task<HttpResponseMessage> Send(HttpClient client, string method, string route)
     {
-        var path = "/" + route.Replace("{id}", "no-such-record");
+        var path = "/" + System.Text.RegularExpressions.Regex.Replace(route, @"\{\w+\}", "no-such-record");
         var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "POST" or "PATCH") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        if (method is "POST" or "PATCH" or "PUT") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
         return client.SendAsync(request);
     }
 

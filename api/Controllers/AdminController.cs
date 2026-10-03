@@ -21,6 +21,7 @@ public partial class AdminController : ApiControllerBase
     private readonly IAdminSyncResolutionService _resolution;
     private readonly IAdminUserActivityService _activity;
     private readonly IUserManagementService _users;
+    private readonly IAttachmentService _attachments;
     private readonly TimeProvider _time;
 
     /// <summary>With no dates, activity covers this many South African days up to and including today.</summary>
@@ -28,12 +29,13 @@ public partial class AdminController : ApiControllerBase
 
     public AdminController(
         IAdminSyncStatusService syncStatus, IAdminSyncResolutionService resolution, IAdminUserActivityService activity,
-        IUserManagementService users, TimeProvider time)
+        IUserManagementService users, IAttachmentService attachments, TimeProvider time)
     {
         _syncStatus = syncStatus;
         _resolution = resolution;
         _activity = activity;
         _users = users;
+        _attachments = attachments;
         _time = time;
     }
 

@@ -27,7 +27,7 @@ These override the matching rows further down (sections 2 and 8 were written bef
 |---|---|---|
 | Container image | **Built, not yet deployed** | Multi-stage, non-root, .NET 10. `deploy.yml` publishes it to GitHub Container Registry (free) tagged with the commit. |
 | Key Vault | **Defined, not yet created** | `infra/main.bicep` creates the vault and the Web App reads secrets through Key Vault references (no code change). Secret values are set by hand (`infra/README.md`). |
-| Blob Storage | **Missing (largest piece of work)** | The API has no photo/signature endpoint, no storage code, no Azure packages. The app keeps the files on the device and its upload worker is not built (#75). |
+| Blob Storage | **Built; needs the storage account created and the role assigned** | The API stores signatures and photos in a private container through its managed identity (`PUT /api/cbo-collection/{collectionId}/attachments/{attachmentId}`; Admin read-only view under `/api/admin`), and the app uploads them after their record is received. Verified end to end against the Azurite emulator, and on the emulator app. Not yet run against a real storage account. What Foodspace receives is still open (section 3.2, point 5); timing on 2G is still to do (#75). |
 | Security hardening of the API | Done | HTTPS-only, HSTS, forwarded headers, login rate limit, startup refusal of unsafe config, body limits (#54). |
 | Observability | Missing | No Application Insights/OpenTelemetry, no alerts (#57). |
 | CI | **Done** | Backend, Android and secret-scan workflows run for PRs into `development`/`main` and pushes to `development`; `deploy.yml` calls the same three for `main`. |
@@ -112,7 +112,15 @@ Plain values may live in the Bicep parameters; secrets are Key Vault references 
 
 ### 3.2 Blob Storage (the big one)
 
-Nothing exists on the API side. Build, in order:
+**Status: built** (points 1 to 4 and 6 below, and the Android upload, item 11 of section 4), with these differences from the plan:
+the route is `PUT .../attachments/{attachmentId}` (idempotent on the device's id, so a retry is safe); a file may only be attached
+to a collection its own submitter sent, with no Admin exception, and anything else is a 404; the table is `collection_attachments`
+with at most one file per collection, kind and slot; the Admin read path streams the bytes through the API (no SAS links at all);
+the container is created by hand or by Bicep, never by the API, because the identity's role is on that one container only; photos
+lose their EXIF (including GPS) on the phone, because the app re-encodes them. Still open: point 5 (what Foodspace receives), and the
+live run against a real storage account. The original plan follows, kept as the reasoning.
+
+Build, in order:
 
 1. **Abstraction.** `IAttachmentStore` (put, open/delete, create read-SAS) with an Azure implementation using
    `Azure.Storage.Blobs` + `Azure.Identity` (`DefaultAzureCredential`, no account key anywhere), and an in-memory fake for
@@ -180,7 +188,7 @@ Baseline `assembleRelease` result: see "Verified" at the end.
 | 8 | **App lock** | The document requires a PIN/biometric lock, especially for Admin (B9.4). Not implemented (no `androidx.biometric`). |
 | 9 | **Signing-certificate self-check** | The risk register promises the app verifies its own signing certificate at launch (sideloaded tampering). Not implemented. |
 | 10 | **`security-crypto` (#72)** | Deprecated; works. Fine for the pilot, schedule the replacement. |
-| 11 | **Photo upload** | Android side of 3.2: a Retrofit upload method, an `AttachmentUploadWorker` using the existing DAO queries (`getUploadableAttachments`, `markAttachmentsUploaded`, `markAttachmentsRejected`), and a `GzipRequestInterceptor` exemption for already-compressed images (it currently gzips any body over 1 KB). Then #75 (test on 2G). |
+| 11 | **Photo upload. DONE (2G timing still to do, #75)** | `AttachmentApiService`, `AttachmentUploadProcessor` (run by `CboSyncWorker` after the records, using the existing DAO queries), and the `GzipRequestInterceptor` now leaves images alone. Unit tests cover every outcome; four emulator scenarios (`AttachmentUploadScenarioTest`) run the real storage, database, sync and upload against the Docker stack and compare the bytes read back by an Admin. |
 | 12 | **Distribution (#62)** | The document says direct APK distribution, no store. **Decision:** where staff download it (private Blob container + short SAS link, Firebase App Distribution, or Intune/managed Google Play). Publish the SHA-256 beside every build (risk register). Android blocks installing over a differently-signed APK, which is another reason signing key custody matters. |
 | 13 | **CI. DONE** | `ci-android.yml` builds the release variant (R8, `lintVitalRelease`, unsigned, dummy https address) in every Android pull request. |
 

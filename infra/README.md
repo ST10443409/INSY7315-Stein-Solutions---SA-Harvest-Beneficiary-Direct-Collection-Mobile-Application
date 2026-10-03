@@ -16,7 +16,7 @@ push to main ─► CI gates (build, tests incl. PostgreSQL migrations, lint, se
 |---|---|---|
 | App Service plan (Linux) + Web App for Containers | runs the API | system-assigned identity; HTTPS only, TLS 1.2+, FTP off; **no slots** on this tier |
 | Key Vault | the JWT signing key, database connection string, registry pull token, later the Foodspace key | RBAC; the app reads secrets with its identity through Key Vault references, so no secret is in the image or the settings |
-| Storage account + private `attachments` container | photos and signatures (the API upload endpoint is not built yet) | no public access, **no account keys** (identity only), soft delete, GRS in prod |
+| Storage account + private `attachments` container | photos and signatures (the API uploads them with its identity; Admins read them back through the API) | no public access, **no account keys** (identity only), soft delete, GRS in prod |
 | Log Analytics + Application Insights | monitoring | connection string is set; the API does not send telemetry yet (#57) |
 
 Not created, on purpose: the **database** (SA Harvest's), the **container registry** (GitHub's, free), the **secret values**.
@@ -96,8 +96,10 @@ the passwordless OIDC variant is kept in `infra/alternatives/deploy-backend-oidc
    (Without it the webhook answers 401 and the deploy step fails with that.)
 2. Point the Web App at the `live` tag **once**, after the first pipeline run has published it (step 6): Web App > **Deployment > Deployment
    Center** > Registry source *Private registry*, server `https://ghcr.io`, login your GitHub user, password the pull token, image
-   `<owner lower-case>/saharvest-api`, tag **`live`**; **Continuous deployment: Off**; Save. (Via the CLI: `az webapp config container set -g $RG -n $APP
-   --container-image-name ghcr.io/<owner>/saharvest-api:live`; the registry settings from step 2 are already in place.)
+   `<owner lower-case>/saharvest-api`, tag **`live`**; **Continuous deployment: On** (that is what creates the webhook and makes a POST to it restart the app and pull the image;
+   GHCR has no registry-side webhook, so nothing but our pipeline ever calls it); Save. (Via the CLI: `az webapp config container set -g $RG -n $APP
+   --container-image-name ghcr.io/<owner>/saharvest-api:live`, then `az webapp deployment container config -g $RG -n $APP --enable-cd true --query CI_CD_URL -o tsv`
+   prints the webhook URL; the registry settings from step 2 are already in place.)
 3. Copy the webhook URL: Deployment Center > **Webhook URL** > Copy (it looks like `https://$<app>:<password>@<app>.scm.<region>.azurewebsites.net/api/registry/webhook`).
    Treat it like a password.
 
@@ -182,5 +184,12 @@ management (creating collectors and officers, deactivating a lost phone's owner,
 - **An admin screen for accounts in the Android app.** Accounts are managed through the API for now (`docs/user-accounts.md`); the
   endpoints exist and are tested, the app does not call them yet.
 - **Foodspace** base address and authentication (`docs/OPEN-DECISIONS.md` #1), so forwarding stays off.
-- **Photo upload to the storage account**, and **telemetry to Application Insights**: the resources and settings exist, the code does not.
+- **Telemetry to Application Insights**: the resource and setting exist, the code does not.
+- **Signatures and photos** are built (the API stores them in the `attachments` container using `Storage__AccountUri` and its managed
+  identity's **Storage Blob Data Contributor** role on that one container; there is no key anywhere). To check it on a live deployment:
+  sign in as a collector, send a collection and a file (see `docs/user-accounts.md` for tokens; the upload is
+  `PUT /api/cbo-collection/<collection>/attachments/<id>?kind=PHOTO&slot=0` with the image as the body), then as an Admin
+  `GET /api/admin/collections/<collection>/attachments` and `GET /api/admin/attachments/<id>`. A 503 on upload means the API cannot reach
+  the container: check the role assignment (it can take a few minutes to apply) and `Storage__AccountUri`. What Foodspace receives is
+  still open (`docs/OPEN-DECISIONS.md`).
 - **Release keystore** and the signed-APK secrets; **certificate pinning**, which needs the final host name.

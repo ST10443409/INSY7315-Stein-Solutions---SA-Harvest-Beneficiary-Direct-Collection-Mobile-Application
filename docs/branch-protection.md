@@ -30,8 +30,9 @@ second call returns `403 ... Upgrade to GitHub Pro or make this repository publi
 
 ## Order of operations
 
-1. Create `development` from `main`, commit the CI-trigger change **on it**, and push it. That first push runs all three
-   workflows once (a new branch has no "before" commit, so nothing is skipped).
+1. Create `development` from `main` and push it (`git switch -c development && git push -u origin development`). The
+   CI-trigger change is already on `main` (`c22cf57`), so the branch inherits it. That first push runs all three workflows
+   once (a new branch has no "before" commit, so nothing is skipped; the emulator tests do not run on `development`).
 2. Open one small pull request into `development` (a docs change is enough) so the checks have also reported on a pull
    request; GitHub's UI only offers checks that have reported recently. (The API call below accepts the names without this.)
 3. Apply the rules:

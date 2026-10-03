@@ -5,17 +5,26 @@ Project layout: `client/` (Android app), `api/` (ASP.NET Core backend), `api.Tes
 
 ## Continuous integration
 
-Two GitHub Actions workflows in `.github/workflows/`. Each runs on pull requests to `main`, on pushes to `main`,
-and on demand (`gh workflow run <file>`), **only** when files in its paths change:
+Branches: work on `feature/*` (or `feat/*`, `fix/*`) branches cut from `development`, and open a pull request back into
+`development`. When `development` has been tested, a pull request from `development` into `main` releases it. Nobody pushes
+to `development` or `main` directly (see [docs/branch-protection.md](docs/branch-protection.md)).
 
-| Workflow | Runs | Triggers on changes to |
+Two GitHub Actions workflows in `.github/workflows/`. Each runs on pull requests to `development` or `main`, on pushes to
+either, and on demand (`gh workflow run <file>`). Each starts with a quick `changes` job that checks which files the change
+touched ([.github/scripts/changed-paths.sh](.github/scripts/changed-paths.sh)); the real job is skipped when none of its
+paths changed, and GitHub counts a skipped job as passed. (This is a job rather than a `paths:` filter on the trigger
+because a workflow a filter stops from starting never reports its check, and a required check that never reports blocks
+the pull request forever.)
+
+| Workflow | Runs | Real job runs on changes to |
 |---|---|---|
-| `ci-android.yml` | JDK 17, `./gradlew assembleDebug lint test` in `client/` | `client/**`, the workflow file |
-| `cd-backend.yml` | .NET 10: restore, build, `dotnet test api.Tests`, then `docker build` for `api` and `external-api-sim` | `api/**`, `api.Tests/**`, `external-api-sim/**`, `compose.yaml`, `dotnet-tools.json`, the workflow file, and the Room entities / `UserRole.kt` under `client/app/src/main/java/com/example/client/{data,auth}` (because `RoomParityTests` reads them) |
+| `ci-android.yml` (job `build`) | JDK 17, `./gradlew assembleDebug lint test` in `client/`; **plus the emulator tests only for pull requests into `main`, pushes to `main` and manual runs** (they take most of an hour, so `development` pull requests skip them) | `client/**`, the workflow file |
+| `cd-backend.yml` (job `build-test-docker`) | .NET 10: restore, build, `dotnet test api.Tests`, then `docker build` for `api` and `external-api-sim` | `api/**`, `api.Tests/**`, `external-api-sim/**`, `compose.yaml`, `dotnet-tools.json`, the workflow file, and the Room entities / `UserRole.kt` under `client/app/src/main/java/com/example/client/{data,auth}` (because `RoomParityTests` reads them) |
 
 So an Android UI change does not run the backend pipeline, and a backend change does not run the Android one.
 
-A third workflow, `secret-scan.yml`, runs gitleaks on **every** pull request and push to `main` (their new commits only)
+A third workflow, `secret-scan.yml` (job `gitleaks`), runs gitleaks on **every** pull request and push to `development` and
+`main` (their new commits only)
 and weekly over the whole history (#54). If it flags something real, rotate the secret first (it is already in history),
 then remove it. If it is a false positive, add a commented exception to `.gitleaks.toml` and note it in
 [`docs/security/security-review.md`](docs/security/security-review.md).

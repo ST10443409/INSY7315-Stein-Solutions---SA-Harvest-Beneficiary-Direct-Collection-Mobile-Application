@@ -1,31 +1,15 @@
 name: Backend CI/CD (Build, Test, Docker)
 
-# Runs only when backend code (or this workflow) changes; Android-only changes don't trigger it.
+# Runs for pull requests and pushes on `development` and `main`, but the build only does its work when backend code (or this
+# workflow) changed; Android-only changes skip it. The filter is a job (not `paths:` on the trigger) so that this workflow
+# always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
 # The two Room-related paths are here on purpose: api.Tests (RoomParityTests) reads the Kotlin entities
 # and UserRole.kt to make sure the backend models stay in sync with the app.
 on:
   pull_request:
-    branches: [ "main" ]
-    paths:
-      - 'api/**'
-      - 'api.Tests/**'
-      - 'external-api-sim/**'
-      - 'compose.yaml'
-      - 'dotnet-tools.json'
-      - 'client/app/src/main/java/com/example/client/data/**'
-      - 'client/app/src/main/java/com/example/client/auth/UserRole.kt'
-      - '.github/workflows/cd-backend.yml'
+    branches: [ "main", "development" ]
   push:
-    branches: [ "main" ]
-    paths:
-      - 'api/**'
-      - 'api.Tests/**'
-      - 'external-api-sim/**'
-      - 'compose.yaml'
-      - 'dotnet-tools.json'
-      - 'client/app/src/main/java/com/example/client/data/**'
-      - 'client/app/src/main/java/com/example/client/auth/UserRole.kt'
-      - '.github/workflows/cd-backend.yml'
+    branches: [ "main", "development" ]
   workflow_dispatch:
 
 permissions:
@@ -36,7 +20,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.relevant }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # a diff against the base needs the history
+
+    - name: Did backend code change?
+      id: filter
+      env:
+        EVENT: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: |
+        relevant=$(bash .github/scripts/changed-paths.sh '^(api/|api\.Tests/|external-api-sim/|compose\.yaml$|dotnet-tools\.json$|client/app/src/main/java/com/example/client/data/|client/app/src/main/java/com/example/client/auth/UserRole\.kt$|\.github/workflows/cd-backend\.yml$|\.github/scripts/changed-paths\.sh$)')
+        echo "Backend relevant: $relevant"
+        echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  # Keep this job's name: it is the check name branch protection requires. A skipped job counts as passed.
   build-test-docker:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

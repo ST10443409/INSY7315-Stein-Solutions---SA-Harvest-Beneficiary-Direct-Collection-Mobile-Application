@@ -1,17 +1,17 @@
 name: Android CI
 
-# Runs only when the Android project (or this workflow) changes; backend-only changes don't trigger it.
+# Runs for pull requests and pushes on `development` and `main`, but the build only does its work when the Android project
+# (or this workflow) changed; backend-only changes skip it. The filter is a job (not `paths:` on the trigger) so that this
+# workflow always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
+#
+# Two tiers (design document B10.4): build, lint and unit tests run everywhere; the emulator (instrumented) tests, which
+# take most of the hour, run only for work heading into `main` and on `main` itself, so day-to-day pull requests into
+# `development` stay fast and do not use up the free Actions minutes.
 on:
   pull_request:
-    branches: [ "main" ]
-    paths:
-      - 'client/**'
-      - '.github/workflows/ci-android.yml'
+    branches: [ "main", "development" ]
   push:
-    branches: [ "main" ]
-    paths:
-      - 'client/**'
-      - '.github/workflows/ci-android.yml'
+    branches: [ "main", "development" ]
   workflow_dispatch:
 
 permissions:
@@ -21,8 +21,38 @@ concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # True for a pull request into main, a push to main, and a manual run.
+  RUN_EMULATOR_TESTS: ${{ github.event_name == 'workflow_dispatch' || github.base_ref == 'main' || github.ref == 'refs/heads/main' }}
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.filter.outputs.relevant }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # a diff against the base needs the history
+
+    - name: Did the Android project change?
+      id: filter
+      env:
+        EVENT: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: |
+        relevant=$(bash .github/scripts/changed-paths.sh '^(client/|\.github/workflows/ci-android\.yml$|\.github/scripts/changed-paths\.sh$)')
+        echo "Android relevant: $relevant"
+        echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  # Keep this job's name: it is the check name branch protection requires. A skipped job counts as passed.
   build:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -53,6 +83,7 @@ jobs:
         -Pkotlin.daemon.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m"
 
     - name: Enable KVM for Android Emulator
+      if: env.RUN_EMULATOR_TESTS == 'true'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
@@ -62,6 +93,7 @@ jobs:
     # is 7.4 GB, more than the hosted runner has left after the build (about 6.7 GB), so it never booted. Remove
     # toolchains this job never uses (the Android SDK and Java are left alone) and give the AVD a smaller partition below.
     - name: Free disk space for the emulator
+      if: env.RUN_EMULATOR_TESTS == 'true'
       run: |
         df -h /
         sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL \
@@ -69,6 +101,7 @@ jobs:
         df -h /
 
     - name: Run Instrumented Tests
+      if: env.RUN_EMULATOR_TESTS == 'true'
       uses: reactivecircus/android-emulator-runner@v2
       with:
         api-level: 31

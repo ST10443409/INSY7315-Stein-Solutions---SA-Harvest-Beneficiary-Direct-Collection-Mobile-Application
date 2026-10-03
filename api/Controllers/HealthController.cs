@@ -17,12 +17,15 @@ public class HealthController : ApiControllerBase
     private readonly AppDbContext _db;
     private readonly TimeProvider _time;
     private readonly ILogger<HealthController> _logger;
+    private readonly string _revision;
 
-    public HealthController(AppDbContext db, TimeProvider time, ILogger<HealthController> logger)
+    public HealthController(AppDbContext db, TimeProvider time, ILogger<HealthController> logger, IConfiguration configuration)
     {
         _db = db;
         _time = time;
         _logger = logger;
+        // Set by the Dockerfile from the pipeline's build argument; "unknown" for a local or hand-built image.
+        _revision = string.IsNullOrWhiteSpace(configuration["BUILD_REVISION"]) ? "unknown" : configuration["BUILD_REVISION"]!;
     }
 
     /// <summary>200 when the API and its database are reachable, 503 when the database is not.</summary>
@@ -36,7 +39,8 @@ public class HealthController : ApiControllerBase
         var health = new HealthStatus(
             databaseUp ? "ok" : "unhealthy",
             databaseUp ? "ok" : "unavailable",
-            _time.GetUtcNow());
+            _time.GetUtcNow(),
+            _revision);
 
         if (databaseUp)
             return Ok(ApiResponse.Ok(health));

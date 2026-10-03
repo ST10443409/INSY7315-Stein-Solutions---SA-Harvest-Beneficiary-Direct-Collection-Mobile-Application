@@ -29,14 +29,16 @@ jobs:
       env:
         TAG: ${{ inputs.tag }}
       run: |
-        case "$TAG" in *[!A-Za-z0-9._-]*|"") echo "::error::'$TAG' is not a valid image tag"; exit 1 ;; esac
+        # The smoke test waits for /api/health to report this exact revision, so only a 12-character commit prefix makes sense (not "live").
+        case "$TAG" in *[!0-9a-f]*|"") echo "::error::'$TAG' is not a 12-character commit revision (lower-case hex)"; exit 1 ;; esac
+        [ "${#TAG}" -eq 12 ] || { echo "::error::'$TAG' must be exactly 12 characters"; exit 1; }
         owner="${GITHUB_REPOSITORY_OWNER,,}"
         echo "image=ghcr.io/${owner}/saharvest-api:${TAG}" >> "$GITHUB_OUTPUT"
 
   deploy:
     needs: image
     permissions:
-      id-token: write
+      packages: write # the deploy repoints the live and last-good image tags
       contents: read
     uses: ./.github/workflows/_deploy-backend.yml
     with:

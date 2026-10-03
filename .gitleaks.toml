@@ -26,3 +26,12 @@ description = "The dev-only SEED_TEST_PASSWORD committed in .env.example by d90c
 condition = "AND"
 commits = ["d90c094c351b5244fcd3c4795d7dd941e39e2017"]
 paths = ['''^\.env\.example$''']
+
+[[allowlists]]
+description = "Azure built-in role definition ids in infra/main.bicep: public constants, identical in every tenant (docs: learn.microsoft.com Azure built-in roles), flagged only because the variable names contain the word 'Key' (Key Vault). Not secrets."
+regexTarget = "line"
+regexes = [
+  '''roleKeyVaultSecretsUser = ''',
+  '''roleKeyVaultSecretsOfficer = ''',
+  '''roleStorageBlobDataContributor = ''',
+]

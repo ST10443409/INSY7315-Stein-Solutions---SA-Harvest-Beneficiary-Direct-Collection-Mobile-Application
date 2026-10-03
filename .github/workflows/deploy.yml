@@ -66,6 +66,7 @@ jobs:
         --tag "${{ steps.meta.outputs.image }}"
         --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
         --label "org.opencontainers.image.revision=${{ github.sha }}"
+        --build-arg "REVISION=${GITHUB_SHA::12}"
 
     - name: Push to GitHub Container Registry
       env:
@@ -79,7 +80,7 @@ jobs:
   deploy-backend:
     needs: publish-image
     permissions:
-      id-token: write
+      packages: write # the deploy repoints the live and last-good image tags
       contents: read
     uses: ./.github/workflows/_deploy-backend.yml
     with:

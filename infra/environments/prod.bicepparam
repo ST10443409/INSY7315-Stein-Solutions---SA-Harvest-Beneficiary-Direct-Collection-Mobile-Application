@@ -19,9 +19,17 @@ param appServicePlanSku = 'B1'
 param registryUsername = 'ST10443409'
 
 // Fill in when Foodspace gives them (docs/OPEN-DECISIONS.md #1); keep forwarding off until then.
-param foodspaceBaseUrl = ''
+// NOT empty, even though forwarding is off: with no address the API falls back to http://localhost:5284 and its own safety check
+// refuses to start on a non-HTTPS Foodspace address. This placeholder is never called while forwarding is off; the vetting
+// records list simply reports Foodspace as unavailable until the real address replaces it. ".invalid" cannot resolve, on purpose.
+param foodspaceBaseUrl = 'https://foodspace-not-configured.invalid/'
 param foodspaceApiKeySecretExists = false
 param foodspaceForwardingEnabled = false
+
+// The FIRST administrator (docs/user-accounts.md). Set both, redo step 2 of infra/README.md, sign in, then clear both and redo
+// step 2 again and delete the secret: the bootstrap does nothing once an admin exists, and a spent secret should not linger.
+param bootstrapAdminUsername = ''
+param bootstrapAdminPasswordSecretExists = false
 
 param migrateOnStartup = true
 

@@ -1,30 +1,36 @@
 name: Deploy backend (reusable)
 
-# Puts one container image on the Web App, proves it works, and puts the previous image back if it does not. Called by
-# deploy.yml (after a push to main has passed the CI gates and the image is published) and by redeploy-backend.yml (to roll
-# forward or back to any published image by hand). Not run on its own.
+# Puts one container image on the Web App, proves it is the one answering and working, and puts the last good image back if it is
+# not. Called by deploy.yml (after a push to main has passed the CI gates and the image is published) and by redeploy-backend.yml
+# (to roll forward or back to any published image by hand). Not run on its own.
 #
-# No slots on the free tier, so there is no blue-green swap (design document B6.5): the new image replaces the old one, the
-# smoke test runs against it, and on failure the previous image is restored. Expect a short gap while the container restarts.
+# How it deploys, and why it needs no Azure login: the Web App is configured ONCE (in the portal) to run the moving tag
+#     ghcr.io/<owner>/saharvest-api:live
+# A deployment repoints `live` at the new image (pull, tag, push: the very same manifest, so the very same bytes) and then POSTs the Web App's own
+# "webhook" URL, which makes App Service restart the container and pull `live` again (Microsoft's documented way to deploy from
+# a registry that is not ACR or Docker Hub). The only credential is that webhook URL, stored as one environment secret; it carries
+# the Web App's deployment credentials, so it can never be anything but a secret of the `production` environment, which only `main` can use.
+# (The Microsoft Entra / OIDC alternative, for a tenant that allows app registrations, is kept in infra/alternatives/.)
 #
-# Authentication is OIDC: GitHub proves who the workflow is to Azure with a short-lived token, so no Azure password or secret
-# is stored in GitHub. See infra/README.md for the one-time setup.
+# After the switch the smoke test waits until /api/health reports the NEW commit's revision (so the previous container still
+# answering is not a pass), then checks sign-in rules. On success the image is also tagged `last-good`; on failure `live` is pointed
+# back at `last-good` and the webhook is called again. No slots on the free tier, so there is a short gap while the container restarts.
 on:
   workflow_call:
     inputs:
       image:
-        description: "Full image reference to deploy, e.g. ghcr.io/owner/saharvest-api:abc123def456"
+        description: "Full image reference to deploy, ending in the 12-character revision tag, e.g. ghcr.io/owner/saharvest-api:REVISION"
         required: true
         type: string
       environment:
-        description: "GitHub environment holding the AZURE_* variables"
+        description: "GitHub environment holding the secret and variables"
         required: false
         type: string
         default: production
 
 permissions:
-  id-token: write # to ask GitHub for the OIDC token Azure checks
   contents: read
+  packages: write # to repoint the `live` and `last-good` tags with the workflow's own token
 
 jobs:
   deploy:
@@ -33,70 +39,94 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       IMAGE: ${{ inputs.image }}
-      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      WEBAPP: ${{ vars.AZURE_WEBAPP_NAME }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      WEBHOOK_URL: ${{ secrets.AZURE_WEBAPP_WEBHOOK_URL }}
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Check the deployment is configured
-      env:
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       run: |
         missing=""
-        for v in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID RESOURCE_GROUP WEBAPP; do
-          [ -n "${!v}" ] || missing="$missing $v"
-        done
+        [ -n "$API_BASE_URL" ] || missing="$missing variable:API_BASE_URL"
+        [ -n "$WEBHOOK_URL" ]  || missing="$missing secret:AZURE_WEBAPP_WEBHOOK_URL"
         if [ -n "$missing" ]; then
-          echo "::error::Missing GitHub environment variables for '${{ inputs.environment }}':$missing (AZURE_* names, see infra/README.md)"
+          echo "::error::Missing for environment '${{ inputs.environment }}':$missing (see the setup guide)"
           exit 1
         fi
-        echo "Deploying $IMAGE to $WEBAPP in $RESOURCE_GROUP"
+        case "$IMAGE" in *:*) ;; *) echo "::error::'$IMAGE' has no tag"; exit 1 ;; esac
 
-    - uses: azure/login@v2
-      with:
-        client-id: ${{ vars.AZURE_CLIENT_ID }}
-        tenant-id: ${{ vars.AZURE_TENANT_ID }}
-        subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-    # What to put back if this goes wrong. For the very first deployment it is the placeholder image infra/main.bicep started with.
-    - name: Remember the running image
+    - name: Work out the image names
       run: |
-        previous="$(az webapp config show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query linuxFxVersion -o tsv)"
-        [ -n "$previous" ] || { echo "::error::Could not read the Web App's current image"; exit 1; }
-        echo "PREVIOUS_FX=$previous" >> "$GITHUB_ENV"
-        echo "Currently running: $previous"
+        repo="${IMAGE%:*}"            # ghcr.io/owner/saharvest-api
+        revision="${IMAGE##*:}"       # the first 12 characters of the commit
+        {
+          echo "REVISION=$revision"
+          echo "LIVE=$repo:live"
+          echo "LAST_GOOD=$repo:last-good"
+        } >> "$GITHUB_ENV"
+        echo "Deploying revision $revision ($IMAGE)"
 
-    - name: Deploy the new image
-      run: |
-        echo "DEPLOY_STARTED=true" >> "$GITHUB_ENV" # from here on a failure must restore the previous image
-        az webapp config set --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --linux-fx-version "DOCKER|$IMAGE" --output none
-        az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP"
-
-    - name: Smoke test
+    - name: Sign in to the registry
       env:
+        REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+    # Is there a last good image to go back to? The first deployment has none.
+    - name: Remember whether there is a last good image
+      run: |
+        if docker buildx imagetools inspect "$LAST_GOOD" > /dev/null 2>&1; then
+          echo "HAS_LAST_GOOD=true" >> "$GITHUB_ENV"
+          echo "Last good image exists: a failed deployment can be rolled back."
+        else
+          echo "HAS_LAST_GOOD=false" >> "$GITHUB_ENV"
+          echo "::notice::No last-good image yet (first deployment): there is nothing to roll back to."
+        fi
+
+    - name: Point "live" at the new image and tell Azure to pull it
+      run: |
+        echo "DEPLOY_STARTED=true" >> "$GITHUB_ENV" # from here on a failure must put the last good image back
+        docker pull --quiet "$IMAGE"
+        docker tag "$IMAGE" "$LIVE"
+        docker push --quiet "$LIVE"
+        # -f: fail on 401/403 (basic-auth publishing credentials switched off, or a wrong URL); --max-time: never hang the pipeline.
+        curl -fsS --max-time 60 -X POST "$WEBHOOK_URL" > /dev/null
+        echo "The Web App was told to restart and pull ${LIVE}."
+
+    - name: Smoke test (waits for the new revision)
+      env:
+        EXPECTED_REVISION: ${{ env.REVISION }}
         SMOKE_USERNAME: ${{ secrets.SMOKE_TEST_USERNAME }}
         SMOKE_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
-      run: |
-        host="$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query defaultHostName -o tsv)"
-        bash .github/scripts/smoke-test.sh "https://$host"
+      run: bash .github/scripts/smoke-test.sh "${API_BASE_URL%/}"
 
-    # The smoke test proves an API is answering; this proves it is the one we just deployed and not the previous one still serving.
-    - name: Confirm the new image is the one running
+    - name: Remember this image as the last good one
       run: |
-        running="$(az webapp config show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query linuxFxVersion -o tsv)"
-        [ "$running" = "DOCKER|$IMAGE" ] || { echo "::error::Web App reports '$running', expected 'DOCKER|$IMAGE'"; exit 1; }
-        echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
-        echo "\`$IMAGE\` is running on \`$WEBAPP\` and passed the smoke test." >> "$GITHUB_STEP_SUMMARY"
+        docker tag "$IMAGE" "$LAST_GOOD" # the image pulled above: same manifest, so the same bytes
+        docker push --quiet "$LAST_GOOD"
+        {
+          echo "### Deployed"
+          echo "Revision \`$REVISION\` is live on the Web App and passed the smoke test."
+        } >> "$GITHUB_STEP_SUMMARY"
 
-    # Only once the new image has been put on the app: a failure earlier (not configured, login) changed nothing to undo.
-    - name: Roll back to the previous image
-      if: failure() && env.DEPLOY_STARTED == 'true'
+    # Only once `live` has been repointed: a failure earlier (not configured, registry login) changed nothing to undo.
+    - name: Roll back to the last good image
+      if: failure() && env.DEPLOY_STARTED == 'true' && env.HAS_LAST_GOOD == 'true'
       run: |
-        echo "::warning::Deployment failed; restoring '$PREVIOUS_FX'"
-        az webapp config set --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --linux-fx-version "$PREVIOUS_FX" --output none
-        az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP"
-        echo "### Rolled back" >> "$GITHUB_STEP_SUMMARY"
-        echo "The deployment of \`$IMAGE\` failed its checks, so \`$PREVIOUS_FX\` was restored. Read the failing step above." >> "$GITHUB_STEP_SUMMARY"
+        echo "::warning::Deployment of $REVISION failed; putting the last good image back."
+        docker pull --quiet "$LAST_GOOD"
+        docker tag "$LAST_GOOD" "$LIVE"
+        docker push --quiet "$LIVE"
+        curl -fsS --max-time 60 -X POST "$WEBHOOK_URL" > /dev/null
+        {
+          echo "### Rolled back"
+          echo "Revision \`$REVISION\` failed its checks, so \`live\` was pointed back at the last good image. Read the failing step above."
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Note that there was nothing to roll back to
+      if: failure() && env.DEPLOY_STARTED == 'true' && env.HAS_LAST_GOOD == 'false'
+      run: |
+        {
+          echo "### Not rolled back"
+          echo "This was the first deployment, so there was no last good image. Fix the cause (the failing step above, and the Log stream in the portal), then run **Redeploy backend** with tag \`$REVISION\`."
+        } >> "$GITHUB_STEP_SUMMARY"

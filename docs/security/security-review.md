@@ -165,6 +165,11 @@ DataStore with the same) when convenient.
 `.gitleaks.toml` holds the reviewed exceptions above, each with its reason; the retired `SEED_TEST_PASSWORD` commit is
 one of them. `--redact` keeps any finding's value out of the workflow log.
 
+Reviewed exception added with the Azure setup: the three built-in role definition ids in `infra/main.bicep` (`roleKeyVaultSecretsUser`,
+`roleKeyVaultSecretsOfficer`, `roleStorageBlobDataContributor`). They are public constants, identical in every Azure tenant, and the
+generic-key rule flagged them only because the variable names contain "Key" (Key Vault). Matched by line so the exception covers
+nothing else in the file.
+
 ## Verification on the emulator
 
 Run on 2026-10-02 (`Pixel_10_Pro` AVD, Android 17, debug build of this change), signed in as `cbo_test_user`:

@@ -1,5 +1,7 @@
 # Azure setup and deployment (#58)
 
+
+
 The API runs as a container on an Azure App Service. This folder creates everything it needs; `.github/workflows/deploy.yml`
 puts each release on it. The Android app is **not** deployed to Azure: it is built into an APK (see `docs/android-release.md`).
 
@@ -68,6 +70,10 @@ az keyvault secret set --vault-name $KV --name ConnectionStrings--Default --valu
 
 read -rs -p "GitHub token (classic, read:packages) the Web App pulls the image with: " V; echo
 az keyvault secret set --vault-name $KV --name Registry--PullToken --value "$V" -o none; unset V
+
+# The first administrator's password (see "The first administrator" below). 12+ characters, not containing the username.
+read -rs -p "First admin password: " V; echo
+az keyvault secret set --vault-name $KV --name Bootstrap--AdminPassword --value "$V" -o none; unset V
 ```
 
 Create that token at GitHub > Settings > Developer settings > Personal access tokens (**classic**, scope `read:packages` only, set an
@@ -78,52 +84,74 @@ Later, when Foodspace gives its key: `az keyvault secret set --vault-name $KV --
 `foodspaceApiKeySecretExists = true`, `foodspaceBaseUrl` and (when ready) `foodspaceForwardingEnabled = true` in the parameter file and
 redo step 2.
 
-### 4. Let GitHub deploy without a password (OIDC)
+### 4. Let GitHub deploy (the Web App's own webhook; no Azure login)
 
-GitHub proves to Azure who a workflow run is with a short-lived token; no Azure secret is stored in GitHub.
+The pipeline never logs in to Azure. The Web App runs the moving tag `ghcr.io/<owner>/saharvest-api:live`; a deployment repoints `live`
+at the new image and POSTs the Web App's **webhook URL**, which makes App Service restart and pull it (Microsoft's documented way to deploy
+from a registry that is not ACR or Docker Hub). That URL carries the Web App's deployment credentials, so it is stored as one **environment
+secret** that only `main` can read. This works when the school/tenant blocks Microsoft Entra app registrations; if your tenant allows them,
+the passwordless OIDC variant is kept in `infra/alternatives/deploy-backend-oidc.yml.txt`.
 
-```bash
-REPO=ST10443409/INSY7315-Stein-Solutions---SA-Harvest-Beneficiary-Direct-Collection-Mobile-Application
-APP=$(az deployment group show -g $RG -n main --query properties.outputs.webAppName.value -o tsv)
-
-APPID=$(az ad app create --display-name sah-github-deploy --query appId -o tsv)
-az ad sp create --id $APPID -o none
-az ad app federated-credential create --id $APPID --parameters "{
-  \"name\": \"github-production\",
-  \"issuer\": \"https://token.actions.githubusercontent.com\",
-  \"subject\": \"repo:$REPO:environment:production\",
-  \"audiences\": [\"api://AzureADTokenExchange\"] }" -o none
-# Least privilege: change this one Web App, nothing else.
-az role assignment create --assignee $APPID --role "Website Contributor" \
-  --scope "$(az webapp show -g $RG -n $APP --query id -o tsv)" -o none
-```
+1. Allow the credentials: Web App > **Settings > Configuration > General settings** > **SCM Basic Auth Publishing Credentials** = **On** > Save.
+   (Without it the webhook answers 401 and the deploy step fails with that.)
+2. Point the Web App at the `live` tag **once**, after the first pipeline run has published it (step 6): Web App > **Deployment > Deployment
+   Center** > Registry source *Private registry*, server `https://ghcr.io`, login your GitHub user, password the pull token, image
+   `<owner lower-case>/saharvest-api`, tag **`live`**; **Continuous deployment: Off**; Save. (Via the CLI: `az webapp config container set -g $RG -n $APP
+   --container-image-name ghcr.io/<owner>/saharvest-api:live`; the registry settings from step 2 are already in place.)
+3. Copy the webhook URL: Deployment Center > **Webhook URL** > Copy (it looks like `https://$<app>:<password>@<app>.scm.<region>.azurewebsites.net/api/registry/webhook`).
+   Treat it like a password.
 
 ### 5. Tell GitHub where to deploy
 
 ```bash
+REPO=ST10443409/INSY7315-Stein-Solutions---SA-Harvest-Beneficiary-Direct-Collection-Mobile-Application
 gh api -X PUT repos/$REPO/environments/production --input - <<'JSON'
 { "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
 JSON
 gh api -X POST repos/$REPO/environments/production/deployment-branch-policies -f name=main     # only main may use it
 
-gh variable set AZURE_CLIENT_ID       --env production --repo $REPO --body "$APPID"
-gh variable set AZURE_TENANT_ID       --env production --repo $REPO --body "$(az account show --query tenantId -o tsv)"
-gh variable set AZURE_SUBSCRIPTION_ID --env production --repo $REPO --body "$(az account show --query id -o tsv)"
-gh variable set AZURE_RESOURCE_GROUP  --env production --repo $REPO --body "$RG"
-gh variable set AZURE_WEBAPP_NAME     --env production --repo $REPO --body "$APP"
-gh variable set API_BASE_URL          --env production --repo $REPO --body "$(az deployment group show -g $RG -n main --query properties.outputs.apiBaseUrl.value -o tsv)"
+gh variable set API_BASE_URL --env production --repo $REPO --body "https://<the Web App's default domain>/"      # with the trailing slash
+read -rs -p "Webhook URL: " V; echo; gh secret set AZURE_WEBAPP_WEBHOOK_URL --env production --repo $REPO --body "$V"; unset V
 ```
 
-Restricting the environment to `main` means a pull-request branch cannot use the Azure credential, even though the OIDC trust
-names the environment. The Android signing secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
-`ANDROID_KEY_PASSWORD`) go in the same environment as secrets once the keystore exists (`docs/android-release.md`); until then the
-release job skips with a warning. Optional: `SMOKE_TEST_USERNAME` / `SMOKE_TEST_PASSWORD` secrets let the smoke test also sign in.
+(Or in the browser: repository **Settings > Environments > production**: deployment branch `main` only, variable `API_BASE_URL`, secret `AZURE_WEBAPP_WEBHOOK_URL`.)
+Restricting the environment to `main` means a pull-request branch cannot read the webhook secret. The Android signing secrets
+(`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) go in the same environment once the
+keystore exists (`docs/android-release.md`); until then the release job skips with a warning. Optional: `SMOKE_TEST_USERNAME` /
+`SMOKE_TEST_PASSWORD` secrets let the smoke test also sign in.
 
 ### 6. First deployment
 
-Merge `development` into `main` (a pull request). That push runs `deploy.yml`. The first run is expected to be the shakedown: if a
-secret is missing or the database cannot be reached, the smoke test fails and the previous (placeholder) image is restored.
-Read the failing step, fix the cause, and run **Actions > Redeploy backend** with the same tag (no new commit needed).
+Merge `development` into `main` (a pull request). That push runs `deploy.yml`. **The first run is the shakedown and is expected to fail its
+smoke test**: the Web App still runs the placeholder image until step 4.2 points it at `live`, and `live` only exists once the first run has
+published it. Then: do step 4.2, and run **Actions > Redeploy backend** with the 12-character revision from the first run (it is the image tag).
+From then on every push to `main` deploys by itself. If a deployment fails its checks, `live` is pointed back at the last good image
+(`last-good`) and the webhook is called again; the very first deployment has no last good image, so it is only reported.
+
+### 7. The first administrator
+
+A fresh deployment has nobody who can sign in, and only an Admin can create accounts, so the very first Admin comes from
+configuration. It is created once when the API starts, and does nothing if an active Admin already exists. Full account
+management (creating collectors and officers, deactivating a lost phone's owner, resetting a password) is in
+[docs/user-accounts.md](../docs/user-accounts.md).
+
+1. The `Bootstrap--AdminPassword` secret was set in step 3. In `infra/environments/prod.bicepparam` set `bootstrapAdminUsername`
+   (3 to 64 characters: lower-case letters, digits, `.`, `_`, `-`) and `bootstrapAdminPasswordSecretExists = true`. Set **both**: the API
+   refuses to start with only one, on purpose, so a typo cannot quietly leave you with no admin.
+2. Redo step 2 (`az deployment group create ...`). The Web App restarts and creates the account; the log says so
+   (`Created the first administrator ...`) and never prints the password.
+3. Sign in once to prove it (replace the host; the password is read without being echoed):
+   ```bash
+   read -rs -p "Admin password: " P; echo
+   curl -s -X POST https://<your-app>.azurewebsites.net/api/auth/login -H 'Content-Type: application/json' \
+     -d "{\"username\":\"<the username>\",\"password\":\"$P\"}" | grep -o '"role":"[A-Z_]*"'; unset P     # "role":"ADMIN"
+   ```
+4. **Then remove the bootstrap**: set `bootstrapAdminPasswordSecretExists = false` and `bootstrapAdminUsername = ''`, redo step 2, and
+   `az keyvault secret delete --vault-name $KV --name Bootstrap--AdminPassword`. It has done its job; a secret that is no longer needed
+   should not stay around. (If you forget, nothing breaks: it does nothing while an active Admin exists.)
+5. Put the smoke test's account in too: create a low-privilege account for it (a Vetting officer called e.g. `smoke.test`) as in
+   `docs/user-accounts.md`, and store its username and password as the `SMOKE_TEST_USERNAME` / `SMOKE_TEST_PASSWORD` secrets of the
+   GitHub `production` environment, so the deploy's smoke test also proves a real sign-in.
 
 ## Day to day
 
@@ -151,8 +179,8 @@ Read the failing step, fix the cause, and run **Actions > Redeploy backend** wit
 - **SA Harvest's database.** The API cannot start without it. It needs: a reachable host and port, TLS, a database role that may create
   and alter tables (EF migrations create the API's own tables: users, sync state, admin actions), and SA Harvest's firewall admitting the
   Web App's outbound addresses (shared and can change on a free/basic plan; a fixed address needs VNet integration and NAT, which cost money).
-- **User accounts.** The only code that creates login accounts is the Development-only seeder, which the API refuses to run anywhere
-  else, so a deployed API has no users. See `docs/azure-deployment-readiness.md`.
+- **An admin screen for accounts in the Android app.** Accounts are managed through the API for now (`docs/user-accounts.md`); the
+  endpoints exist and are tested, the app does not call them yet.
 - **Foodspace** base address and authentication (`docs/OPEN-DECISIONS.md` #1), so forwarding stays off.
 - **Photo upload to the storage account**, and **telemetry to Application Insights**: the resources and settings exist, the code does not.
 - **Release keystore** and the signed-APK secrets; **certificate pinning**, which needs the final host name.

@@ -98,19 +98,22 @@ public class AttachmentService : IAttachmentService
         if (!AttachmentRules.IsAllowedMediaType(declaredMediaType) || declaredMediaType != detected)
             return new AttachmentUploadResult(AttachmentOutcome.UnsupportedType, "The file's content does not match its declared type.");
 
-        // 3. Retry, or conflict.
-        var sameId = await _db.CollectionAttachments.AsNoTracking()
-            .Where(a => a.Id == attachmentId)
-            .Select(a => new { a.CollectionId, a.Kind, a.Slot, a.SizeBytes })
-            .SingleOrDefaultAsync(cancellationToken);
-        if (sameId is not null)
+        // 3. Retry, or conflict. ONE query answers both "is this id already stored?" and "is this slot taken?". Asking them in two
+        // queries lets an identical upload commit in between: the second query then sees the slot taken (by this very file) and the
+        // retry is wrongly called a conflict. Found by CI on a slower machine; pinned by AnUploadWhoseTwinCommitsBetweenItsChecks....
+        var existing = await _db.CollectionAttachments.AsNoTracking()
+            .Where(a => a.Id == attachmentId || (a.CollectionId == collectionId && a.Kind == kind && a.Slot == slot))
+            .Select(a => new { a.Id, a.CollectionId, a.Kind, a.Slot, a.SizeBytes })
+            .ToListAsync(cancellationToken);
+        if (existing.Count > 0)
         {
+            var sameId = existing.FirstOrDefault(a => a.Id == attachmentId);
+            if (sameId is null)
+                return new AttachmentUploadResult(AttachmentOutcome.Conflict, "This collection already has a file for that kind and slot.");
             return sameId.CollectionId == collectionId && sameId.Kind == kind && sameId.Slot == slot
                 ? new AttachmentUploadResult(AttachmentOutcome.AlreadyReceived, SizeBytes: sameId.SizeBytes)
                 : new AttachmentUploadResult(AttachmentOutcome.Conflict, "That attachment id is already used for a different file.");
         }
-        if (await _db.CollectionAttachments.AnyAsync(a => a.CollectionId == collectionId && a.Kind == kind && a.Slot == slot, cancellationToken))
-            return new AttachmentUploadResult(AttachmentOutcome.Conflict, "This collection already has a file for that kind and slot.");
 
         // 4. Bytes first, then the row.
         var blobName = $"{collectionId}/{attachmentId}";

@@ -96,8 +96,10 @@ the passwordless OIDC variant is kept in `infra/alternatives/deploy-backend-oidc
    (Without it the webhook answers 401 and the deploy step fails with that.)
 2. Point the Web App at the `live` tag **once**, after the first pipeline run has published it (step 6): Web App > **Deployment > Deployment
    Center** > Registry source *Private registry*, server `https://ghcr.io`, login your GitHub user, password the pull token, image
-   `<owner lower-case>/saharvest-api`, tag **`live`**; **Continuous deployment: Off**; Save. (Via the CLI: `az webapp config container set -g $RG -n $APP
-   --container-image-name ghcr.io/<owner>/saharvest-api:live`; the registry settings from step 2 are already in place.)
+   `<owner lower-case>/saharvest-api`, tag **`live`**; **Continuous deployment: On** (that is what creates the webhook and makes a POST to it restart the app and pull the image;
+   GHCR has no registry-side webhook, so nothing but our pipeline ever calls it); Save. (Via the CLI: `az webapp config container set -g $RG -n $APP
+   --container-image-name ghcr.io/<owner>/saharvest-api:live`, then `az webapp deployment container config -g $RG -n $APP --enable-cd true --query CI_CD_URL -o tsv`
+   prints the webhook URL; the registry settings from step 2 are already in place.)
 3. Copy the webhook URL: Deployment Center > **Webhook URL** > Copy (it looks like `https://$<app>:<password>@<app>.scm.<region>.azurewebsites.net/api/registry/webhook`).
    Treat it like a password.
 

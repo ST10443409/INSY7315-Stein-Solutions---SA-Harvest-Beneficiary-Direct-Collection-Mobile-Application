@@ -82,6 +82,15 @@ jobs:
         -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
         -Pkotlin.daemon.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m"
 
+    # #59: the release variant (R8 shrinking and obfuscation on, lintVitalRelease included) must keep building, so a keep-rule
+    # or signing-config mistake fails the pull request instead of surprising the release. Unsigned and pointed at a dummy
+    # https address on purpose: no secret is needed or used here. The signed build is the release pipeline's job.
+    - name: Release build check (R8, unsigned)
+      run: >
+        ./gradlew assembleRelease -PapiBaseUrl=https://api.example.test/ --stacktrace
+        -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+        -Pkotlin.daemon.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m"
+
     - name: Enable KVM for Android Emulator
       if: env.RUN_EMULATOR_TESTS == 'true'
       run: |

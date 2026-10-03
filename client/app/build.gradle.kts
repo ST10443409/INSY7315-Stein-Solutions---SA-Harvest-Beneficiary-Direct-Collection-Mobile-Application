@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,24 +11,79 @@ plugins {
 // The default is the host machine as seen from the Android emulator.
 val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "http://10.0.2.2:5000/"
 
+// Release version (#59). Android refuses to install an APK over a newer one, so versionCode must go up with every build that
+// reaches a phone: CI passes -PappVersionCode=<run number> and -PappVersionName=<tag or 1.0.<run number>>. The defaults are
+// for local builds, which are never distributed.
+val appVersionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 1
+val appVersionName = (project.findProperty("appVersionName") as String?) ?: "1.0"
+
+// Release signing (#59). The keystore and its passwords are secrets and are NEVER in the repository (.gitignore refuses the
+// usual file names). They come from environment variables (CI: decoded from repository secrets) or, on a developer machine
+// that builds release APKs, from client/keystore.properties (gitignored; see keystore.properties.example). With neither, the
+// release variant is still built, but unsigned: Android will not install it, which is right for the pull-request check.
+// Pass -PrequireReleaseSigning=true (the release pipeline does) to make a missing keystore a build failure instead.
+val keystoreProperties = Properties().also { props ->
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(props::load)
+}
+
+fun signingSetting(envName: String, propertyName: String): String? =
+    System.getenv(envName)?.takeIf { it.isNotBlank() } ?: keystoreProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingSetting("ANDROID_KEYSTORE_FILE", "storeFile")
+val releaseStorePassword = signingSetting("ANDROID_KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingSetting("ANDROID_KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingSetting("ANDROID_KEY_PASSWORD", "keyPassword")
+val releaseSigningConfigured = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { it != null }
+
 android {
+    // The code's package stays com.example.client (renaming it would touch every file for no user-visible gain); what
+    // identifies the app on a phone, in the Keystore and in FileProvider authorities is applicationId. It cannot change once
+    // the first APK is installed: Android treats a new id as a different app and the old one's unsynced records stay behind.
     namespace = "com.example.client"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.client"
+        applicationId = "za.org.saharvest.collectionvetting"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!) // an absolute path stays absolute
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 (design document B9.4): shrinks, optimises and obfuscates, so endpoints and logic are harder to lift from
+            // the APK. Gson and Retrofit read our classes by reflection, which R8 cannot see: proguard-rules.pro keeps
+            // exactly those, and docs/android-release.md explains how to check a build still talks to the API.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
+        }
+
+        // NOT a shipping variant: the release build with the same R8 rules, made debuggable and allowed to reach the emulator's
+        // host over plain HTTP (src/r8Check/res/xml/network_security_config.xml), because the real release build refuses
+        // cleartext and so cannot be tried against a local backend. It installs beside the real app (id suffix) and is signed
+        // with the debug key, so it can never be mistaken for, or replace, a release. See docs/android-release.md.
+        create("r8Check") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            isDebuggable = true
+            applicationIdSuffix = ".r8check"
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -64,6 +121,13 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     doFirst {
         check(apiBaseUrl.startsWith("https://")) {
             "Release builds need an https:// API address: pass -PapiBaseUrl=https://<host>/ (got $apiBaseUrl)."
+        }
+        if (project.findProperty("requireReleaseSigning") == "true") {
+            check(releaseSigningConfigured) {
+                "-PrequireReleaseSigning=true but no release keystore is configured. Set ANDROID_KEYSTORE_FILE, " +
+                    "ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD, or fill in client/keystore.properties " +
+                    "(see keystore.properties.example). An unsigned APK cannot be installed."
+            }
         }
     }
 }

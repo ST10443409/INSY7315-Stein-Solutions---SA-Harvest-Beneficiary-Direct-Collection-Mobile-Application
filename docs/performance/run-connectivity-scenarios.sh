@@ -34,6 +34,6 @@ status=0
     -Pandroid.testInstrumentationRunnerArguments.e2eProfile="$label") || status=$?
 "$adb" logcat -d -s ConnectivityScenario:I | { grep 'scenario=' || true; } | sed -E 's/^.*ConnectivityScenario: //'
 # A crash or ANR during the run is a finding even if every scenario passed.
-"$adb" logcat -d | grep -E 'FATAL EXCEPTION|ANR in com.example.client' || echo "(no crash or ANR in logcat)"
+"$adb" logcat -d | grep -E 'FATAL EXCEPTION|ANR in za.org.saharvest.collectionvetting' || echo "(no crash or ANR in logcat)"
 [ "$status" -eq 0 ] || echo "!!! scenarios FAILED on $label (report: client/app/build/reports/androidTests/connected/)"
 exit "$status"

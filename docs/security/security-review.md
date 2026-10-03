@@ -125,8 +125,8 @@ was stale). It holds no token or personal data; that is acceptable and documente
 **On a device** (debug build, signed in as `cbo_test_user`):
 
 ```bash
-adb shell run-as com.example.client ls shared_prefs
-adb shell run-as com.example.client cat shared_prefs/auth_secure_prefs.xml
+adb shell run-as za.org.saharvest.collectionvetting ls shared_prefs
+adb shell run-as za.org.saharvest.collectionvetting cat shared_prefs/auth_secure_prefs.xml
 ```
 
 The token, role, CBO and username are stored only as ciphertext; no `eyJ…` (JWT) appears.

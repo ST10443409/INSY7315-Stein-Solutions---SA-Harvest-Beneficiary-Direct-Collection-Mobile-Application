@@ -77,6 +77,7 @@ public class CboCollectionForwarder : ICboCollectionForwarder
     {
         var now = _time.GetUtcNow();
         var due = await _db.CboCollections.Include(c => c.ProductLines)
+            .Where(c => c.ForwardClaimedUntil == null || c.ForwardClaimedUntil <= now) // not being sent by someone else right now
             .Where(c => (c.ForwardingStatus == ForwardingStatus.Pending
                          && c.DuplicateOfId == null) // a suspected duplicate is held for an Admin and never auto-forwarded...
                         || (c.ForwardingStatus == ForwardingStatus.SyncedLocalPendingFoodspace // ...but once released it retries like any other
@@ -86,16 +87,24 @@ public class CboCollectionForwarder : ICboCollectionForwarder
             .Take(_options.BatchSize)
             .ToListAsync(cancellationToken);
 
+        var attempted = 0;
         foreach (var collection in due)
         {
-            await AttemptAsync(collection, cancellationToken);
+            if (await AttemptAsync(collection, cancellationToken)) attempted++;
         }
-        return due.Count;
+        return attempted;
     }
 
-    private async Task AttemptAsync(CboCollection collection, CancellationToken cancellationToken)
+    /// <summary>Sends one collection if this caller wins the claim on it (see <see cref="ForwardingClaim"/>); false if somebody else has it.</summary>
+    private async Task<bool> AttemptAsync(CboCollection collection, CancellationToken cancellationToken)
     {
         var now = _time.GetUtcNow();
+        if (!await ForwardingClaim.TryClaimAsync(_db, collection, now, ForwardingClaim.LeaseFor(_options), cancellationToken))
+        {
+            _logger.LogInformation("Collection {Id} is already being forwarded by another worker; skipped.", collection.Id);
+            return false;
+        }
+
         collection.SyncAttempts++;
         collection.LastSyncAttemptAt = now;
 
@@ -119,8 +128,14 @@ public class CboCollectionForwarder : ICboCollectionForwarder
                 collection.Id, collection.SyncAttempts, collection.NextForwardAttemptAt?.ToString("O") ?? "none");
         }
 
-        // Saved per record so progress is never lost if a later record in the batch throws.
-        await _db.SaveChangesAsync(cancellationToken);
+        // Saved per record so progress is never lost if a later record in the batch throws. Also ends the claim.
+        if (!await ForwardingClaim.ReleaseAsync(_db, collection, cancellationToken))
+        {
+            _logger.LogWarning(
+                "Collection {Id}: the claim ran out while Foodspace was answering and another worker took the record over; " +
+                "this attempt's outcome was not saved.", collection.Id);
+        }
+        return true;
     }
 
     /// <summary>Base delay doubled for every failed attempt so far, capped.</summary>

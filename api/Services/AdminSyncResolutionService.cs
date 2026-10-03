@@ -172,7 +172,18 @@ public class AdminSyncResolutionService : IAdminSyncResolutionService
         record.NextForwardAttemptAt = null;
         // SyncError is kept: it is why the record needed an Admin, and part of what the audit trail explains.
 
-        await RecordActionAsync(admin, AdminActionType.Dismiss, found.Form, id, previousStatus, record.ForwardingStatus, record.SyncAttempts, reason, cancellationToken);
+        try
+        {
+            await RecordActionAsync(admin, AdminActionType.Dismiss, found.Form, id, previousStatus, record.ForwardingStatus, record.SyncAttempts, reason, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A forwarding worker claimed the record between this request reading it and writing it (see ForwardingClaim).
+            // Nothing was saved, neither the dismissal nor its audit entry, so the Admin can simply ask again.
+            _logger.LogInformation("Admin {Admin} could not dismiss {Form} {Id}: it was being sent to Foodspace at that moment.", admin, EnumWire.Of(found.Form), id);
+            return ResolutionResult<ResolutionResponse>.Fail(ResolutionStatus.NotAllowed,
+                "This record is being sent to Foodspace right now. Try again in a moment.");
+        }
         _logger.LogInformation("Admin {Admin} dismissed {Form} {Id} (was {State}).", admin, EnumWire.Of(found.Form), id, EnumWire.Of(previous));
 
         return ResolutionResult<ResolutionResponse>.Ok(new ResolutionResponse(EnumWire.Of(previous), await ToDetailAsync(record, found.Form, cancellationToken)));

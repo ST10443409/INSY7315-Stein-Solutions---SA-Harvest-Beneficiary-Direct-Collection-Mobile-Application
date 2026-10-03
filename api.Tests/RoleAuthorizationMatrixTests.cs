@@ -30,7 +30,7 @@ namespace api.Tests;
 ///    role that is (<see cref="EveryEndpoint_AnswersEachRole_AsTheTableSays"/>);
 ///  - the checklist document must list every row (<see cref="TheChecklistDocument_ListsEveryEndpoint"/>).
 ///
-/// Admin is deliberate on the two form endpoints and /api/sync: the Admin role gets Form 1 and Form 2 inside the Android app
+/// Admin is deliberate on the two form endpoints: the Admin role gets Form 1 and Form 2 inside the Android app
 /// (docs/decisions/0001), so the backend accepts what those screens send. Admin-only endpoints are never open to the others.
 /// </summary>
 public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatrixTests.MatrixFactory>
@@ -55,7 +55,6 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
         ("GET", "api/admin/sync-status/{id}", new[] { Admin }),
         ("POST", "api/admin/sync-status/{id}/retry", new[] { Admin }),
         ("POST", "api/admin/sync-status/{id}/dismiss", new[] { Admin }),
-        ("POST", "api/sync", new[] { Cbo, Vetting, Admin }),
         ("GET", "api/health", Anyone),
         ("POST", "api/auth/login", Anyone),
         ("GET", "api/auth/me", AnySignedIn),

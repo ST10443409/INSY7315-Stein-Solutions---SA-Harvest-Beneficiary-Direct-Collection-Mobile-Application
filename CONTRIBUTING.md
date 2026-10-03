@@ -19,7 +19,7 @@ the pull request forever.)
 | Workflow | Runs | Real job runs on changes to |
 |---|---|---|
 | `ci-android.yml` (job `build`) | JDK 17, `./gradlew assembleDebug lint test` in `client/`; **plus the emulator tests only for pull requests into `main`, pushes to `main` and manual runs** (they take most of an hour, so `development` pull requests skip them) | `client/**`, the workflow file |
-| `cd-backend.yml` (job `build-test-docker`) | .NET 10: restore, build, `dotnet test api.Tests`, then `docker build` for `api` and `external-api-sim` | `api/**`, `api.Tests/**`, `external-api-sim/**`, `compose.yaml`, `dotnet-tools.json`, the workflow file, and the Room entities / `UserRole.kt` under `client/app/src/main/java/com/example/client/{data,auth}` (because `RoomParityTests` reads them) |
+| `cd-backend.yml` (job `build-test-docker`) | .NET 10: restore, build, `dotnet test api.Tests` (with a throwaway PostgreSQL service container, so every migration is applied to an empty database and the forwarding-claim tests run on real SQL; see [docs/testing.md](docs/testing.md)), then `docker build` for `api` and `external-api-sim` | `api/**`, `api.Tests/**`, `external-api-sim/**`, `compose.yaml`, `dotnet-tools.json`, the workflow file, and the Room entities / `UserRole.kt` under `client/app/src/main/java/com/example/client/{data,auth}` (because `RoomParityTests` reads them) |
 
 So an Android UI change does not run the backend pipeline, and a backend change does not run the Android one.
 

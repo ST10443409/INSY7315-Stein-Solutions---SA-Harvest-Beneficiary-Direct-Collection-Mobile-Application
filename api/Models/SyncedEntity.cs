@@ -41,4 +41,22 @@ public abstract class ForwardedEntity : SyncedEntity
 
     /// <summary>Last forwarding error (never contains record data), shown to Admins while the record is not Forwarded.</summary>
     public string? SyncError { get; set; }
+
+    /// <summary>
+    /// A random value that changes every time a worker claims this record for sending and again when it lets go; null only
+    /// for a record nobody has touched yet. It is a concurrency token: every update of the row is conditional on it being
+    /// unchanged, so when two workers (a second instance, an overlapping deployment, the worker and an Admin's retry) both
+    /// read the row and both try to claim it, the database lets exactly one through and the other gets a
+    /// <see cref="Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException"/> and leaves the record alone. It does NOT say
+    /// whether the record is busy (that is <see cref="ForwardClaimedUntil"/>); it only has to never repeat a value.
+    /// See <see cref="api.Services.Foodspace.ForwardingClaim"/>.
+    /// </summary>
+    public Guid? ForwardClaimId { get; set; }
+
+    /// <summary>
+    /// While a worker is sending this record, when its claim lapses; null when nobody is sending it. A worker that dies
+    /// mid-send leaves this behind; once the time has passed another worker may take the record over, so a crash delays a
+    /// record but never strands it.
+    /// </summary>
+    public DateTimeOffset? ForwardClaimedUntil { get; set; }
 }

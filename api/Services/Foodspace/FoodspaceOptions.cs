@@ -31,6 +31,13 @@ public class FoodspaceOptions
 
     public int BatchSize { get; set; } = 25;
 
+    /// <summary>
+    /// How long a worker may hold a record while it sends it (see <see cref="ForwardingClaim"/>). It must comfortably exceed
+    /// <see cref="TimeoutSeconds"/>: a claim that lapses mid-send lets a second worker send the same record. If a worker dies
+    /// mid-send, its record waits this long before another worker picks it up.
+    /// </summary>
+    public int ClaimLeaseSeconds { get; set; } = 120;
+
     /// <summary>Automatic attempts before a record is left for an Admin to retry manually.</summary>
     public int MaxAttempts { get; set; } = 8;
 

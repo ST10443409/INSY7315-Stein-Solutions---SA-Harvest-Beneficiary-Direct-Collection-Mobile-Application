@@ -124,21 +124,6 @@ builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
-// Register the queue service as a singleton
-builder.Services.AddSingleton<IQueueService, QueueService>();
-
-// Register the background worker to process the queue
-builder.Services.AddHostedService<QueueBackgroundWorker>();
-
-// HttpClient for the external API simulator. Base URL comes from configuration
-// (ExternalApi:BaseUrl) so it can be overridden per environment, e.g. in Docker.
-builder.Services.AddHttpClient("ExternalApi", client =>
-{
-    var baseUrl = builder.Configuration["ExternalApi:BaseUrl"]
-        ?? throw new InvalidOperationException("Configuration value 'ExternalApi:BaseUrl' is missing.");
-    client.BaseAddress = new Uri(baseUrl);
-});
-
 // ── Foodspace forwarding ──────────────────────────────────────────────────────────────────
 // Records that reached this backend are forwarded to Foodspace by a typed HttpClient. Foodspace:ApiKey is a
 // secret (user-secrets / Foodspace__ApiKey); BaseUrl falls back to ExternalApi:BaseUrl (the simulator for now).
@@ -165,6 +150,7 @@ builder.Services.AddScoped<IVettingRecordsService, VettingRecordsService>();
 builder.Services.AddScoped<IAdminSyncStatusService, AdminSyncStatusService>();
 builder.Services.AddScoped<IAdminSyncResolutionService, AdminSyncResolutionService>();
 builder.Services.AddScoped<IAdminUserActivityService, AdminUserActivityService>();
+// Safe to run in more than one instance at once (a second instance, an overlapping deployment): see ForwardingClaim.
 builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 
 // Responses are compressed (gzip/brotli) when the client asks, which matters most for the vetting record pages on poor

@@ -65,6 +65,10 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             NameClaimType = "name",
             RoleClaimType = JwtTokenService.RoleClaim, // [Authorize(Roles = "...")] reads the "role" claim
         };
+
+        // A valid signature is not enough: the account must still be active and the token's stamp current, so deactivating a
+        // user, resetting a password or changing a role ends their existing sessions at once (see TokenAccountCheck).
+        bearer.Events = new JwtBearerEvents { OnTokenValidated = TokenAccountCheck.ValidateAsync };
     });
 builder.Services.AddAuthorization();
 
@@ -150,6 +154,10 @@ builder.Services.AddScoped<IVettingRecordsService, VettingRecordsService>();
 builder.Services.AddScoped<IAdminSyncStatusService, AdminSyncStatusService>();
 builder.Services.AddScoped<IAdminSyncResolutionService, AdminSyncResolutionService>();
 builder.Services.AddScoped<IAdminUserActivityService, AdminUserActivityService>();
+builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+
+// The first administrator, from configuration (Bootstrap:AdminUsername / Bootstrap:AdminPassword): see AdminBootstrapper.
+builder.Services.AddOptions<BootstrapOptions>().Bind(builder.Configuration.GetSection(BootstrapOptions.SectionName));
 // Safe to run in more than one instance at once (a second instance, an overlapping deployment): see ForwardingClaim.
 builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 
@@ -181,6 +189,17 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     using var scope = app.Services.CreateScope();
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+}
+
+// Real environments: create the first administrator when the Bootstrap settings are present and nobody can manage accounts
+// yet. Does nothing otherwise, and stops the start-up (without printing the password) on a configuration it cannot honour.
+{
+    var bootstrap = app.Services.GetRequiredService<IOptions<BootstrapOptions>>().Value;
+    if (bootstrap.IsConfigured)
+    {
+        using var scope = app.Services.CreateScope();
+        await AdminBootstrapper.RunAsync(scope.ServiceProvider, bootstrap, app.Logger);
+    }
 }
 
 // Opt-in (Seed:Enabled=true, local dev only): one test user per role.

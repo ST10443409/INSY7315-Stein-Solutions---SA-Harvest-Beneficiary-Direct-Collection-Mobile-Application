@@ -112,6 +112,10 @@ namespace api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("role");
 
+                    b.Property<Guid>("SecurityStamp")
+                        .HasColumnType("uuid")
+                        .HasColumnName("security_stamp");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasColumnType("text")
@@ -623,6 +627,49 @@ namespace api.Migrations
                         .HasDatabaseName("ix_product_lines_collection_id");
 
                     b.ToTable("product_lines", (string)null);
+                });
+
+            modelBuilder.Entity("api.Models.UserAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<Guid>("TargetUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_user_id");
+
+                    b.Property<string>("TargetUsername")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("target_username");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_audit");
+
+                    b.HasIndex("TargetUserId")
+                        .HasDatabaseName("ix_user_audit_target_user_id");
+
+                    b.ToTable("user_audit", (string)null);
                 });
 
             modelBuilder.Entity("api.Models.VettingDecision", b =>

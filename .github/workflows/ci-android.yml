@@ -1,18 +1,27 @@
 name: Android CI
 
-# Runs for pull requests and pushes on `development` and `main`, but the build only does its work when the Android project
-# (or this workflow) changed; backend-only changes skip it. The filter is a job (not `paths:` on the trigger) so that this
-# workflow always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
+# Runs for pull requests into `development` and `main` and pushes to `development`, but the build only does its work when the
+# Android project (or this workflow) changed; backend-only changes skip it. The filter is a job (not `paths:` on the trigger)
+# so that this workflow always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
 #
 # Two tiers (design document B10.4): build, lint and unit tests run everywhere; the emulator (instrumented) tests, which
 # take most of the hour, run only for work heading into `main` and on `main` itself, so day-to-day pull requests into
 # `development` stay fast and do not use up the free Actions minutes.
+#
+# A push to `main` is NOT a trigger of its own: deploy.yml calls this workflow (workflow_call), so the commit that ships went
+# through the same sequence a pull request does, and the release job can read `android_changed`. Inside that call
+# github.event_name and github.ref are the caller's (push, refs/heads/main), so the emulator tests do run.
 on:
   pull_request:
     branches: [ "main", "development" ]
   push:
-    branches: [ "main", "development" ]
+    branches: [ "development" ]
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      android_changed:
+        description: "'true' when this change touched the Android project, so a release APK should be built"
+        value: ${{ jobs.changes.outputs.android }}
 
 permissions:
   contents: read

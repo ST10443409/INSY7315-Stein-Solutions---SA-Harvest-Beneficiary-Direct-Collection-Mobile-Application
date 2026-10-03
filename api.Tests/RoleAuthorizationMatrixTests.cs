@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using api.Controllers;
+using api.Data;
 using api.Models;
 using api.Services.Foodspace;
 using Microsoft.AspNetCore.Authorization;
@@ -55,6 +56,11 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
         ("GET", "api/admin/sync-status/{id}", new[] { Admin }),
         ("POST", "api/admin/sync-status/{id}/retry", new[] { Admin }),
         ("POST", "api/admin/sync-status/{id}/dismiss", new[] { Admin }),
+        ("GET", "api/admin/users", new[] { Admin }),
+        ("GET", "api/admin/users/{id}", new[] { Admin }),
+        ("POST", "api/admin/users", new[] { Admin }),
+        ("PATCH", "api/admin/users/{id}", new[] { Admin }),
+        ("POST", "api/admin/users/{id}/reset-password", new[] { Admin }),
         ("GET", "api/health", Anyone),
         ("POST", "api/auth/login", Anyone),
         ("GET", "api/auth/me", AnySignedIn),
@@ -185,11 +191,20 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     [Fact]
     public async Task ATokenWithNoRoleAtAll_IsRefusedByEveryRoleRestrictedEndpoint()
     {
-        // Someone holding a validly signed token that names no (or an unknown) role gets nothing role-restricted.
+        // Someone holding a validly signed token that names no (or an unknown) role gets nothing role-restricted. The token names
+        // a REAL, active account and its current stamp, so it gets past the account check and it is the role that refuses it
+        // (a token for an account that does not exist is a 401 before roles are even looked at; see UserAccountTests).
+        Guid userId, stamp;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var user = scope.ServiceProvider.GetRequiredService<AppDbContext>().Users.Single(u => u.Username == "cbo_test_user");
+            (userId, stamp) = (user.Id, user.SecurityStamp);
+        }
+
         foreach (var role in new[] { null, "SUPERUSER", "admin" }) // the role comparison is exact: "admin" is not "ADMIN"
         {
             var client = _factory.CreateClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Tokens.For(role));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Tokens.For(role, userId, stamp));
 
             foreach (var row in Table.Where(r => r.Allowed != Anyone && r.Allowed != AnySignedIn))
                 Assert.Equal(HttpStatusCode.Forbidden, (await Send(client, row.Method, row.Route)).StatusCode);
@@ -231,7 +246,7 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     {
         var path = "/" + route.Replace("{id}", "no-such-record");
         var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method == "POST") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        if (method is "POST" or "PATCH") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
         return client.SendAsync(request);
     }
 
@@ -248,9 +263,9 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     /// <summary>Validly signed tokens whose role claim is whatever a test says, to prove only the exact roles count.</summary>
     private static class Tokens
     {
-        public static string For(string? role)
+        public static string For(string? role, Guid userId, Guid stamp)
         {
-            var claims = new List<Claim> { new("sub", Guid.NewGuid().ToString()), new("name", "someone") };
+            var claims = new List<Claim> { new("sub", userId.ToString()), new("name", "someone"), new("stamp", stamp.ToString()) };
             if (role is not null) claims.Add(new Claim("role", role));
             return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
             {

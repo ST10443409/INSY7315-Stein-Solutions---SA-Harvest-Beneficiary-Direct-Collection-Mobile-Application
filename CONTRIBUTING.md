@@ -10,7 +10,8 @@ Branches: work on `feature/*` (or `feat/*`, `fix/*`) branches cut from `developm
 to `development` or `main` directly (see [docs/branch-protection.md](docs/branch-protection.md)).
 
 Two GitHub Actions workflows in `.github/workflows/`. Each runs on pull requests to `development` or `main`, on pushes to
-either, and on demand (`gh workflow run <file>`). Each starts with a quick `changes` job that checks which files the change
+`development`, and on demand (`gh workflow run <file>`); a push to `main` is run by `deploy.yml` instead, which calls them
+(see "Deployment" below). A fourth, `validate-pipeline.yml` (job `validate-pipeline`), lints the workflows, the scripts and the Azure Bicep whenever `.github/` or `infra/` changes, because nothing else exercises them before a release. Each starts with a quick `changes` job that checks which files the change
 touched ([.github/scripts/changed-paths.sh](.github/scripts/changed-paths.sh)); the real job is skipped when none of its
 paths changed, and GitHub counts a skipped job as passed. (This is a job rather than a `paths:` filter on the trigger
 because a workflow a filter stops from starting never reports its check, and a required check that never reports blocks
@@ -23,11 +24,20 @@ the pull request forever.)
 
 So an Android UI change does not run the backend pipeline, and a backend change does not run the Android one.
 
-A third workflow, `secret-scan.yml` (job `gitleaks`), runs gitleaks on **every** pull request and push to `development` and
-`main` (their new commits only)
-and weekly over the whole history (#54). If it flags something real, rotate the secret first (it is already in history),
+A third workflow, `secret-scan.yml` (job `gitleaks`), runs gitleaks on **every** pull request and push to `development`
+(and on `main` through `deploy.yml`), scanning only the new commits, and weekly over the whole history (#54). If it flags something real, rotate the secret first (it is already in history),
 then remove it. If it is a false positive, add a commented exception to `.gitleaks.toml` and note it in
 [`docs/security/security-review.md`](docs/security/security-review.md).
+
+### Deployment
+
+A push to `main` deploys what changed, after the same checks a pull request gets. `deploy.yml` does not copy those checks: it
+**calls** the three CI workflows above (so they cannot drift apart), and only if all pass does it (1) publish the API image to
+GitHub Container Registry tagged with the commit and deploy it to the Azure Web App if backend code changed, with a smoke test and
+automatic rollback to the previous image, and (2) build the signed release APK if the Android project changed. Deployments queue
+and are never cancelled half way. To roll back or redeploy a published image: Actions > **Redeploy backend**. One-time Azure setup,
+what it costs and how to read a failed first deployment: [infra/README.md](infra/README.md). The Android app itself is never
+deployed to Azure; it is built into an APK ([docs/android-release.md](docs/android-release.md)).
 
 **Release builds of the app** need an HTTPS API address: `./gradlew assembleRelease -PapiBaseUrl=https://<host>/`. Without
 one the build stops, because release builds refuse plain HTTP. Release builds are minified (R8), signed with a keystore that is

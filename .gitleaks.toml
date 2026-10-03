@@ -26,3 +26,18 @@ description = "The dev-only SEED_TEST_PASSWORD committed in .env.example by d90c
 condition = "AND"
 commits = ["d90c094c351b5244fcd3c4795d7dd941e39e2017"]
 paths = ['''^\.env\.example$''']
+
+[[allowlists]]
+description = "Azure built-in role definition ids in infra/main.bicep: public constants, identical in every tenant (docs: learn.microsoft.com Azure built-in roles), flagged only because the variable names contain the word 'Key' (Key Vault). Not secrets."
+regexTarget = "line"
+regexes = [
+  '''roleKeyVaultSecretsUser = ''',
+  '''roleKeyVaultSecretsOfficer = ''',
+  '''roleStorageBlobDataContributor = ''',
+]
+
+[[allowlists]]
+description = "An example image tag in the description of a workflow input in a6f48b9 ('e.g. ghcr.io/owner/saharvest-api:<12 hex characters>'), flagged by the generic-key rule because of its entropy. Not a secret; reworded in a later commit of the same pull request, but an earlier commit still contains it and history is not rewritten for it."
+condition = "AND"
+commits = ["a6f48b9c8ced8f89defe8f5ff971b03b10052765"]
+paths = ['''^\.github/workflows/_deploy-backend\.yml$''']

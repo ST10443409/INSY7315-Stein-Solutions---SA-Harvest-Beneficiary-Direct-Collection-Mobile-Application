@@ -165,6 +165,16 @@ DataStore with the same) when convenient.
 `.gitleaks.toml` holds the reviewed exceptions above, each with its reason; the retired `SEED_TEST_PASSWORD` commit is
 one of them. `--redact` keeps any finding's value out of the workflow log.
 
+Reviewed exception added with the Azure setup: the three built-in role definition ids in `infra/main.bicep` (`roleKeyVaultSecretsUser`,
+`roleKeyVaultSecretsOfficer`, `roleStorageBlobDataContributor`). They are public constants, identical in every Azure tenant, and the
+generic-key rule flagged them only because the variable names contain "Key" (Key Vault). Matched by line so the exception covers
+nothing else in the file.
+
+Second reviewed exception, found by the first CI scan of the Azure pull request: an example image tag (`ghcr.io/owner/saharvest-api:` followed by
+12 hex characters) in a workflow input description in commit `a6f48b9`, flagged for its entropy. The example was reworded in a later commit,
+but CI scans every commit of a pull request on its own and history is not rewritten for a harmless string, so the exception is tied to that one
+commit AND that one file (`condition = "AND"`, like the retired seed-password commit above) and covers nothing else.
+
 ## Verification on the emulator
 
 Run on 2026-10-02 (`Pixel_10_Pro` AVD, Android 17, debug build of this change), signed in as `cbo_test_user`:

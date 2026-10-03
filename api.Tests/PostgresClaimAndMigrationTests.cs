@@ -1,7 +1,9 @@
 using api.Data;
 using api.Models;
+using api.Services;
 using api.Services.Foodspace;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -168,5 +170,74 @@ public class PostgresClaimAndMigrationTests : IAsyncLifetime
             Assert.Equal(1, c.SyncAttempts);
             Assert.Null(c.ForwardClaimedUntil);
         });
+    }
+
+    // ── accounts, on real SQL ──────────────────────────────────────────────────────
+    // What the in-memory provider cannot show: a unique index really refusing a duplicate username when two Admins create the
+    // same one at once, the search and ordering translating to SQL, and the audit trail round-tripping.
+
+    private static UserManagementService Accounts(AppDbContext db) =>
+        new(db, new Microsoft.AspNetCore.Identity.PasswordHasher<AppUser>(), TimeProvider.System, NullLogger<UserManagementService>.Instance);
+
+    private static readonly AdminActor TestAdmin = new(Guid.NewGuid(), "pg.admin");
+
+    private static api.DTOs.CreateUserRequest NewUser(string username, string role = "VETTING", string? cbo = null) =>
+        new() { Username = username, Role = role, CboId = cbo, Password = "a-long-enough-passphrase-1" };
+
+    [PostgresFact]
+    public async Task TwoAdminsCreatingTheSameUsernameAtOnce_ExactlyOneWins_TheUniqueIndexDecides()
+    {
+        var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
+        {
+            await using var db = NewDb();
+            return await Accounts(db).CreateAsync(TestAdmin, NewUser("race.user"));
+        }));
+
+        Assert.Equal(1, results.Count(r => r.Status == UserResultStatus.Ok));
+        Assert.Equal(3, results.Count(r => r.Status == UserResultStatus.Conflict)); // told "taken", not a server error
+        await using var check = NewDb();
+        Assert.Equal(1, await check.Users.CountAsync(u => u.Username == "race.user"));
+        Assert.Equal(1, await check.UserAudit.CountAsync(a => a.TargetUsername == "race.user")); // and only one audit line
+    }
+
+    [PostgresFact]
+    public async Task Accounts_CanBeCreatedListedSearchedChangedAndAudited()
+    {
+        await using var db = NewDb();
+        var service = Accounts(db);
+        foreach (var name in new[] { "zed.vet", "amy.vet", "mid.admin" })
+            Assert.Equal(UserResultStatus.Ok, (await service.CreateAsync(TestAdmin, NewUser(name, name.EndsWith("admin") ? "ADMIN" : "VETTING"))).Status);
+        var collector = (await service.CreateAsync(TestAdmin, NewUser("col.one", "CBO_COLLECTION", "cbo-5"))).Value!;
+
+        var all = await service.ListAsync(new UserListQuery(null, null, null, 1, 50));
+        Assert.Equal(new[] { "amy.vet", "col.one", "mid.admin", "zed.vet" }, all.Items.Select(i => i.Username)); // ordered by username
+        Assert.Equal(new[] { "amy.vet", "zed.vet" }, (await service.ListAsync(new UserListQuery(UserRole.VETTING, null, null, 1, 50))).Items.Select(i => i.Username));
+        Assert.Equal(new[] { "mid.admin" }, (await service.ListAsync(new UserListQuery(null, null, "MID", 1, 50))).Items.Select(i => i.Username)); // case-insensitive search
+
+        Assert.Equal(UserResultStatus.Ok, (await service.UpdateAsync(TestAdmin, Guid.Parse(collector.Id), new api.DTOs.UpdateUserRequest { IsActive = false })).Status);
+        Assert.Equal(new[] { "col.one" }, (await service.ListAsync(new UserListQuery(null, false, null, 1, 50))).Items.Select(i => i.Username));
+
+        var history = (await service.GetAsync(Guid.Parse(collector.Id))).Value!.History;
+        Assert.Equal(new[] { "DEACTIVATED", "CREATED" }, history.Select(h => h.Action)); // newest first, enum round-trips as text
+        Assert.All(history, h => Assert.Equal("pg.admin", h.Actor));
+    }
+
+    [PostgresFact]
+    public async Task TheFirstAdminBootstrap_WorksOnRealPostgres_AndASecondRunIsANoOp()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(o => o.UseNpgsql(ConnectionString));
+        services.AddSingleton<Microsoft.AspNetCore.Identity.IPasswordHasher<AppUser>, Microsoft.AspNetCore.Identity.PasswordHasher<AppUser>>();
+        services.AddSingleton(TimeProvider.System);
+        await using var sp = services.BuildServiceProvider();
+        var options = new api.Options.BootstrapOptions { AdminUsername = "pg.first.admin", AdminPassword = "first-admin-passphrase-1" };
+
+        await AdminBootstrapper.RunAsync(sp, options, NullLogger.Instance);
+        await AdminBootstrapper.RunAsync(sp, options, NullLogger.Instance);
+
+        await using var check = NewDb();
+        var admin = await check.Users.SingleAsync();
+        Assert.Equal((UserRole.ADMIN, true), (admin.Role, admin.IsActive));
+        Assert.Equal(1, await check.UserAudit.CountAsync());
     }
 }

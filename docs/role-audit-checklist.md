@@ -30,6 +30,11 @@ Roles are the wire names the API issues: `CBO_COLLECTION`, `VETTING`, `ADMIN`.
 | `GET` | `/api/admin/sync-status/{id}` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
 | `POST` | `/api/admin/sync-status/{id}/retry` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
 | `POST` | `/api/admin/sync-status/{id}/dismiss` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `AdminSyncResolutionEndpointTests` |
+| `GET` | `/api/admin/users` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
+| `GET` | `/api/admin/users/{id}` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
+| `POST` | `/api/admin/users` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
+| `PATCH` | `/api/admin/users/{id}` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
+| `POST` | `/api/admin/users/{id}/reset-password` | `ADMIN` | `[Authorize(Roles = "ADMIN")]` on the controller | matrix + `UserManagementEndpointTests` |
 | `GET` | `/api/health` | open (platform probes) | `[AllowAnonymous]` | matrix + `HealthAndEnvelopeTests` |
 | `POST` | `/api/auth/login` | open (it issues the token) | `[AllowAnonymous]` | matrix + `AuthEndpointTests` |
 | `GET` | `/api/auth/me` | any signed-in user | `[Authorize]` | matrix + `AuthEndpointTests` |
@@ -55,6 +60,14 @@ Android side, with the next change to the client: delete the unused `SyncApiServ
 implement it) and the Room `sync_payloads` table, which needs a Room schema version and migration.
 
 **`/api/auth/me` is any signed-in user.** It only echoes the caller's own identity and role.
+
+**Account management (`/api/admin/users`) is ADMIN only, and an Admin's rights are re-checked on every request.** Anyone who can
+create an Admin can take over the system, so these five endpoints sit behind the same `[Authorize(Roles = "ADMIN")]` as the rest of
+the controller, and the matrix proves every other role gets 403 on each. Two things make that hold up in practice, not only on paper:
+a token is checked against the live account on every request (`TokenAccountCheck`: an unknown, deactivated or re-stamped account is a
+401, whatever the token's signature and expiry say), so removing someone's Admin role or deactivating them ends their access at once
+rather than when their token expires; and an Admin cannot deactivate or re-role themselves, and the last active Admin cannot be
+removed. Details and the full rules: `docs/user-accounts.md`.
 
 **Wrong-role and wrong-token results.** A role-restricted endpoint answers `401` with no (or an invalid/expired) token and
 `403` with a valid token of a role that is not allowed. The app treats a `403` as "not this record's fault, try later" and

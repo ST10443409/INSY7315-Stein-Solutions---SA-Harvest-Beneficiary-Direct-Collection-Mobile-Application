@@ -26,7 +26,6 @@ GET api/admin/sync-status/attention ADMIN
 GET api/admin/sync-status/no-such-record ADMIN
 POST api/admin/sync-status/no-such-record/retry ADMIN
 POST api/admin/sync-status/no-such-record/dismiss ADMIN
-POST api/sync CBO,VETTING,ADMIN
 GET api/health OPEN
 GET api/auth/me ANY
 "

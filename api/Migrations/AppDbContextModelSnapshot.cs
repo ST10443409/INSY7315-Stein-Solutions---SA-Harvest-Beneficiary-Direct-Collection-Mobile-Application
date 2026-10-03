@@ -219,6 +219,28 @@ namespace api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("donor_signed");
 
+                    b.Property<string>("DuplicateKey")
+                        .HasColumnType("text")
+                        .HasColumnName("duplicate_key");
+
+                    b.Property<string>("DuplicateOfId")
+                        .HasColumnType("text")
+                        .HasColumnName("duplicate_of_id");
+
+                    b.Property<Guid?>("ForwardClaimId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("forward_claim_id");
+
+                    b.Property<DateTimeOffset?>("ForwardClaimedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("forward_claimed_until");
+
+                    b.Property<string>("ForwardingStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("forwarding_status");
+
                     b.Property<DateTimeOffset?>("LastSyncAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_sync_attempt_at");
@@ -231,36 +253,23 @@ namespace api.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("longitude");
 
-                    b.Property<bool>("NoteAttached")
-                        .HasColumnType("boolean")
-                        .HasColumnName("note_attached");
-
-                    b.Property<string>("DuplicateKey")
-                        .HasColumnType("text")
-                        .HasColumnName("duplicate_key");
-
-                    b.Property<string>("DuplicateOfId")
-                        .HasColumnType("text")
-                        .HasColumnName("duplicate_of_id");
-
-                    b.Property<string>("ForwardingStatus")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("forwarding_status");
-
                     b.Property<DateTimeOffset?>("NextForwardAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_forward_attempt_at");
 
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("retry_count");
+                    b.Property<bool>("NoteAttached")
+                        .HasColumnType("boolean")
+                        .HasColumnName("note_attached");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("received_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
 
                     b.PrimitiveCollection<List<bool>>("Shots")
                         .IsRequired()
@@ -298,12 +307,6 @@ namespace api.Migrations
                     b.HasIndex("CboId")
                         .HasDatabaseName("ix_cbo_collections_cbo_id");
 
-                    b.HasIndex("SyncStatus")
-                        .HasDatabaseName("ix_cbo_collections_sync_status");
-
-                    b.HasIndex("ForwardingStatus")
-                        .HasDatabaseName("ix_cbo_collections_forwarding_status");
-
                     b.HasIndex("DuplicateKey")
                         .IsUnique()
                         .HasDatabaseName("ux_cbo_collections_duplicate_key_original")
@@ -311,6 +314,12 @@ namespace api.Migrations
 
                     b.HasIndex("DuplicateOfId")
                         .HasDatabaseName("ix_cbo_collections_duplicate_of_id");
+
+                    b.HasIndex("ForwardingStatus")
+                        .HasDatabaseName("ix_cbo_collections_forwarding_status");
+
+                    b.HasIndex("SyncStatus")
+                        .HasDatabaseName("ix_cbo_collections_sync_status");
 
                     b.ToTable("cbo_collections", (string)null);
                 });
@@ -635,9 +644,27 @@ namespace api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("foodspace_record_id");
 
+                    b.Property<Guid?>("ForwardClaimId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("forward_claim_id");
+
+                    b.Property<DateTimeOffset?>("ForwardClaimedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("forward_claimed_until");
+
+                    b.Property<string>("ForwardingStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("forwarding_status");
+
                     b.Property<DateTimeOffset?>("LastSyncAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_sync_attempt_at");
+
+                    b.Property<DateTimeOffset?>("NextForwardAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_forward_attempt_at");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text")
@@ -652,15 +679,6 @@ namespace api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("outcome");
-
-                    b.Property<string>("ForwardingStatus")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("forwarding_status");
-
-                    b.Property<DateTimeOffset?>("NextForwardAttemptAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("next_forward_attempt_at");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()

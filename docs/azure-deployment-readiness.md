@@ -37,19 +37,21 @@ These override the matching rows further down (sections 2 and 8 were written bef
 
 ## 1. Blockers found while reading the code (fix before the first deploy)
 
-1. **Duplicate forwarding when more than one worker runs.** `CboCollectionForwarder.ForwardDueAsync` (and the vetting
-   forwarder) selects due rows with no lock, lease or concurrency token. A deployment slot (staging + production share a
-   database during a swap) or scaling to 2 instances makes two workers forward the same record to Foodspace. Foodspace
-   de-duplication is still an open question (`docs/OPEN-DECISIONS.md` #1). Fix: claim rows (`FOR UPDATE SKIP LOCKED` or an
-   `xmin` concurrency token plus a short lease) **and** keep `Foodspace__ForwardingEnabled=false` as a slot-sticky setting
-   on the staging slot.
+1. **Duplicate forwarding when more than one worker runs. FIXED on `fix/backend-deploy-blockers`.** The forwarders selected
+   due rows with no lock, so an overlapping deployment (old and new container briefly both running) or a second instance
+   made two workers forward the same record to Foodspace, whose de-duplication is still an open question
+   (`docs/OPEN-DECISIONS.md` #1). Now each send is preceded by a database-arbitrated claim (`ForwardingClaim`: a concurrency
+   token plus a lease; `Foodspace:ClaimLeaseSeconds`, default 120), covering the background loop, ingestion and an Admin's
+   retry alike. Proven on real PostgreSQL (four concurrent forwarders, 20 records, each sent once) and by a regression test
+   for the "ABA" trap the first version fell into. Slots are not planned on the free tier, so
+   `Foodspace__ForwardingEnabled=false` on a staging copy is now a precaution rather than a requirement.
 2. **Deployment slots need Standard tier or above.** The design document costs B1 (R220) for 100 users *and* relies on
    slot swap (B6.5, B10.3). Basic tier has no slots. Either budget S1 (R1,190, the doc's 1,000-user figure) from day one,
    or drop slots for the pilot and roll back by redeploying the previous image tag.
-3. **Legacy `/api/sync` + `QueueBackgroundWorker`.** An in-memory channel (lost on every restart) posts to
-   `ExternalApi:BaseUrl/api/external/sync`, which is the simulator. The app no longer calls it (`SyncApiService.syncData` is
-   unused). Remove the controller, `QueueService`, `QueueBackgroundWorker` and the `"ExternalApi"` named client before
-   production; otherwise a production call to `/api/sync` accepts data and silently drops it.
+3. **Legacy `/api/sync` + `QueueBackgroundWorker`. REMOVED on `fix/backend-deploy-blockers`** (controller, `QueueService`,
+   `QueueBackgroundWorker`, `SyncPayload`, the `"ExternalApi"` named client; a test keeps the route gone). Left for the
+   Android work: the unused `SyncApiService.syncData` declaration (five client test fakes implement it) and the Room
+   `sync_payloads` table, which needs a schema version and migration.
 4. **`Security:KnownNetworks`, `AllowedHosts` and the database TLS mode must be set or every call fails.** (Documented in
    `security-review.md` S3, repeated here because it is the usual first-deploy failure.) `AllowedHosts` must include the
    *staging slot* host name too (use `*.azurewebsites.net` or list both), or the slot's health check and smoke test get a 400.
@@ -149,9 +151,11 @@ Nothing exists on the API side. Build, in order:
   the deploy job runs it against the target database, then deploys the image.
 - Because a slot swap means the *old* code briefly runs against the *new* schema, migrations must be backward compatible
   (add columns nullable, drop in a later release).
-- **CI never runs the migrations**: the tests use EF's in-memory provider, so a model change with a forgotten migration, or
-  a migration that Postgres rejects, would only be found in Azure. Add a CI step against a `postgres:17` service container:
-  `dotnet ef migrations has-pending-model-changes` plus applying all migrations to an empty database.
+- **CI now runs the migrations (done on `fix/backend-deploy-blockers`).** The workflow starts a `postgres:17-alpine` service
+  container and sets `TEST_POSTGRES`; `PostgresClaimAndMigrationTests` creates a throwaway database, applies every migration
+  to it (EF refuses if the model has changes no migration covers) and asserts `HasPendingModelChanges()` is false. A forgotten
+  migration, or one PostgreSQL rejects, now fails the pull request instead of failing in Azure. Locally the tests are
+  skipped unless `TEST_POSTGRES` is set (see `docs/testing.md`).
 
 ### 3.5 Observability (#57)
 

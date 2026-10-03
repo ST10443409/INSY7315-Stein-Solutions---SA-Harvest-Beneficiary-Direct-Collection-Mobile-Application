@@ -21,6 +21,8 @@ public class RoomParityTests
         nameof(ForwardedEntity.SyncError),
         nameof(ForwardedEntity.ForwardingStatus),
         nameof(ForwardedEntity.NextForwardAttemptAt),
+        nameof(ForwardedEntity.ForwardClaimId),
+        nameof(ForwardedEntity.ForwardClaimedUntil),
         nameof(CboCollection.SubmittedBy),
         nameof(CboCollection.DuplicateKey),
         nameof(CboCollection.DuplicateOfId),

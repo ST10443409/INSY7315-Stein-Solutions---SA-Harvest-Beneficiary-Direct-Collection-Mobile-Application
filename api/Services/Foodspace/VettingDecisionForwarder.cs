@@ -80,6 +80,7 @@ public class VettingDecisionForwarder : IVettingDecisionForwarder
     {
         var now = _time.GetUtcNow();
         var due = await _db.VettingDecisions
+            .Where(d => d.ForwardClaimedUntil == null || d.ForwardClaimedUntil <= now) // not being sent by someone else right now
             .Where(d => d.ForwardingStatus == ForwardingStatus.Pending
                         || (d.ForwardingStatus == ForwardingStatus.SyncedLocalPendingFoodspace
                             && d.NextForwardAttemptAt != null
@@ -89,26 +90,34 @@ public class VettingDecisionForwarder : IVettingDecisionForwarder
             .Take(_options.BatchSize)
             .ToListAsync(cancellationToken);
 
+        var attempted = 0;
         foreach (var decision in due)
         {
-            await AttemptAsync(decision, cancellationToken);
+            if (await AttemptAsync(decision, cancellationToken)) attempted++;
         }
-        return due.Count;
+        return attempted;
     }
 
-    private async Task AttemptAsync(VettingDecision decision, CancellationToken cancellationToken)
+    /// <summary>Sends one decision if this caller wins the claim on it (see <see cref="ForwardingClaim"/>); false if somebody else has it.</summary>
+    private async Task<bool> AttemptAsync(VettingDecision decision, CancellationToken cancellationToken)
     {
+        var now = _time.GetUtcNow();
+        if (!await ForwardingClaim.TryClaimAsync(_db, decision, now, ForwardingClaim.LeaseFor(_options), cancellationToken))
+        {
+            _logger.LogInformation("Vetting decision {Id} is already being forwarded by another worker; skipped.", decision.Id);
+            return false;
+        }
+
         if (await HasNewerDecisionAsync(decision, cancellationToken))
         {
             decision.ForwardingStatus = ForwardingStatus.Superseded;
             decision.NextForwardAttemptAt = null;
             decision.SyncError = null;
-            await _db.SaveChangesAsync(cancellationToken);
+            await ForwardingClaim.ReleaseAsync(_db, decision, cancellationToken);
             _logger.LogInformation("Vetting decision {Id} is superseded by a newer one and was not forwarded.", decision.Id);
-            return;
+            return true;
         }
 
-        var now = _time.GetUtcNow();
         decision.SyncAttempts++;
         decision.LastSyncAttemptAt = now;
 
@@ -132,8 +141,14 @@ public class VettingDecisionForwarder : IVettingDecisionForwarder
                 decision.Id, decision.SyncAttempts, decision.NextForwardAttemptAt?.ToString("O") ?? "none");
         }
 
-        // Saved per decision so progress is never lost if a later one in the batch throws.
-        await _db.SaveChangesAsync(cancellationToken);
+        // Saved per decision so progress is never lost if a later one in the batch throws. Also ends the claim.
+        if (!await ForwardingClaim.ReleaseAsync(_db, decision, cancellationToken))
+        {
+            _logger.LogWarning(
+                "Vetting decision {Id}: the claim ran out while Foodspace was answering and another worker took the decision over; " +
+                "this attempt's outcome was not saved.", decision.Id);
+        }
+        return true;
     }
 
     private Task<bool> HasNewerDecisionAsync(VettingDecision d, CancellationToken cancellationToken) =>

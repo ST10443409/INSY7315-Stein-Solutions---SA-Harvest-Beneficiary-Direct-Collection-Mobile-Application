@@ -34,7 +34,7 @@ appears on `VALIDATION_FAILED`. Errors the framework produces are wrapped automa
 (`500 INTERNAL_ERROR`, logged with the same `traceId`, never a stack trace), model-validation failures
 (`400 VALIDATION_FAILED`), and bodyless `401`/`403`/`404` responses.
 
-The pre-existing `POST /api/auth/login`, `GET /api/auth/me` and `POST /api/sync` still return their original
+The pre-existing `POST /api/auth/login` and `GET /api/auth/me` still return their original
 bare bodies because the Android client parses them as-is; move them onto the envelope together with the client.
 
 **Health.** `GET /api/health` (anonymous) returns `200` with `data.status = "ok"` when the API and database are
@@ -146,8 +146,14 @@ Records that reach this backend are forwarded to Foodspace by `FoodspaceApiClien
   `MaxAttempts`); when retries run out it stays there for an Admin to retry or dismiss (see "Admin oversight endpoints"). `SyncStatus` is untouched, so a
   collector's record is never marked failed because of Foodspace.
 - **Ingestion:** `POST /api/cbo-collection/sync` stores the record; the forwarding loop then picks it up within `PollIntervalSeconds`.
+- **Several workers are safe.** Before sending a record, a worker claims it in the database (`forward_claim_id` is a concurrency
+  token, `forward_claimed_until` the lease; `Foodspace:ClaimLeaseSeconds`, default 120, must exceed `TimeoutSeconds`). Of two
+  workers that both read the same row (a second instance, the old and new container during a deployment, the loop and an
+  Admin's retry) the database lets one through and the other skips the record. A worker that dies mid-send delays its record by
+  at most the lease. An Admin dismissing a record at the instant a worker claims it gets `409`, "being sent right now".
+  See `ForwardingClaim` for why the claim id must never return to an earlier value.
 - **Config** (section `Foodspace`): `BaseUrl` (falls back to `ExternalApi:BaseUrl`), `ApiKey` (**secret**, sent as `X-Api-Key`;
-  set with user-secrets or `Foodspace__ApiKey`), `ForwardingEnabled`, `PollIntervalSeconds`, `MaxAttempts`, `LogPayloads`
+  set with user-secrets or `Foodspace__ApiKey`), `ForwardingEnabled`, `PollIntervalSeconds`, `MaxAttempts`, `ClaimLeaseSeconds`, `LogPayloads`
   (off by default: payloads contain donor names). The auth mechanism is an assumption until Foodspace confirms it.
 - **Mapping:** `FoodspaceCboCollectionMapper` is the single place our fields map to Foodspace's; its comment is the mapping table.
 - **Simulate an outage:** `POST http://localhost:5284/api/external/simulate/outage` (optionally `?status=500`), then

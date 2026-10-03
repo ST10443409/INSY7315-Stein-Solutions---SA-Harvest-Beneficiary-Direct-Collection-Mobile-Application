@@ -18,7 +18,8 @@ namespace api.Data;
 ///
 /// Deliberate differences from Room:
 ///   * Server-only columns (no Room equivalent): received_at, sync_attempts, last_sync_attempt_at,
-///     sync_error, forwarding_status and next_forward_attempt_at (Foodspace forwarding, see ForwardingStatus)
+///     sync_error, forwarding_status, next_forward_attempt_at, forward_claim_id and forward_claimed_until (Foodspace
+///     forwarding, see ForwardingStatus; the last two stop two workers sending the same record, see ForwardingClaim)
 ///     and submitted_by on collections/decisions (Admin monitoring, #49-#51), and fetched_at on the Foodspace
 ///     cache. SyncStatus means "reached the backend" on both sides; forwarding_status tracks Foodspace.
 ///   * List fields are native Postgres arrays (text[] / boolean[]) instead of delimiter-joined text.
@@ -26,7 +27,8 @@ namespace api.Data;
 ///   * vetting_decisions.foodspace_record_id and cbo_collections.cbo_id are intentionally NOT foreign keys:
 ///     the beneficiary cache is replaced on every fetch, and a collection must never be rejected because the
 ///     CBO list hasn't been pulled yet.
-///   * Not modelled: Room's "sync_payloads" (a demo table of the current queue prototype).
+///   * Not modelled: Room's "sync_payloads" (a leftover demo table of the retired queue prototype; the backend endpoint
+///     and queue it fed are gone, the device table is dropped with the next Room schema change).
 ///   * "users" is server-only (login accounts); the device holds a JWT, not a user record.
 ///   * "admin_actions" is server-only (the audit trail of Admin retries and dismissals, #50).
 /// </summary>
@@ -76,6 +78,7 @@ public class AppDbContext : DbContext
             e.ToTable("cbo_collections");
             e.HasKey(x => x.Id);
             e.Property(x => x.ReceivedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.ForwardClaimId).IsConcurrencyToken(); // who is forwarding it now; see ForwardingClaim
             e.HasIndex(x => x.CboId).HasDatabaseName("ix_cbo_collections_cbo_id");
             e.HasIndex(x => x.SyncStatus).HasDatabaseName("ix_cbo_collections_sync_status");
             e.HasIndex(x => x.ForwardingStatus).HasDatabaseName("ix_cbo_collections_forwarding_status");
@@ -109,6 +112,7 @@ public class AppDbContext : DbContext
             e.ToTable("vetting_decisions");
             e.HasKey(x => x.Id);
             e.Property(x => x.ReceivedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.ForwardClaimId).IsConcurrencyToken(); // who is forwarding it now; see ForwardingClaim
             e.HasIndex(x => x.FoodspaceRecordId).HasDatabaseName("ix_vetting_decisions_foodspace_record_id");
             e.HasIndex(x => x.SyncStatus).HasDatabaseName("ix_vetting_decisions_sync_status");
             e.HasIndex(x => x.OfficerId).HasDatabaseName("ix_vetting_decisions_officer_id");

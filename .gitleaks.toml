@@ -35,3 +35,9 @@ regexes = [
   '''roleKeyVaultSecretsOfficer = ''',
   '''roleStorageBlobDataContributor = ''',
 ]
+
+[[allowlists]]
+description = "An example image tag in the description of a workflow input in a6f48b9 ('e.g. ghcr.io/owner/saharvest-api:<12 hex characters>'), flagged by the generic-key rule because of its entropy. Not a secret; reworded in a later commit of the same pull request, but an earlier commit still contains it and history is not rewritten for it."
+condition = "AND"
+commits = ["a6f48b9c8ced8f89defe8f5ff971b03b10052765"]
+paths = ['''^\.github/workflows/_deploy-backend\.yml$''']

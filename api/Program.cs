@@ -7,6 +7,7 @@ using api.Infrastructure;
 using api.Models;
 using api.Options;
 using api.Services;
+using api.Services.Attachments;
 using api.Services.Foodspace;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -65,6 +66,10 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             NameClaimType = "name",
             RoleClaimType = JwtTokenService.RoleClaim, // [Authorize(Roles = "...")] reads the "role" claim
         };
+
+        // A valid signature is not enough: the account must still be active and the token's stamp current, so deactivating a
+        // user, resetting a password or changing a role ends their existing sessions at once (see TokenAccountCheck).
+        bearer.Events = new JwtBearerEvents { OnTokenValidated = TokenAccountCheck.ValidateAsync };
     });
 builder.Services.AddAuthorization();
 
@@ -124,21 +129,6 @@ builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
-// Register the queue service as a singleton
-builder.Services.AddSingleton<IQueueService, QueueService>();
-
-// Register the background worker to process the queue
-builder.Services.AddHostedService<QueueBackgroundWorker>();
-
-// HttpClient for the external API simulator. Base URL comes from configuration
-// (ExternalApi:BaseUrl) so it can be overridden per environment, e.g. in Docker.
-builder.Services.AddHttpClient("ExternalApi", client =>
-{
-    var baseUrl = builder.Configuration["ExternalApi:BaseUrl"]
-        ?? throw new InvalidOperationException("Configuration value 'ExternalApi:BaseUrl' is missing.");
-    client.BaseAddress = new Uri(baseUrl);
-});
-
 // ── Foodspace forwarding ──────────────────────────────────────────────────────────────────
 // Records that reached this backend are forwarded to Foodspace by a typed HttpClient. Foodspace:ApiKey is a
 // secret (user-secrets / Foodspace__ApiKey); BaseUrl falls back to ExternalApi:BaseUrl (the simulator for now).
@@ -165,6 +155,27 @@ builder.Services.AddScoped<IVettingRecordsService, VettingRecordsService>();
 builder.Services.AddScoped<IAdminSyncStatusService, AdminSyncStatusService>();
 builder.Services.AddScoped<IAdminSyncResolutionService, AdminSyncResolutionService>();
 builder.Services.AddScoped<IAdminUserActivityService, AdminUserActivityService>();
+builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+
+// ── Signatures and photos (Azure Blob Storage) ────────────────────────────────────────────
+// In Azure: Storage:AccountUri (an app setting) + the Web App's managed identity, with the "Storage Blob Data Contributor" role on the one
+// private container. No account key, connection string or SAS anywhere. Locally: Storage:ConnectionString against Azurite (Development
+// only, see SecurityStartupChecks). With neither set the API still starts and uploads are answered 503: the app keeps the files.
+builder.Services.AddOptions<StorageOptions>().Bind(builder.Configuration.GetSection(StorageOptions.SectionName));
+builder.Services.AddSingleton<IAttachmentStore>(sp =>
+{
+    var storage = sp.GetRequiredService<IOptions<StorageOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(storage.ConnectionString))
+        return AzureBlobAttachmentStore.ForEmulator(storage.ConnectionString, storage.Container);
+    if (!string.IsNullOrWhiteSpace(storage.AccountUri))
+        return AzureBlobAttachmentStore.ForAccount(new Uri(storage.AccountUri), storage.Container);
+    return new NotConfiguredAttachmentStore();
+});
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+
+// The first administrator, from configuration (Bootstrap:AdminUsername / Bootstrap:AdminPassword): see AdminBootstrapper.
+builder.Services.AddOptions<BootstrapOptions>().Bind(builder.Configuration.GetSection(BootstrapOptions.SectionName));
+// Safe to run in more than one instance at once (a second instance, an overlapping deployment): see ForwardingClaim.
 builder.Services.AddHostedService<FoodspaceForwardingWorker>();
 
 // Responses are compressed (gzip/brotli) when the client asks, which matters most for the vetting record pages on poor
@@ -195,6 +206,17 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     using var scope = app.Services.CreateScope();
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+}
+
+// Real environments: create the first administrator when the Bootstrap settings are present and nobody can manage accounts
+// yet. Does nothing otherwise, and stops the start-up (without printing the password) on a configuration it cannot honour.
+{
+    var bootstrap = app.Services.GetRequiredService<IOptions<BootstrapOptions>>().Value;
+    if (bootstrap.IsConfigured)
+    {
+        using var scope = app.Services.CreateScope();
+        await AdminBootstrapper.RunAsync(scope.ServiceProvider, bootstrap, app.Logger);
+    }
 }
 
 // Opt-in (Seed:Enabled=true, local dev only): one test user per role.

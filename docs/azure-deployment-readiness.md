@@ -17,41 +17,46 @@ These override the matching rows further down (sections 2 and 8 were written bef
 | **Free tiers / student plan** | No deployment slots (they need Standard), so blue-green swap from B6.5 is dropped: deploy the SHA-tagged image, health-check it, roll back by redeploying the previous tag. **Open risk:** the Free (F1) App Service has no Always On, so the process sleeps when idle and the Foodspace forwarding loop (which retries on a timer) stops with it; F1 also has a daily CPU quota. Whether a *container* can run on F1 must be checked in the portal. Basic (B1, about US$13/month) is the realistic floor and is covered by the student credit. Azure Container Registry has no free tier (Basic, about US$5/month); GitHub Container Registry is free for private images and App Service can pull from it with a token. Key Vault (Standard, pay per operation), Application Insights (5 GB/month free) and Blob (5 GB free for 12 months) are effectively free at this scale. |
 | **Database is SA Harvest's, not Azure's** | No Azure PostgreSQL. The API still needs `SSL Mode=Require` or stronger and **their** firewall must admit the App Service's outbound addresses (shared, can change; a fixed address needs VNet integration plus NAT, which is not free). EF migrations would create this API's tables (users, sync state, admin actions) in their database, so they must agree to that and give a database role that may. Information needed from SA Harvest is listed in the reply that accompanies this change. |
 | **No APIM / WAF / private endpoints** | Record the risk acceptance (document B8.3 and B9.1 describe them). Compensating controls already in the API: HTTPS-only, rate limit, role checks. Add App Service access restrictions if SA Harvest has fixed office/CBO ranges (they likely do not, since collectors use mobile data). |
-| **Application id** | "SAH Collection & Vetting" is a display name, not a valid id (no spaces or `&`; must look like a package name). Proposed id `za.org.saharvest.collectionvetting`, display name `SAH Collection & Vetting` (the `app_name` string). **Needs your confirmation before the first APK**, because it cannot change afterwards. |
+| **Application id** | **Confirmed:** `za.org.saharvest.collectionvetting`; display name `SAH Collection & Vetting` (the `app_name` string, `&amp;` in XML). Not yet changed in `build.gradle.kts`: it goes in with the Android release configuration. It cannot change after the first APK is installed. |
+| **Region: Spain Central** (`spaincentral`) | Chosen over South Africa North because South Africa's region offers fewer services. Three things to know. (1) Beneficiary data (POPIA personal information) would then be processed outside South Africa; POPIA section 72 permits that where the recipient country has comparable protection (Spain is under the EU's GDPR) or the data subjects consent, but SA Harvest should confirm and the choice belongs in the handover documents. (2) Round trips from South Africa to Spain are several times longer than to South Africa North, on top of the 2G/3G links the app already budgets for (timeouts in `HttpClients` are generous, but record it in #63's load test). (3) An Azure for Students subscription limits which regions can be used; confirm Spain Central is allowed on yours before any resource is planned around it. Keep every resource (app, storage, Key Vault, registry) in the same region. |
+| **Branch rules** | Pro is active on `ST10443409`. The owner may bypass protection (`enforce_admins: false`). Emulator tests skip on `development` pull requests (accepted). |
 
 ## 0. Where things stand
 
 | Area | Status | One-line summary |
 |---|---|---|
-| Container image | Partial | Multi-stage, non-root, .NET 10. Works. Not yet pushed anywhere; no registry, no tags. |
-| Key Vault | Missing (cheap) | Config is already env-var driven (`Jwt__SigningKey`, ...), so Key Vault *references* in App Service need **no code change**. Nothing is provisioned. |
-| Blob Storage | **Missing (largest piece of work)** | The API has no photo/signature endpoint, no storage code, no Azure packages. The app keeps the files on the device and its upload worker is not built (#75). |
+| Container image | **Built, not yet deployed** | Multi-stage, non-root, .NET 10. `deploy.yml` publishes it to GitHub Container Registry (free) tagged with the commit. |
+| Key Vault | **Defined, not yet created** | `infra/main.bicep` creates the vault and the Web App reads secrets through Key Vault references (no code change). Secret values are set by hand (`infra/README.md`). |
+| Blob Storage | **Built; needs the storage account created and the role assigned** | The API stores signatures and photos in a private container through its managed identity (`PUT /api/cbo-collection/{collectionId}/attachments/{attachmentId}`; Admin read-only view under `/api/admin`), and the app uploads them after their record is received. Verified end to end against the Azurite emulator, and on the emulator app. Not yet run against a real storage account. What Foodspace receives is still open (section 3.2, point 5); timing on 2G is still to do (#75). |
 | Security hardening of the API | Done | HTTPS-only, HSTS, forwarded headers, login rate limit, startup refusal of unsafe config, body limits (#54). |
 | Observability | Missing | No Application Insights/OpenTelemetry, no alerts (#57). |
-| CI | Partial | Backend and Android CI exist and are good, but only on PRs to `main`, and nothing runs on a `development` branch. |
-| CD | **Missing** | `cd-backend.yml` is CI with a docker build; "Add registry login + push steps here" is still a comment. |
-| Android release | **Missing** | No signing config, R8 off, `proguard-rules.pro` does not exist, `applicationId` is `com.example.client`, version hard-coded to 1 / "1.0". |
-| Repo governance | Missing | `main` is not protected; no `development` branch; no GitHub environments, secrets or variables. |
+| CI | **Done** | Backend, Android and secret-scan workflows run for PRs into `development`/`main` and pushes to `development`; `deploy.yml` calls the same three for `main`. |
+| CD | **Written, not yet run** | `deploy.yml` (publish image, deploy by repointing the `live` image tag and calling the Web App webhook (no Azure login; the school tenant blocks Entra app registrations), smoke test, auto-rollback, signed APK) and `redeploy-backend.yml`. Needs the one-time setup in `infra/README.md`; never run against a real Azure subscription yet. |
+| Android release | **Mostly done** (items 1-5 and 13 of section 4, on `feat/android-release-config`) | Id `za.org.saharvest.collectionvetting`, R8 on with keep rules, signing from environment variables, version from CI, release build in PR CI, all verified on an emulator. Still open: the keystore itself (yours to create), the signed build in the pipeline, pinning, SQLCipher, app lock, signature self-check, distribution. See `docs/android-release.md`. |
+| Repo governance | **Done** for `development`; environment still to create | `development` is protected (PR + 3 checks, 0 approvals, owner may bypass); `main` deliberately is not. The `production` GitHub environment and its variables are created in `infra/README.md` step 5. |
 
 ## 1. Blockers found while reading the code (fix before the first deploy)
 
-1. **Duplicate forwarding when more than one worker runs.** `CboCollectionForwarder.ForwardDueAsync` (and the vetting
-   forwarder) selects due rows with no lock, lease or concurrency token. A deployment slot (staging + production share a
-   database during a swap) or scaling to 2 instances makes two workers forward the same record to Foodspace. Foodspace
-   de-duplication is still an open question (`docs/OPEN-DECISIONS.md` #1). Fix: claim rows (`FOR UPDATE SKIP LOCKED` or an
-   `xmin` concurrency token plus a short lease) **and** keep `Foodspace__ForwardingEnabled=false` as a slot-sticky setting
-   on the staging slot.
+1. **Duplicate forwarding when more than one worker runs. FIXED on `fix/backend-deploy-blockers`.** The forwarders selected
+   due rows with no lock, so an overlapping deployment (old and new container briefly both running) or a second instance
+   made two workers forward the same record to Foodspace, whose de-duplication is still an open question
+   (`docs/OPEN-DECISIONS.md` #1). Now each send is preceded by a database-arbitrated claim (`ForwardingClaim`: a concurrency
+   token plus a lease; `Foodspace:ClaimLeaseSeconds`, default 120), covering the background loop, ingestion and an Admin's
+   retry alike. Proven on real PostgreSQL (four concurrent forwarders, 20 records, each sent once) and by a regression test
+   for the "ABA" trap the first version fell into. Slots are not planned on the free tier, so
+   `Foodspace__ForwardingEnabled=false` on a staging copy is now a precaution rather than a requirement.
 2. **Deployment slots need Standard tier or above.** The design document costs B1 (R220) for 100 users *and* relies on
    slot swap (B6.5, B10.3). Basic tier has no slots. Either budget S1 (R1,190, the doc's 1,000-user figure) from day one,
    or drop slots for the pilot and roll back by redeploying the previous image tag.
-3. **Legacy `/api/sync` + `QueueBackgroundWorker`.** An in-memory channel (lost on every restart) posts to
-   `ExternalApi:BaseUrl/api/external/sync`, which is the simulator. The app no longer calls it (`SyncApiService.syncData` is
-   unused). Remove the controller, `QueueService`, `QueueBackgroundWorker` and the `"ExternalApi"` named client before
-   production; otherwise a production call to `/api/sync` accepts data and silently drops it.
+3. **Legacy `/api/sync` + `QueueBackgroundWorker`. REMOVED on `fix/backend-deploy-blockers`** (controller, `QueueService`,
+   `QueueBackgroundWorker`, `SyncPayload`, the `"ExternalApi"` named client; a test keeps the route gone). Left for the
+   Android work: the unused `SyncApiService.syncData` declaration (five client test fakes implement it) and the Room
+   `sync_payloads` table, which needs a schema version and migration.
 4. **`Security:KnownNetworks`, `AllowedHosts` and the database TLS mode must be set or every call fails.** (Documented in
    `security-review.md` S3, repeated here because it is the usual first-deploy failure.) `AllowedHosts` must include the
    *staging slot* host name too (use `*.azurewebsites.net` or list both), or the slot's health check and smoke test get a 400.
-5. **Release build config is incomplete** (section 4): until it is fixed the APK that CI could produce is unsigned,
+5. **Release build config. DONE on `feat/android-release-config`** (section 4): application id, R8 with keep rules, signing from environment variables, CI-derived version, and a release build in every Android pull request. The release keystore and the signed pipeline build are still to do.
+6. **No way to create a user account in any deployed environment. DONE on `feat/user-accounts`.** The only code that created users was the Development-only seeder. Now: the first Admin is created from configuration at start-up (`Bootstrap__AdminUsername` plus a Key Vault password; it does nothing once an Admin exists, never changes an existing account, and refuses to start on a half-set or weak configuration), and Admins manage accounts through `/api/admin/users` (create, list, get, change role/CBO/active, reset password), every change audited. Deactivating, re-roling or resetting a password ends the account's sessions at once (a per-user security stamp checked on every request), so a lost phone is not a 60-minute problem. See `docs/user-accounts.md` and `infra/README.md` section 7. Still open: an Admin screen in the app, a self-service password change, and checking a collector's CBO id against a real list.
    un-minified and named `com.example.client`.
 
 ## 2. Azure resources to provision
@@ -61,7 +66,7 @@ UAT and Production are provably the same shape (B6.5: "same images across enviro
 
 | Resource | Notes |
 |---|---|
-| Resource group per environment | Region: **South Africa North** unless SA Harvest says otherwise (POPIA, latency). Confirm every SKU you want exists there. |
+| Resource group per environment | Region: **Spain Central** (decided; see "Decisions taken"). Confirm every SKU you want exists there. |
 | Azure Container Registry | Basic (doc: R85). Admin user **off**; App Service pulls with its managed identity (`AcrPull`). Keep the last 5 tags (doc B10.3). Vulnerability scanning needs Defender for Containers (not in the doc's cost table). |
 | App Service plan (Linux) + Web App for Containers | Image from ACR, `WEBSITES_PORT=8080`, health check path `/api/health`, `alwaysOn`, HTTPS only, TLS 1.2 minimum, FTPS disabled, system-assigned identity. Staging slot if S1 or above. |
 | Azure Database for PostgreSQL Flexible Server | **Decision.** The document costs "FoodSpace Database integration, no separate database", but this API has its own tables (users, sync state, admin actions, vetting decisions) and its own migrations. Either SA Harvest hosts a database for it on FoodSpace's server, or you add Flexible Server (Burstable B1ms is roughly R300-400/month, not in the cost table). TLS is enforced by default on Azure; the API demands `SSL Mode=Require` or stronger. 7-day PITR backup per B6.5. |
@@ -107,7 +112,15 @@ Plain values may live in the Bicep parameters; secrets are Key Vault references 
 
 ### 3.2 Blob Storage (the big one)
 
-Nothing exists on the API side. Build, in order:
+**Status: built** (points 1 to 4 and 6 below, and the Android upload, item 11 of section 4), with these differences from the plan:
+the route is `PUT .../attachments/{attachmentId}` (idempotent on the device's id, so a retry is safe); a file may only be attached
+to a collection its own submitter sent, with no Admin exception, and anything else is a 404; the table is `collection_attachments`
+with at most one file per collection, kind and slot; the Admin read path streams the bytes through the API (no SAS links at all);
+the container is created by hand or by Bicep, never by the API, because the identity's role is on that one container only; photos
+lose their EXIF (including GPS) on the phone, because the app re-encodes them. Still open: point 5 (what Foodspace receives), and the
+live run against a real storage account. The original plan follows, kept as the reasoning.
+
+Build, in order:
 
 1. **Abstraction.** `IAttachmentStore` (put, open/delete, create read-SAS) with an Azure implementation using
    `Azure.Storage.Blobs` + `Azure.Identity` (`DefaultAzureCredential`, no account key anywhere), and an in-memory fake for
@@ -147,9 +160,11 @@ Nothing exists on the API side. Build, in order:
   the deploy job runs it against the target database, then deploys the image.
 - Because a slot swap means the *old* code briefly runs against the *new* schema, migrations must be backward compatible
   (add columns nullable, drop in a later release).
-- **CI never runs the migrations**: the tests use EF's in-memory provider, so a model change with a forgotten migration, or
-  a migration that Postgres rejects, would only be found in Azure. Add a CI step against a `postgres:17` service container:
-  `dotnet ef migrations has-pending-model-changes` plus applying all migrations to an empty database.
+- **CI now runs the migrations (done on `fix/backend-deploy-blockers`).** The workflow starts a `postgres:17-alpine` service
+  container and sets `TEST_POSTGRES`; `PostgresClaimAndMigrationTests` creates a throwaway database, applies every migration
+  to it (EF refuses if the model has changes no migration covers) and asserts `HasPendingModelChanges()` is false. A forgotten
+  migration, or one PostgreSQL rejects, now fails the pull request instead of failing in Azure. Locally the tests are
+  skipped unless `TEST_POSTGRES` is set (see `docs/testing.md`).
 
 ### 3.5 Observability (#57)
 
@@ -163,23 +178,31 @@ Baseline `assembleRelease` result: see "Verified" at the end.
 
 | # | Item | Detail |
 |---|---|---|
-| 1 | **Application id** | `com.example.client` is the template default. It cannot change after the first APK is installed (a new id is a different app and strands unsynced data). Pick the real one now (e.g. `za.org.saharvest.collection`). Keep `namespace` as is; only `applicationId` needs to move. The FileProvider authority follows it automatically. **Decision.** |
-| 2 | **Signing** | No `signingConfigs`. Create a release keystore, store it in a vault *and* an offline backup (losing it means staff must uninstall to update, losing unsynced records). Read passwords from environment variables in `build.gradle.kts`; CI decodes a base64 secret to a temp file. Add `*.jks`, `*.keystore` and `keystore.properties` to `.gitignore` (currently absent, and gitleaks will not flag a binary keystore). |
-| 3 | **Versioning** | `versionCode = 1`, `versionName = "1.0"`. Derive `versionCode` from the CI run number (must strictly increase) and `versionName` from the tag. |
-| 4 | **R8 / minify** | `isMinifyEnabled = false`. The document requires obfuscation (B9.4, risk register). Turn on `isMinifyEnabled` and `isShrinkResources` and **create `proguard-rules.pro`** (referenced but missing). Gson serialises the DTOs in `network/*Dtos.kt` reflectively; with renamed fields, requests and responses silently break. Add keep rules (or `@SerializedName`) for the DTO packages, plus Retrofit/Room/Hilt/WorkManager defaults. Test the **release** variant on a device and an emulator; the existing instrumented tests only run the debug build. |
-| 5 | **API address** | `API_BASE_URL` is baked in at build time (`-PapiBaseUrl=https://.../`) and the release build already refuses `http://`. A custom domain on the API means a later host change does not need a new APK. Pass it from a GitHub variable per environment. |
+| 1 | **Application id. DONE** | `za.org.saharvest.collectionvetting` (display name `SAH Collection & Vetting`), confirmed by the team. `namespace` stays `com.example.client`. |
+| 2 | **Signing. DONE in the build; keystore still to create** | `signingConfigs.release` reads `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (or the gitignored `client/keystore.properties`). `-PrequireReleaseSigning=true` fails the build rather than producing an unsigned APK. `.gitignore` now refuses `*.jks`, `*.keystore`, `keystore.properties`. **The person who owns releases must create the keystore and back it up** (steps in `docs/android-release.md`); losing it strands every installed phone. |
+| 3 | **Versioning. DONE** | `-PappVersionCode` / `-PappVersionName`; the pipeline passes the run number. Local default `1` / `1.0`. |
+| 4 | **R8 / minify. DONE and verified** | `isMinifyEnabled` + `isShrinkResources`, `proguard-rules.pro` created (Gson fields of the `network` package and the Room entities used as bodies, enums, Retrofit full-mode rules). APK 11.5 MB to 4.4 MB. Verified on an emulator through the non-shipping `r8Check` build type against the real API (sign-in, 3 beneficiary records downloaded and shown, a decision saved and forwarded, no crash). Not hand-driven: collector form upload and admin screens. |
+| 5 | **API address. Unchanged, decided** | Baked in at build time; the release build refuses `http://`. Pass it from a GitHub variable per environment once the host exists. |
 | 6 | **Certificate pinning (#73)** | Not done, deliberately. `*.azurewebsites.net` certificates are Microsoft-managed and rotate. Pin the issuing CA with a backup pin, or use a custom domain with your own certificate. Decide **before** the first APK ships, because pins cannot be added to installed apps without an update. Include an expiry-safe fallback (a pinning failure must not mark records as failed; the app already treats connectivity errors as "retry"). |
 | 7 | **Local DB encryption (#71)** | The document says SQLCipher (B9.4, risk register); the code relies on Android file-based encryption. Needs a decision (POPIA, shared phones). Encrypting later requires a data migration on devices with unsynced records, so decide before rollout. |
 | 8 | **App lock** | The document requires a PIN/biometric lock, especially for Admin (B9.4). Not implemented (no `androidx.biometric`). |
 | 9 | **Signing-certificate self-check** | The risk register promises the app verifies its own signing certificate at launch (sideloaded tampering). Not implemented. |
 | 10 | **`security-crypto` (#72)** | Deprecated; works. Fine for the pilot, schedule the replacement. |
-| 11 | **Photo upload** | Android side of 3.2: a Retrofit upload method, an `AttachmentUploadWorker` using the existing DAO queries (`getUploadableAttachments`, `markAttachmentsUploaded`, `markAttachmentsRejected`), and a `GzipRequestInterceptor` exemption for already-compressed images (it currently gzips any body over 1 KB). Then #75 (test on 2G). |
+| 11 | **Photo upload. DONE (2G timing still to do, #75)** | `AttachmentApiService`, `AttachmentUploadProcessor` (run by `CboSyncWorker` after the records, using the existing DAO queries), and the `GzipRequestInterceptor` now leaves images alone. Unit tests cover every outcome; four emulator scenarios (`AttachmentUploadScenarioTest`) run the real storage, database, sync and upload against the Docker stack and compare the bytes read back by an Admin. |
 | 12 | **Distribution (#62)** | The document says direct APK distribution, no store. **Decision:** where staff download it (private Blob container + short SAS link, Firebase App Distribution, or Intune/managed Google Play). Publish the SHA-256 beside every build (risk register). Android blocks installing over a differently-signed APK, which is another reason signing key custody matters. |
-| 13 | **CI** | Add an `assembleRelease` (unsigned, dummy https URL) and `lintVitalRelease` step to PR builds so an R8 or lint break is caught before the deploy build. |
+| 13 | **CI. DONE** | `ci-android.yml` builds the release variant (R8, `lintVitalRelease`, unsigned, dummy https address) in every Android pull request. |
 
 ## 5. Pipelines: branching, CI and CD
 
-### 5.1 What exists
+**Status (feat/azure-deploy): section 5.2 is now built.** `deploy.yml` calls `cd-backend.yml`, `ci-android.yml` and
+`secret-scan.yml` as reusable workflows (so the deployed commit went through the PR sequence by construction), publishes the image
+to GHCR, deploys through `_deploy-backend.yml` (repoint the `live` tag, call the Web App webhook, wait for the new build revision on /api/health, smoke test, automatic restore of `last-good`), and
+builds the signed APK. `redeploy-backend.yml` rolls back or forward by tag. Infrastructure is `infra/main.bicep`. Deviations from
+5.2 forced by the free tier: no slots (so no blue-green swap; restore-on-failure instead), GHCR instead of ACR (the registry pull
+uses a token in Key Vault instead of a managed identity), migrations run at start-up instead of a pipeline step (SA Harvest's
+database is probably not reachable from GitHub's runners). None of it has run against a real Azure subscription.
+
+### 5.1 What existed before (kept for the record)
 
 - `cd-backend.yml` (named "CI/CD" but CI only): restore, build, test (in-memory), build the two Docker images. Path-filtered, runs on PRs to `main` and pushes to `main`.
 - `ci-android.yml`: build, lint, unit tests, emulator instrumented tests. Same triggers.
@@ -230,6 +253,8 @@ Rules that avoid the usual traps:
 - Secrets/variables to create: none of the Azure ones need a password if OIDC is used; Android signing needs
   `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
 
+> **Update (school tenant):** item 4 below (OIDC) could not be done: the school tenant blocks Microsoft Entra app registrations. The deploy uses the Web App's own webhook instead (one environment secret, `AZURE_WEBAPP_WEBHOOK_URL`); see `infra/README.md` section 4. The OIDC workflow is kept in `infra/alternatives/`.
+
 ## 6. Recommended order of work
 
 1. **Decisions** (section 8), especially application id, database host, slots/tier, APIM/WAF scope, Entra vs own JWT.
@@ -266,5 +291,5 @@ Rules that avoid the usual traps:
 | 6 | Photo storage: our Blob account vs Foodspace's image storage; what Foodspace receives | SA Harvest / Foodspace | Own Blob account, private |
 | 7 | APK distribution channel | Team + SA Harvest | Private Blob container with short-lived link + published SHA-256 |
 | 8 | SQLCipher, app lock, pinning for v1? | Team + SA Harvest | Pinning (CA pin + backup) and app lock before rollout; SQLCipher decision recorded |
-| 9 | Region | SA Harvest | South Africa North |
+| 9 | Region | SA Harvest | Spain Central (decided) |
 | 10 | Sentry vs Application Insights | Team | Application Insights (matches the document) |

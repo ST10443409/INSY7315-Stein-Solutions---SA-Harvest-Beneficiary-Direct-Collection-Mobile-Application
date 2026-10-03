@@ -34,7 +34,7 @@ appears on `VALIDATION_FAILED`. Errors the framework produces are wrapped automa
 (`500 INTERNAL_ERROR`, logged with the same `traceId`, never a stack trace), model-validation failures
 (`400 VALIDATION_FAILED`), and bodyless `401`/`403`/`404` responses.
 
-The pre-existing `POST /api/auth/login`, `GET /api/auth/me` and `POST /api/sync` still return their original
+The pre-existing `POST /api/auth/login` and `GET /api/auth/me` still return their original
 bare bodies because the Android client parses them as-is; move them onto the envelope together with the client.
 
 **Health.** `GET /api/health` (anonymous) returns `200` with `data.status = "ok"` when the API and database are
@@ -146,8 +146,14 @@ Records that reach this backend are forwarded to Foodspace by `FoodspaceApiClien
   `MaxAttempts`); when retries run out it stays there for an Admin to retry or dismiss (see "Admin oversight endpoints"). `SyncStatus` is untouched, so a
   collector's record is never marked failed because of Foodspace.
 - **Ingestion:** `POST /api/cbo-collection/sync` stores the record; the forwarding loop then picks it up within `PollIntervalSeconds`.
+- **Several workers are safe.** Before sending a record, a worker claims it in the database (`forward_claim_id` is a concurrency
+  token, `forward_claimed_until` the lease; `Foodspace:ClaimLeaseSeconds`, default 120, must exceed `TimeoutSeconds`). Of two
+  workers that both read the same row (a second instance, the old and new container during a deployment, the loop and an
+  Admin's retry) the database lets one through and the other skips the record. A worker that dies mid-send delays its record by
+  at most the lease. An Admin dismissing a record at the instant a worker claims it gets `409`, "being sent right now".
+  See `ForwardingClaim` for why the claim id must never return to an earlier value.
 - **Config** (section `Foodspace`): `BaseUrl` (falls back to `ExternalApi:BaseUrl`), `ApiKey` (**secret**, sent as `X-Api-Key`;
-  set with user-secrets or `Foodspace__ApiKey`), `ForwardingEnabled`, `PollIntervalSeconds`, `MaxAttempts`, `LogPayloads`
+  set with user-secrets or `Foodspace__ApiKey`), `ForwardingEnabled`, `PollIntervalSeconds`, `MaxAttempts`, `ClaimLeaseSeconds`, `LogPayloads`
   (off by default: payloads contain donor names). The auth mechanism is an assumption until Foodspace confirms it.
 - **Mapping:** `FoodspaceCboCollectionMapper` is the single place our fields map to Foodspace's; its comment is the mapping table.
 - **Simulate an outage:** `POST http://localhost:5284/api/external/simulate/outage` (optionally `?status=500`), then
@@ -187,6 +193,38 @@ Two cases look alike and are handled differently:
 - **Database level:** `duplicate_key` (a SHA-256 of the rule's inputs, so no donor name in the index) has a partial unique
   index `WHERE duplicate_of_id IS NULL`: at most one original per real-world collection, even for simultaneous requests.
 - Re-sending a stored duplicate returns `DUPLICATE_DETECTED` again, so the app never mistakes it for a synced record.
+
+## Signatures and photos (Azure Blob Storage)
+
+`PUT /api/cbo-collection/{collectionId}/attachments/{attachmentId}?kind=PHOTO&slot=1` (roles `CBO_COLLECTION` or `ADMIN`) stores one
+file. The body is the raw image with `Content-Type: image/jpeg` or `image/png`; `kind` is `DONOR_SIGNATURE`, `CBO_SIGNATURE`, `PHOTO`
+or `DELIVERY_NOTE`; `slot` is the photo number (0 to 19) and must be 0 for every other kind. `attachmentId` is the id the device gave the
+file. Answers use the standard envelope:
+
+| Status | Meaning | The app |
+|---|---|---|
+| `200` `{ attachmentId, alreadyReceived, sizeBytes }` | Stored, or this exact file was already stored (a retry) | marks it synced |
+| `400` `VALIDATION_FAILED` | Bad id, kind or slot, or an empty body | gives up on this file |
+| `404` `NOT_FOUND` | No such collection **for this user** (the caller must be who submitted it) | gives up on this file |
+| `409` `CONFLICT` | The slot already holds a different file, or the id is used for another | gives up on this file |
+| `413` `PAYLOAD_TOO_LARGE` | Over 512 KB (signatures) or 5 MB (photos) | gives up on this file |
+| `415` `UNSUPPORTED_MEDIA_TYPE` | Not a JPEG or PNG by its bytes, or the bytes do not match the declared type | gives up on this file |
+| `503` `SERVICE_UNAVAILABLE` | Blob storage cannot be reached right now | keeps the file and tries again |
+
+Admins read the files back, read-only and only through the API: `GET /api/admin/collections/{collectionId}/attachments` lists them
+(kind, slot, type, size, SHA-256, uploader, time; no storage address) and `GET /api/admin/attachments/{id}` returns the image with
+`Cache-Control: private, no-store`, `nosniff` and a sandbox content-security policy.
+
+- **Configuration** (`Storage` section): in Azure set `Storage__AccountUri` (the account's blob address, https) and `Storage__Container`
+  (default `attachments`); the Web App's managed identity needs the **Storage Blob Data Contributor** role on that container. No key,
+  connection string or SAS exists anywhere. Locally `compose.yaml` runs the Azurite emulator and sets `Storage__ConnectionString`;
+  the API refuses a connection string outside Development. With neither set the API still starts and uploads answer `503`.
+- **The container is never created by the API** (outside the emulator): the identity's role is on the container only, so create it
+  once (`infra/main.bicep` does, or the portal/CLI).
+- **Why the bytes go first:** the file is written to the container, then its row (`collection_attachments`) is saved. A crash between
+  the two leaves a file with no row, which the retry overwrites; a row pointing at nothing cannot happen. A database unique index on
+  (collection, kind, slot) decides concurrent uploads.
+- Rules and reasoning: [docs/security/security-review.md](../docs/security/security-review.md) (S12).
 
 ## Vetting records endpoint (#43)
 
@@ -310,3 +348,25 @@ acting user, their role, the time, and a record reference (`form` + `id`, plus a
   out Form 1 records from before submitters were recorded (their `user` is null).
 - The date and user filters run on unindexed columns (`created_at`, `decision_timestamp`, `submitted_by`; only `officer_id` has an index). That is fine at this size; add
   indexes with the rest of #56 if the lists grow.
+
+## User accounts (Admin endpoints and the first-admin bootstrap)
+
+Login accounts are created and managed by an Admin through `/api/admin/users`; the operator guide, with `curl` examples, the password
+and username rules and the guard rails, is [docs/user-accounts.md](../docs/user-accounts.md).
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/admin/users` | list, filter by `role`, `active`, `search`; paged |
+| `GET /api/admin/users/{id}` | one account with its history (newest first) |
+| `POST /api/admin/users` | create (201); a collector needs a `cboId`, the other roles must not have one |
+| `PATCH /api/admin/users/{id}` | change `role`, `cboId` and/or `isActive`; absent fields are left alone |
+| `POST /api/admin/users/{id}/reset-password` | set a new password |
+
+- **Sessions end at once.** A token carries a `stamp` claim, `TokenAccountCheck` compares it with the account's current
+  `AppUser.SecurityStamp` on every authenticated request, and the stamp changes on deactivate/reactivate, role or CBO change and password
+  reset. A token for an account that is gone, deactivated or re-stamped is a 401. Cost: one indexed two-column lookup per request.
+- **Audit.** Every change writes a `user_audit` row in the same save (actor, action, target, detail; never a secret).
+- **First admin.** `Bootstrap:AdminUsername` and `Bootstrap:AdminPassword` (a secret) create the first Admin at start-up, once, and only
+  if no active Admin exists; they never change an existing account, and a half-set or unacceptable value stops the start-up
+  (`AdminBootstrapper`). Remove the settings after the first sign-in. The test-user seeder remains Development-only.
+- Rules live in one place, `AccountRules`, shared by the bootstrap and the endpoints.

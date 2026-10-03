@@ -18,6 +18,7 @@ done
 # method route allowed-roles   (CBO, VETTING, ADMIN, or "ANY" = any valid token, or "OPEN" = no token needed)
 TABLE="
 POST api/cbo-collection/sync CBO,ADMIN
+PUT api/cbo-collection/no-such-collection/attachments/no-such-attachment CBO,ADMIN
 POST api/vetting/sync VETTING,ADMIN
 GET api/vetting/records VETTING,ADMIN
 GET api/admin/user-activity ADMIN
@@ -26,7 +27,13 @@ GET api/admin/sync-status/attention ADMIN
 GET api/admin/sync-status/no-such-record ADMIN
 POST api/admin/sync-status/no-such-record/retry ADMIN
 POST api/admin/sync-status/no-such-record/dismiss ADMIN
-POST api/sync CBO,VETTING,ADMIN
+GET api/admin/users ADMIN
+GET api/admin/users/no-such-user ADMIN
+POST api/admin/users ADMIN
+PATCH api/admin/users/no-such-user ADMIN
+POST api/admin/users/no-such-user/reset-password ADMIN
+GET api/admin/collections/no-such-collection/attachments ADMIN
+GET api/admin/attachments/no-such-attachment ADMIN
 GET api/health OPEN
 GET api/auth/me ANY
 "

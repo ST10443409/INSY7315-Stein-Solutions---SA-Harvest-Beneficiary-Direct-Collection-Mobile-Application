@@ -21,6 +21,8 @@ public class RoomParityTests
         nameof(ForwardedEntity.SyncError),
         nameof(ForwardedEntity.ForwardingStatus),
         nameof(ForwardedEntity.NextForwardAttemptAt),
+        nameof(ForwardedEntity.ForwardClaimId),
+        nameof(ForwardedEntity.ForwardClaimedUntil),
         nameof(CboCollection.SubmittedBy),
         nameof(CboCollection.DuplicateKey),
         nameof(CboCollection.DuplicateOfId),
@@ -34,8 +36,10 @@ public class RoomParityTests
     // Room tables deliberately not modelled on the server (demo table of the old queue prototype).
     private static readonly HashSet<string> IgnoredRoomTables = new() { "sync_payloads" };
 
-    // Backend tables with no Room counterpart on purpose.
-    private static readonly HashSet<string> ServerOnlyTables = new() { "users", "admin_actions" };
+    // Backend tables with no Room counterpart on purpose. "collection_attachments" has a Room table of the same name, but the device
+    // keeps a file path and an upload status where the server keeps a blob name, a hash and the uploader, so the two are not the same
+    // shape (the shared vocabulary, AttachmentKind, IS checked: see AttachmentKind_HasTheSameWireValuesAsTheKotlinEnum).
+    private static readonly HashSet<string> ServerOnlyTables = new() { "users", "admin_actions", "user_audit", "collection_attachments" };
 
     private record KotlinField(string Name, string Type, bool Nullable);
 
@@ -172,6 +176,19 @@ public class RoomParityTests
         }
 
         Assert.True(problems.Count == 0, "Undeclared backend columns:\n" + string.Join("\n", problems));
+    }
+
+    [Fact]
+    public void AttachmentKind_HasTheSameWireValuesAsTheKotlinEnum()
+    {
+        // The app sends the Kotlin enum's name as the `kind` of an upload, so the two lists must agree exactly.
+        var text = File.ReadAllText(Path.Combine(RoomRoot(), "local", "entity", "CollectionAttachmentEntity.kt"));
+        var body = Regex.Match(text, @"enum class AttachmentKind \{(?<v>.*?)\n\}", RegexOptions.Singleline).Groups["v"].Value;
+        var kotlinValues = Regex.Replace(Regex.Replace(body, @"/\*.*?\*/", "", RegexOptions.Singleline), @"//.*", "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        Assert.Equal(kotlinValues, Enum.GetValues<AttachmentKind>().Select(EnumWire.Of).ToList());
     }
 
     [Fact]

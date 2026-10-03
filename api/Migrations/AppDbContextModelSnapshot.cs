@@ -112,6 +112,10 @@ namespace api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("role");
 
+                    b.Property<Guid>("SecurityStamp")
+                        .HasColumnType("uuid")
+                        .HasColumnName("security_stamp");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasColumnType("text")
@@ -219,6 +223,28 @@ namespace api.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("donor_signed");
 
+                    b.Property<string>("DuplicateKey")
+                        .HasColumnType("text")
+                        .HasColumnName("duplicate_key");
+
+                    b.Property<string>("DuplicateOfId")
+                        .HasColumnType("text")
+                        .HasColumnName("duplicate_of_id");
+
+                    b.Property<Guid?>("ForwardClaimId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("forward_claim_id");
+
+                    b.Property<DateTimeOffset?>("ForwardClaimedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("forward_claimed_until");
+
+                    b.Property<string>("ForwardingStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("forwarding_status");
+
                     b.Property<DateTimeOffset?>("LastSyncAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_sync_attempt_at");
@@ -231,36 +257,23 @@ namespace api.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("longitude");
 
-                    b.Property<bool>("NoteAttached")
-                        .HasColumnType("boolean")
-                        .HasColumnName("note_attached");
-
-                    b.Property<string>("DuplicateKey")
-                        .HasColumnType("text")
-                        .HasColumnName("duplicate_key");
-
-                    b.Property<string>("DuplicateOfId")
-                        .HasColumnType("text")
-                        .HasColumnName("duplicate_of_id");
-
-                    b.Property<string>("ForwardingStatus")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("forwarding_status");
-
                     b.Property<DateTimeOffset?>("NextForwardAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_forward_attempt_at");
 
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("retry_count");
+                    b.Property<bool>("NoteAttached")
+                        .HasColumnType("boolean")
+                        .HasColumnName("note_attached");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("received_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
 
                     b.PrimitiveCollection<List<bool>>("Shots")
                         .IsRequired()
@@ -298,12 +311,6 @@ namespace api.Migrations
                     b.HasIndex("CboId")
                         .HasDatabaseName("ix_cbo_collections_cbo_id");
 
-                    b.HasIndex("SyncStatus")
-                        .HasDatabaseName("ix_cbo_collections_sync_status");
-
-                    b.HasIndex("ForwardingStatus")
-                        .HasDatabaseName("ix_cbo_collections_forwarding_status");
-
                     b.HasIndex("DuplicateKey")
                         .IsUnique()
                         .HasDatabaseName("ux_cbo_collections_duplicate_key_original")
@@ -312,7 +319,73 @@ namespace api.Migrations
                     b.HasIndex("DuplicateOfId")
                         .HasDatabaseName("ix_cbo_collections_duplicate_of_id");
 
+                    b.HasIndex("ForwardingStatus")
+                        .HasDatabaseName("ix_cbo_collections_forwarding_status");
+
+                    b.HasIndex("SyncStatus")
+                        .HasDatabaseName("ix_cbo_collections_sync_status");
+
                     b.ToTable("cbo_collections", (string)null);
+                });
+
+            modelBuilder.Entity("api.Models.CollectionAttachment", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BlobName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("blob_name");
+
+                    b.Property<string>("CollectionId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("collection_id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("integer")
+                        .HasColumnName("slot");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_collection_attachments");
+
+                    b.HasIndex("CollectionId", "Kind", "Slot")
+                        .IsUnique()
+                        .HasDatabaseName("ux_collection_attachments_collection_kind_slot");
+
+                    b.ToTable("collection_attachments", (string)null);
                 });
 
             modelBuilder.Entity("api.Models.FoodspaceBeneficiaryRecord", b =>
@@ -616,6 +689,49 @@ namespace api.Migrations
                     b.ToTable("product_lines", (string)null);
                 });
 
+            modelBuilder.Entity("api.Models.UserAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<Guid>("TargetUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_user_id");
+
+                    b.Property<string>("TargetUsername")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("target_username");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_audit");
+
+                    b.HasIndex("TargetUserId")
+                        .HasDatabaseName("ix_user_audit_target_user_id");
+
+                    b.ToTable("user_audit", (string)null);
+                });
+
             modelBuilder.Entity("api.Models.VettingDecision", b =>
                 {
                     b.Property<string>("Id")
@@ -635,9 +751,27 @@ namespace api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("foodspace_record_id");
 
+                    b.Property<Guid?>("ForwardClaimId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("forward_claim_id");
+
+                    b.Property<DateTimeOffset?>("ForwardClaimedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("forward_claimed_until");
+
+                    b.Property<string>("ForwardingStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("forwarding_status");
+
                     b.Property<DateTimeOffset?>("LastSyncAttemptAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_sync_attempt_at");
+
+                    b.Property<DateTimeOffset?>("NextForwardAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_forward_attempt_at");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text")
@@ -652,15 +786,6 @@ namespace api.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("outcome");
-
-                    b.Property<string>("ForwardingStatus")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("forwarding_status");
-
-                    b.Property<DateTimeOffset?>("NextForwardAttemptAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("next_forward_attempt_at");
 
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .ValueGeneratedOnAdd()
@@ -706,6 +831,18 @@ namespace api.Migrations
                         .HasDatabaseName("ix_vetting_decisions_sync_status");
 
                     b.ToTable("vetting_decisions", (string)null);
+                });
+
+            modelBuilder.Entity("api.Models.CollectionAttachment", b =>
+                {
+                    b.HasOne("api.Models.CboCollection", "Collection")
+                        .WithMany()
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_collection_attachments_cbo_collections_collection_id");
+
+                    b.Navigation("Collection");
                 });
 
             modelBuilder.Entity("api.Models.ProductLine", b =>

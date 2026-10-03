@@ -43,6 +43,27 @@ public class HealthAndEnvelopeTests : IClassFixture<ApiFactory>
         Assert.Equal("ok", data.GetProperty("status").GetString());
         Assert.Equal("ok", data.GetProperty("database").GetString());
         Assert.True(data.TryGetProperty("timestamp", out _));
+        Assert.Equal("unknown", data.GetProperty("revision").GetString()); // not built by the pipeline: no BUILD_REVISION
+    }
+
+    [Fact]
+    public async Task Health_ReportsTheBuildRevisionTheImageWasMadeWith()
+    {
+        // The deploy pipeline waits for this value to change to the new commit before it calls a deployment successful.
+        using var factory = new RevisionFactory("1a2b3c4d5e6f");
+
+        var body = await factory.CreateClient().GetFromJsonAsync<JsonElement>("/api/health");
+
+        Assert.Equal("1a2b3c4d5e6f", body.GetProperty("data").GetProperty("revision").GetString());
+    }
+
+    private sealed class RevisionFactory(string revision) : ApiFactory
+    {
+        protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.UseSetting("BUILD_REVISION", revision);
+        }
     }
 
     [Fact]

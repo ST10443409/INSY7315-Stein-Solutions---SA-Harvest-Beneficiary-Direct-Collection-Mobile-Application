@@ -7,9 +7,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace api.Controllers;
 
-/// <summary>Admin oversight endpoints (#49 to #51). Serves /api/admin. ADMIN only.</summary>
+/// <summary>
+/// Admin oversight endpoints (#49 to #51) and account management (<c>users</c>, in AdminController.Users.cs). Serves /api/admin.
+/// ADMIN only.
+/// </summary>
 [Authorize(Roles = AppRoles.Admin)]
-public class AdminController : ApiControllerBase
+public partial class AdminController : ApiControllerBase
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -17,17 +20,22 @@ public class AdminController : ApiControllerBase
     private readonly IAdminSyncStatusService _syncStatus;
     private readonly IAdminSyncResolutionService _resolution;
     private readonly IAdminUserActivityService _activity;
+    private readonly IUserManagementService _users;
+    private readonly IAttachmentService _attachments;
     private readonly TimeProvider _time;
 
     /// <summary>With no dates, activity covers this many South African days up to and including today.</summary>
     public const int DefaultActivityDays = 7;
 
     public AdminController(
-        IAdminSyncStatusService syncStatus, IAdminSyncResolutionService resolution, IAdminUserActivityService activity, TimeProvider time)
+        IAdminSyncStatusService syncStatus, IAdminSyncResolutionService resolution, IAdminUserActivityService activity,
+        IUserManagementService users, IAttachmentService attachments, TimeProvider time)
     {
         _syncStatus = syncStatus;
         _resolution = resolution;
         _activity = activity;
+        _users = users;
+        _attachments = attachments;
         _time = time;
     }
 

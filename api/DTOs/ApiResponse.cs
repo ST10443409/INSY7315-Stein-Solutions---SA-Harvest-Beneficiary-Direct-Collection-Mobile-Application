@@ -71,6 +71,9 @@ public static class ApiErrorCodes
     /// <summary>The request body is larger than the endpoint accepts (after decompression).</summary>
     public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
 
+    /// <summary>An uploaded file is not a type the endpoint accepts (e.g. not a JPEG or PNG).</summary>
+    public const string UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE";
+
     /// <summary>Default code for an HTTP status that has no more specific one.</summary>
     public static string ForStatus(int status) => status switch
     {
@@ -79,6 +82,7 @@ public static class ApiErrorCodes
         403 => Forbidden,
         404 => NotFound,
         413 => PayloadTooLarge,
+        415 => UnsupportedMediaType,
         429 => TooManyRequests,
         503 => Unhealthy,
         >= 500 => InternalError,

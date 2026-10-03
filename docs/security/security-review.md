@@ -22,6 +22,7 @@ changed. Items that need a product decision or are larger than this review are l
 | S9 | Request bodies (incl. compressed) bounded | Anonymous login accepted up to 30 MB | Low | Fixed |
 | S10 | Dev stack exposed on the LAN | Postgres and the Foodspace simulator (unauthenticated fault injection) on all interfaces | Low | Fixed |
 | S11 | Secret scanning in CI | None (GitHub secret scanning is not available on this private repo) | n/a | Added gitleaks |
+| S12 | Signature and photo upload (new attack surface: files from phones into blob storage) | Designed with the upload, not retrofitted | n/a | Built with the controls below |
 
 ## S1. Hardcoded secrets
 
@@ -125,8 +126,8 @@ was stale). It holds no token or personal data; that is acceptable and documente
 **On a device** (debug build, signed in as `cbo_test_user`):
 
 ```bash
-adb shell run-as com.example.client ls shared_prefs
-adb shell run-as com.example.client cat shared_prefs/auth_secure_prefs.xml
+adb shell run-as za.org.saharvest.collectionvetting ls shared_prefs
+adb shell run-as za.org.saharvest.collectionvetting cat shared_prefs/auth_secure_prefs.xml
 ```
 
 The token, role, CBO and username are stored only as ciphertext; no `eyJ…` (JWT) appears.
@@ -164,6 +165,52 @@ DataStore with the same) when convenient.
 `main` (new commits only, so a finding points at the change that made it) and weekly over the whole history.
 `.gitleaks.toml` holds the reviewed exceptions above, each with its reason; the retired `SEED_TEST_PASSWORD` commit is
 one of them. `--redact` keeps any finding's value out of the workflow log.
+
+Reviewed exception added with the Azure setup: the three built-in role definition ids in `infra/main.bicep` (`roleKeyVaultSecretsUser`,
+`roleKeyVaultSecretsOfficer`, `roleStorageBlobDataContributor`). They are public constants, identical in every Azure tenant, and the
+generic-key rule flagged them only because the variable names contain "Key" (Key Vault). Matched by line so the exception covers
+nothing else in the file.
+
+Second reviewed exception, found by the first CI scan of the Azure pull request: an example image tag (`ghcr.io/owner/saharvest-api:` followed by
+12 hex characters) in a workflow input description in commit `a6f48b9`, flagged for its entropy. The example was reworded in a later commit,
+but CI scans every commit of a pull request on its own and history is not rewritten for a harmless string, so the exception is tied to that one
+commit AND that one file (`condition = "AND"`, like the retired seed-password commit above) and covers nothing else.
+
+Third reviewed exception, with the signature and photo upload: the Azurite storage emulator's published development account
+(`devstoreaccount1`) and its fixed key in `compose.yaml`. Microsoft documents both, they are the same on every machine, and they protect
+nothing (the emulator listens on `127.0.0.1` only and the API refuses a storage connection string outside Development). The generic-key
+rule flagged the key because it is base64. The exception matches the line by its `AccountName=devstoreaccount1;AccountKey=` prefix,
+so any other key in that file is still caught.
+
+## S12. Signatures and photos in blob storage
+
+Files uploaded from phones are untrusted input that ends up in cloud storage and is later opened by an Admin. Controls, each with a
+test (`api.Tests/AttachmentUploadEndpointTests.cs`, `AttachmentRulesTests.cs`, `AzureBlobAttachmentStoreTests.cs`):
+
+- **Who:** only a collector or Admin, and only for a collection they submitted themselves (the same author rule as the sync, #70).
+  Anyone else, and an unknown collection, get the same 404, so ids cannot be probed. No Admin exception: an Admin cannot attach to a
+  collector's record either.
+- **What the bytes are:** only JPEG and PNG, judged from the file's first bytes and required to agree with the declared type. A script
+  or SVG sent as `image/png` is refused (415). The stored type is the detected one, never the client's claim.
+- **How big:** 512 KB per signature, 5 MB per photo, enforced on the declared length and again while reading (a body with no length, or
+  a decompressed one, cannot pass the cap), plus the route's request-size limit.
+- **Names:** ids may only hold letters, digits, `-` and `_` (UUIDs do), and the blob name is built by the server
+  (`{collectionId}/{attachmentId}`), so there is no client-controlled path or file name.
+- **Retries and races:** the device's attachment id is the key. The same file again is a success that changes nothing (first write wins);
+  a different file for a taken slot is a 409. A database unique index (collection, kind, slot) decides concurrent uploads, tested on real
+  PostgreSQL with several uploaders at once, and the loser's bytes are removed.
+- **Access to storage:** the API reaches one private container through its managed identity with the "Storage Blob Data Contributor"
+  role on that container only. No account key, connection string or SAS token exists in any real environment (shared-key access is
+  disabled on the account, and a storage connection string stops the API starting outside Development). The container has no public access.
+- **Reading:** Admin only, and only through the API (never a blob address). The response is `Cache-Control: private, no-store`,
+  `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`, so a browser cannot run anything from it.
+- **Privacy on the phone:** photos are decoded and re-encoded before they are stored, which removes their EXIF block (including GPS
+  position and camera details). The collection's own GPS fields are a separate, deliberate part of the record.
+- **Failure behaviour:** an unreachable or unauthorised storage account is a 503 with a generic message (no account name, no SDK text);
+  the phone keeps the file and sends it again. A file the server refuses for good is marked FAILED with the server's code and never
+  resent; a proxy error that is not the API's own answer is never held against a file.
+- **Not covered:** malware scanning of uploaded files (they are never executed or served to a browser as anything but an inert image),
+  and encryption of the files on the phone (the app's SQLCipher decision, #71, covers the database; the files are in private storage).
 
 ## Verification on the emulator
 

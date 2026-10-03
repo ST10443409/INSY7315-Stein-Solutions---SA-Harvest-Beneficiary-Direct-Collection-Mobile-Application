@@ -229,3 +229,9 @@ coverage.xml
 
 *.orig
 *.rej
+#############################################
+# Release signing (#59): never commit a keystore or its passwords
+#############################################
+*.jks
+*.keystore
+client/keystore.properties

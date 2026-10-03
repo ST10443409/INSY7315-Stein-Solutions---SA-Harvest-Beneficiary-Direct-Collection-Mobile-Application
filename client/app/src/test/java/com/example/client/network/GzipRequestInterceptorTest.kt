@@ -68,4 +68,35 @@ class GzipRequestInterceptorTest {
         assertEquals("identity", received.getHeader("Content-Encoding"))
         assertEquals(body, received.body.readUtf8())
     }
+
+    // Photos and signatures are JPEG/PNG, compressed already: they must reach the server byte for byte (it checks what the bytes
+    // really are), and gzip would only cost battery for next to no saving.
+    @Test
+    fun anImage_isNeverGzipped_evenWhenLarge() {
+        val bytes = ByteArray(300_000) { (it % 251).toByte() } // large and very compressible, so gzip WOULD have been applied
+        server.enqueue(MockResponse())
+
+        client.newCall(
+            Request.Builder().url(server.url("/api/cbo-collection/c/attachments/a"))
+                .put(bytes.toRequestBody("image/jpeg".toMediaType())).build()
+        ).execute().close()
+
+        val received = server.takeRequest()
+        assertNull(received.getHeader("Content-Encoding"))
+        assertEquals(bytes.size.toLong(), received.bodySize)
+        assertEquals("image/jpeg", received.getHeader("Content-Type"))
+        assertEquals(bytes.toList(), received.body.readByteArray().toList())
+    }
+
+    @Test
+    fun aPng_isNeverGzipped_either() {
+        val bytes = ByteArray(5_000) { 1 }
+        server.enqueue(MockResponse())
+
+        client.newCall(
+            Request.Builder().url(server.url("/api/x")).put(bytes.toRequestBody("image/png".toMediaType())).build()
+        ).execute().close()
+
+        assertNull(server.takeRequest().getHeader("Content-Encoding"))
+    }
 }

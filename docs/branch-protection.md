@@ -1,7 +1,7 @@
 # Branch protection (`development` and `main`)
 
 Design document B10.1: three kinds of branch (`feature/*`, `development`, `main`); direct pushes to `development` and `main`
-are off; every merge is a pull request with at least one approval; a failing build or test blocks the merge.
+are off; every merge is a pull request (the team waived the approval, see below); a failing build or test blocks the merge.
 
 This is a GitHub **setting**, not something a commit can carry, so it is applied once with the commands below. It cannot be
 applied until `development` exists on GitHub.
@@ -10,13 +10,13 @@ applied until `development` exists on GitHub.
 
 | Setting | Value | Why |
 |---|---|---|
-| Pull request required | yes, **1 approval** | B10.1. The author cannot approve their own PR, so a second collaborator must. |
+| Pull request required | yes, **0 approvals** (decided: team of two) | B10.1 asks for 1 approval; waived by the team. The PR and the checks are still required. |
 | Dismiss stale approvals on new commits | yes | An approval should cover what was merged. |
 | Required checks | `build-test-docker`, `build`, `gitleaks` | The three job names. `build-test-docker` and `build` are *skipped* (which counts as passed) when their half of the repo did not change; `gitleaks` always runs. |
 | Branch must be up to date before merge | no | With two or three people it mostly causes re-runs. Turn on later if `development` starts to break. |
 | Resolve conversations before merge | yes | |
 | Force pushes / deleting the branch | blocked | |
-| Apply to administrators | **no** (decide) | With yes, even the owner must use a PR with an approval. With no, the owner can push straight to the branch in an emergency; the audit log still shows it. |
+| Apply to administrators | **no** (decided: the owner, ST10443409, may bypass) | With yes, even the owner must use a PR with an approval. With no, the owner can push straight to the branch in an emergency; the audit log still shows it. |
 
 `development` -> `main` is the release path. GitHub cannot enforce "only `development` may be merged into `main`" with
 branch protection alone; it is a team rule (and the deploy workflow will later only build what reached `main`).
@@ -30,8 +30,9 @@ second call returns `403 ... Upgrade to GitHub Pro or make this repository publi
 
 ## Order of operations
 
-1. Create `development` from `main`, commit the CI-trigger change **on it**, and push it. That first push runs all three
-   workflows once (a new branch has no "before" commit, so nothing is skipped).
+1. Create `development` from `main` and push it (`git switch -c development && git push -u origin development`). The
+   CI-trigger change is already on `main` (`c22cf57`), so the branch inherits it. That first push runs all three workflows
+   once (a new branch has no "before" commit, so nothing is skipped; the emulator tests do not run on `development`).
 2. Open one small pull request into `development` (a docs change is enough) so the checks have also reported on a pull
    request; GitHub's UI only offers checks that have reported recently. (The API call below accepts the names without this.)
 3. Apply the rules:
@@ -44,7 +45,7 @@ gh api -X PUT "repos/$REPO/branches/$BRANCH/protection" --input - <<'JSON'
 {
   "required_status_checks": { "strict": false, "contexts": ["build-test-docker", "build", "gitleaks"] },
   "enforce_admins": false,
-  "required_pull_request_reviews": { "required_approving_review_count": 1, "dismiss_stale_reviews": true },
+  "required_pull_request_reviews": { "required_approving_review_count": 0, "dismiss_stale_reviews": true },
   "restrictions": null,
   "required_conversation_resolution": true,
   "allow_force_pushes": false,

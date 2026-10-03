@@ -39,11 +39,28 @@ services:
       # Dev only: create one test user per role (cbo_test_user, vetting_test_user, admin_test_user).
       Seed__Enabled: "true"
       Seed__TestUserPassword: ${SEED_TEST_PASSWORD:?Set SEED_TEST_PASSWORD in .env (see .env.example)}
+      # Signatures and photos go to the Azurite emulator below, so local development never needs an Azure account. The account name
+      # and key are the emulator's PUBLISHED, fixed development credentials (they protect nothing and are the same on every machine);
+      # the API refuses a storage connection string in any environment but Development. In Azure it uses Storage__AccountUri and its
+      # managed identity instead.
+      Storage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
     depends_on:
       db:
         condition: service_healthy
       external-api-sim:
         condition: service_started
+      azurite:
+        condition: service_started
+
+  azurite:
+    # The Azure Blob Storage emulator (blob service only). Files live in the azuritedata volume.
+    image: mcr.microsoft.com/azure-storage/azurite
+    command: azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck
+    ports:
+      # This machine only: the emulator accepts its well-known key, so it must not be reachable from the network.
+      - "127.0.0.1:10000:10000"
+    volumes:
+      - azuritedata:/data
 
   external-api-sim:
     build: ./external-api-sim
@@ -53,3 +70,4 @@ services:
 
 volumes:
   pgdata:
+  azuritedata:

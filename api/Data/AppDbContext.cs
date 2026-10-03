@@ -18,7 +18,8 @@ namespace api.Data;
 ///
 /// Deliberate differences from Room:
 ///   * Server-only columns (no Room equivalent): received_at, sync_attempts, last_sync_attempt_at,
-///     sync_error, forwarding_status and next_forward_attempt_at (Foodspace forwarding, see ForwardingStatus)
+///     sync_error, forwarding_status, next_forward_attempt_at, forward_claim_id and forward_claimed_until (Foodspace
+///     forwarding, see ForwardingStatus; the last two stop two workers sending the same record, see ForwardingClaim)
 ///     and submitted_by on collections/decisions (Admin monitoring, #49-#51), and fetched_at on the Foodspace
 ///     cache. SyncStatus means "reached the backend" on both sides; forwarding_status tracks Foodspace.
 ///   * List fields are native Postgres arrays (text[] / boolean[]) instead of delimiter-joined text.
@@ -26,9 +27,13 @@ namespace api.Data;
 ///   * vetting_decisions.foodspace_record_id and cbo_collections.cbo_id are intentionally NOT foreign keys:
 ///     the beneficiary cache is replaced on every fetch, and a collection must never be rejected because the
 ///     CBO list hasn't been pulled yet.
-///   * Not modelled: Room's "sync_payloads" (a demo table of the current queue prototype).
+///   * Not modelled: Room's "sync_payloads" (a leftover demo table of the retired queue prototype; the backend endpoint
+///     and queue it fed are gone, the device table is dropped with the next Room schema change).
+///   * "collection_attachments" is the server's record of each stored signature and photo (the device's table of the same name
+///     holds the file path and upload status instead; the bytes are in blob storage and are not part of the parity check).
 ///   * "users" is server-only (login accounts); the device holds a JWT, not a user record.
 ///   * "admin_actions" is server-only (the audit trail of Admin retries and dismissals, #50).
+///   * "user_audit" is server-only (the append-only trail of account changes: created, role changed, deactivated, password reset).
 /// </summary>
 public class AppDbContext : DbContext
 {
@@ -39,6 +44,9 @@ public class AppDbContext : DbContext
     public DbSet<Cbo> Cbos => Set<Cbo>();
     public DbSet<CboCollection> CboCollections => Set<CboCollection>();
     public DbSet<ProductLine> ProductLines => Set<ProductLine>();
+
+    /// <summary>The signatures and photos of collections: the record of each file (the bytes are in blob storage).</summary>
+    public DbSet<CollectionAttachment> CollectionAttachments => Set<CollectionAttachment>();
 
     /// <summary>Read-only cache of Foodspace beneficiary records (fetch-and-replace).</summary>
     public DbSet<FoodspaceBeneficiaryRecord> FoodspaceBeneficiaryRecords => Set<FoodspaceBeneficiaryRecord>();
@@ -51,12 +59,17 @@ public class AppDbContext : DbContext
     /// <summary>Server-only audit trail of what Admins did to records that would not sync (#50).</summary>
     public DbSet<AdminAction> AdminActions => Set<AdminAction>();
 
+    /// <summary>Server-only, append-only trail of account changes (who created, changed, deactivated or reset whom).</summary>
+    public DbSet<UserAuditEntry> UserAudit => Set<UserAuditEntry>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<SyncStatus>().HaveConversion<UpperCaseEnumConverter<SyncStatus>>();
         configurationBuilder.Properties<ForwardingStatus>().HaveConversion<UpperSnakeEnumConverter<ForwardingStatus>>();
         configurationBuilder.Properties<SyncForm>().HaveConversion<UpperSnakeEnumConverter<SyncForm>>();
         configurationBuilder.Properties<AdminActionType>().HaveConversion<UpperSnakeEnumConverter<AdminActionType>>();
+        configurationBuilder.Properties<UserAuditAction>().HaveConversion<UpperSnakeEnumConverter<UserAuditAction>>();
+        configurationBuilder.Properties<AttachmentKind>().HaveConversion<UpperSnakeEnumConverter<AttachmentKind>>();
         configurationBuilder.Properties<DecisionOutcome>().HaveConversion<UpperCaseEnumConverter<DecisionOutcome>>();
         configurationBuilder.Properties<Tone>().HaveConversion<UpperCaseEnumConverter<Tone>>();
         // UserRole names are already the wire values (CBO_COLLECTION, ...), so plain string conversion is exact.
@@ -76,6 +89,7 @@ public class AppDbContext : DbContext
             e.ToTable("cbo_collections");
             e.HasKey(x => x.Id);
             e.Property(x => x.ReceivedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.ForwardClaimId).IsConcurrencyToken(); // who is forwarding it now; see ForwardingClaim
             e.HasIndex(x => x.CboId).HasDatabaseName("ix_cbo_collections_cbo_id");
             e.HasIndex(x => x.SyncStatus).HasDatabaseName("ix_cbo_collections_sync_status");
             e.HasIndex(x => x.ForwardingStatus).HasDatabaseName("ix_cbo_collections_forwarding_status");
@@ -97,6 +111,20 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.CollectionId).HasDatabaseName("ix_product_lines_collection_id");
         });
 
+        modelBuilder.Entity<CollectionAttachment>(e =>
+        {
+            e.ToTable("collection_attachments");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UploadedAt).HasDefaultValueSql("now()");
+            // Restrict, not cascade: a signature or photo is evidence and must not vanish because its collection was removed.
+            e.HasOne(x => x.Collection)
+                .WithMany()
+                .HasForeignKey(x => x.CollectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // At most one file per collection, kind and slot (one donor signature, one delivery note, one photo per numbered shot).
+            e.HasIndex(x => new { x.CollectionId, x.Kind, x.Slot }).IsUnique().HasDatabaseName("ux_collection_attachments_collection_kind_slot");
+        });
+
         modelBuilder.Entity<FoodspaceBeneficiaryRecord>(e =>
         {
             e.ToTable("foodspace_beneficiary_records");
@@ -109,6 +137,7 @@ public class AppDbContext : DbContext
             e.ToTable("vetting_decisions");
             e.HasKey(x => x.Id);
             e.Property(x => x.ReceivedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.ForwardClaimId).IsConcurrencyToken(); // who is forwarding it now; see ForwardingClaim
             e.HasIndex(x => x.FoodspaceRecordId).HasDatabaseName("ix_vetting_decisions_foodspace_record_id");
             e.HasIndex(x => x.SyncStatus).HasDatabaseName("ix_vetting_decisions_sync_status");
             e.HasIndex(x => x.OfficerId).HasDatabaseName("ix_vetting_decisions_officer_id");
@@ -128,6 +157,14 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             // "What has been done to this record": the history shown with it.
             e.HasIndex(x => new { x.Form, x.RecordId }).HasDatabaseName("ix_admin_actions_form_record_id");
+        });
+
+        modelBuilder.Entity<UserAuditEntry>(e =>
+        {
+            e.ToTable("user_audit");
+            e.HasKey(x => x.Id);
+            // "What has been done to this account": the history shown with it.
+            e.HasIndex(x => x.TargetUserId).HasDatabaseName("ix_user_audit_target_user_id");
         });
 
         ApplySnakeCaseNames(modelBuilder);

@@ -1,16 +1,25 @@
 name: Backend CI/CD (Build, Test, Docker)
 
-# Runs for pull requests and pushes on `development` and `main`, but the build only does its work when backend code (or this
-# workflow) changed; Android-only changes skip it. The filter is a job (not `paths:` on the trigger) so that this workflow
-# always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
+# Runs for pull requests into `development` and `main` and pushes to `development`, but the build only does its work when
+# backend code (or this workflow) changed; Android-only changes skip it. The filter is a job (not `paths:` on the trigger) so
+# that this workflow always reports a result, which branch protection needs: see .github/scripts/changed-paths.sh.
 # The two Room-related paths are here on purpose: api.Tests (RoomParityTests) reads the Kotlin entities
 # and UserRole.kt to make sure the backend models stay in sync with the app.
+#
+# A push to `main` is NOT a trigger of its own: deploy.yml calls this workflow (workflow_call), so the commit that gets
+# deployed went through exactly the build and test sequence a pull request does, in the same file, and the deploy can read
+# whether backend code changed from the `backend_changed` output.
 on:
   pull_request:
     branches: [ "main", "development" ]
   push:
-    branches: [ "main", "development" ]
+    branches: [ "development" ]
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      backend_changed:
+        description: "'true' when this change touched backend code, so the backend should be deployed"
+        value: ${{ jobs.changes.outputs.backend }}
 
 permissions:
   contents: read
@@ -50,6 +59,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # A throwaway PostgreSQL for the few tests that need a real one (PostgresClaimAndMigrationTests): that every migration
+    # applies to an empty database with the model matching it, and that the Foodspace forwarding claim holds under real SQL.
+    # Trust authentication because it lives only for this job on the runner and holds no data worth a password.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
     - uses: actions/checkout@v4
 
@@ -68,9 +93,29 @@ jobs:
         dotnet build api.Tests/api.Tests.csproj --no-restore --configuration Release
         dotnet build external-api-sim/external-api-sim.csproj --no-restore --configuration Release
 
-    # api.Tests boots the real API in memory (in-memory database, test-only JWT settings), so this needs
-    # no database and no secrets.
+    # The Azure Blob Storage emulator, for the tests that run the REAL Azure SDK code path of the signature/photo store
+    # (AzureBlobAttachmentStoreTests). Started with docker run rather than as a service because the SDK's newest API version can be
+    # newer than the emulator's, which --skipApiVersionCheck accepts and a service container cannot be given. It holds nothing but
+    # test files, and listens on this runner only.
+    - name: Start the Azure Blob Storage emulator (Azurite)
+      run: |
+        docker run -d --name azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite \
+          azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+        for _ in $(seq 1 30); do
+          if (echo > /dev/tcp/127.0.0.1/10000) 2>/dev/null; then exit 0; fi
+          sleep 1
+        done
+        echo "::error::Azurite did not start"
+        docker logs azurite
+        exit 1
+
+    # Most of api.Tests boots the real API in memory (in-memory database, test-only JWT settings) and needs no database and
+    # no secrets. TEST_POSTGRES switches on the tests that use the PostgreSQL service above, and TEST_AZURITE the ones that use
+    # the emulator above; without them those tests are skipped.
     - name: Test
+      env:
+        TEST_POSTGRES: Host=localhost;Port=5432;Username=postgres;Database=postgres
+        TEST_AZURITE: UseDevelopmentStorage=true
       run: dotnet test api.Tests/api.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
 
     - name: Upload test results

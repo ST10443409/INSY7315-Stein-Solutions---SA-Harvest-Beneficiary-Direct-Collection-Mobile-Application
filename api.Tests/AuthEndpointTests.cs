@@ -183,15 +183,16 @@ public class AuthEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task SyncEndpoint_RequiresAToken()
+    public async Task TheRetiredGenericSyncEndpoint_IsGone()
     {
+        // POST /api/sync queued an arbitrary payload in memory and posted it to the simulator; production would have accepted
+        // data and dropped it. The real endpoints are /api/cbo-collection/sync and /api/vetting/sync.
         var client = _factory.CreateClient();
-        var noToken = await client.PostAsJsonAsync("/api/sync", new { id = "1", data = "d" });
-        Assert.Equal(HttpStatusCode.Unauthorized, noToken.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await LoginToken("admin_test_user"));
 
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await LoginToken("cbo_test_user"));
-        var withToken = await client.PostAsJsonAsync("/api/sync", new { id = "1", data = "d" });
-        Assert.Equal(HttpStatusCode.Accepted, withToken.StatusCode);
+        var response = await client.PostAsJsonAsync("/api/sync", new { id = "1", data = "d" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

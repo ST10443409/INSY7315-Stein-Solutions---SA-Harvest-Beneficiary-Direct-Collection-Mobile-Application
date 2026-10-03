@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using api.Controllers;
+using api.Data;
 using api.Models;
 using api.Services.Foodspace;
 using Microsoft.AspNetCore.Authorization;
@@ -30,7 +31,7 @@ namespace api.Tests;
 ///    role that is (<see cref="EveryEndpoint_AnswersEachRole_AsTheTableSays"/>);
 ///  - the checklist document must list every row (<see cref="TheChecklistDocument_ListsEveryEndpoint"/>).
 ///
-/// Admin is deliberate on the two form endpoints and /api/sync: the Admin role gets Form 1 and Form 2 inside the Android app
+/// Admin is deliberate on the two form endpoints: the Admin role gets Form 1 and Form 2 inside the Android app
 /// (docs/decisions/0001), so the backend accepts what those screens send. Admin-only endpoints are never open to the others.
 /// </summary>
 public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatrixTests.MatrixFactory>
@@ -47,6 +48,7 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     public static readonly IReadOnlyList<(string Method, string Route, string[] Allowed)> Table = new (string, string, string[])[]
     {
         ("POST", "api/cbo-collection/sync", new[] { Cbo, Admin }),
+        ("PUT", "api/cbo-collection/{collectionId}/attachments/{attachmentId}", new[] { Cbo, Admin }),
         ("POST", "api/vetting/sync", new[] { Vetting, Admin }),
         ("GET", "api/vetting/records", new[] { Vetting, Admin }),
         ("GET", "api/admin/user-activity", new[] { Admin }),
@@ -55,7 +57,13 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
         ("GET", "api/admin/sync-status/{id}", new[] { Admin }),
         ("POST", "api/admin/sync-status/{id}/retry", new[] { Admin }),
         ("POST", "api/admin/sync-status/{id}/dismiss", new[] { Admin }),
-        ("POST", "api/sync", new[] { Cbo, Vetting, Admin }),
+        ("GET", "api/admin/users", new[] { Admin }),
+        ("GET", "api/admin/users/{id}", new[] { Admin }),
+        ("POST", "api/admin/users", new[] { Admin }),
+        ("PATCH", "api/admin/users/{id}", new[] { Admin }),
+        ("POST", "api/admin/users/{id}/reset-password", new[] { Admin }),
+        ("GET", "api/admin/collections/{collectionId}/attachments", new[] { Admin }),
+        ("GET", "api/admin/attachments/{id}", new[] { Admin }),
         ("GET", "api/health", Anyone),
         ("POST", "api/auth/login", Anyone),
         ("GET", "api/auth/me", AnySignedIn),
@@ -186,11 +194,20 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     [Fact]
     public async Task ATokenWithNoRoleAtAll_IsRefusedByEveryRoleRestrictedEndpoint()
     {
-        // Someone holding a validly signed token that names no (or an unknown) role gets nothing role-restricted.
+        // Someone holding a validly signed token that names no (or an unknown) role gets nothing role-restricted. The token names
+        // a REAL, active account and its current stamp, so it gets past the account check and it is the role that refuses it
+        // (a token for an account that does not exist is a 401 before roles are even looked at; see UserAccountTests).
+        Guid userId, stamp;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var user = scope.ServiceProvider.GetRequiredService<AppDbContext>().Users.Single(u => u.Username == "cbo_test_user");
+            (userId, stamp) = (user.Id, user.SecurityStamp);
+        }
+
         foreach (var role in new[] { null, "SUPERUSER", "admin" }) // the role comparison is exact: "admin" is not "ADMIN"
         {
             var client = _factory.CreateClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Tokens.For(role));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Tokens.For(role, userId, stamp));
 
             foreach (var row in Table.Where(r => r.Allowed != Anyone && r.Allowed != AnySignedIn))
                 Assert.Equal(HttpStatusCode.Forbidden, (await Send(client, row.Method, row.Route)).StatusCode);
@@ -230,9 +247,9 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     // call changes anything. A body is sent where the endpoint expects one; authorization runs before it is read.
     private static Task<HttpResponseMessage> Send(HttpClient client, string method, string route)
     {
-        var path = "/" + route.Replace("{id}", "no-such-record");
+        var path = "/" + System.Text.RegularExpressions.Regex.Replace(route, @"\{\w+\}", "no-such-record");
         var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method == "POST") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        if (method is "POST" or "PATCH" or "PUT") request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
         return client.SendAsync(request);
     }
 
@@ -249,9 +266,9 @@ public class RoleAuthorizationMatrixTests : IClassFixture<RoleAuthorizationMatri
     /// <summary>Validly signed tokens whose role claim is whatever a test says, to prove only the exact roles count.</summary>
     private static class Tokens
     {
-        public static string For(string? role)
+        public static string For(string? role, Guid userId, Guid stamp)
         {
-            var claims = new List<Claim> { new("sub", Guid.NewGuid().ToString()), new("name", "someone") };
+            var claims = new List<Claim> { new("sub", userId.ToString()), new("name", "someone"), new("stamp", stamp.ToString()) };
             if (role is not null) claims.Add(new Claim("role", role));
             return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
             {

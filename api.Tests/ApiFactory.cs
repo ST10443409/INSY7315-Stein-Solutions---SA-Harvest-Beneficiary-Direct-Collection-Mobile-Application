@@ -1,5 +1,6 @@
 using api.Data;
 using api.Models;
+using api.Services.Attachments;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -31,6 +32,9 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     private readonly string _dbName = Guid.NewGuid().ToString();
 
+    /// <summary>Stands in for Azure Blob Storage in every test: nothing in the suite touches a real storage account.</summary>
+    public InMemoryAttachmentStore AttachmentStore { get; } = new();
+
     /// <summary>Subclasses that replace the database with something unusable turn this off.</summary>
     protected virtual bool SeedUsers => true;
 
@@ -53,6 +57,9 @@ public class ApiFactory : WebApplicationFactory<Program>
                          && d.ServiceType.GetGenericArguments().Contains(typeof(AppDbContext))).ToList())
                 services.Remove(d);
             services.AddDbContext<AppDbContext>(o => o.UseInMemoryDatabase(_dbName));
+
+            services.RemoveAll<IAttachmentStore>();
+            services.AddSingleton<IAttachmentStore>(AttachmentStore);
 
             // Test-only endpoint (FaultController) for exercising the exception middleware.
             services.AddControllers().AddApplicationPart(typeof(FaultController).Assembly);

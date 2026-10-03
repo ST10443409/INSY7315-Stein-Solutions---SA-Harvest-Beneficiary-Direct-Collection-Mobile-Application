@@ -7,6 +7,34 @@ cd api
 dotnet test
 ```
 
+### Tests that need a real PostgreSQL
+Most backend tests run the API in memory and need nothing. `api.Tests/PostgresClaimAndMigrationTests.cs` needs a real
+PostgreSQL: it applies every migration to an empty database (so a forgotten migration, or one PostgreSQL rejects, fails here
+and not in Azure) and checks that the Foodspace forwarding claim holds when several workers run at once. Without
+`TEST_POSTGRES` set those tests are **skipped** (reported as skipped, not passed). CI starts a PostgreSQL service container
+and always sets it. To run them locally (each test makes and drops its own throwaway database):
+```bash
+docker run -d --name sah-test-pg -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:55432:5432 postgres:17-alpine
+TEST_POSTGRES="Host=127.0.0.1;Port=55432;Username=postgres;Database=postgres" dotnet test api.Tests
+docker rm -f sah-test-pg
+```
+### Tests that need the Azure Blob Storage emulator
+`api.Tests/AzureBlobAttachmentStoreTests.cs` runs the real Azure SDK code (the one used in Azure) against the Azurite emulator, so
+the signature and photo store is proven against something that behaves like Blob Storage and not only against the in-memory fake the
+other tests use. Without `TEST_AZURITE` those tests are skipped; CI starts Azurite and always sets it. Locally:
+```bash
+docker run -d --name sah-azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+TEST_AZURITE="UseDevelopmentStorage=true" dotnet test api.Tests
+docker rm -f sah-azurite
+```
+The emulator stack in `compose.yaml` (`docker compose up`) also runs Azurite, so the app on an emulator can upload files to it. The
+emulator test `AttachmentUploadScenarioTest` (opt-in, needs `e2ePassword` like the connectivity scenarios) runs the real file storage,
+database, sync and upload against that stack and compares the bytes an Admin reads back.
+
+When you add a migration, generate it with `dotnet ef migrations add <Name> --project api` (set
+`ASPNETCORE_ENVIRONMENT=Development` and `Jwt__SigningKey` to any 32+ character value for the design-time run), keep it
+additive and nullable where a deployment may overlap the previous version, and run these tests.
+
 ## Android
 To run Android unit and instrumented tests locally:
 ```bash

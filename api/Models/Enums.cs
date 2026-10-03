@@ -46,6 +46,25 @@ public enum ForwardingStatus
     Dismissed
 }
 
+/// <summary>
+/// What a stored picture is of. The same four values as the device's AttachmentKind; wire and database form is UPPER_SNAKE_CASE
+/// (<c>DONOR_SIGNATURE</c>).
+/// </summary>
+public enum AttachmentKind
+{
+    /// <summary>The donor's finger-drawn signature (at most one per collection).</summary>
+    DonorSignature,
+
+    /// <summary>The CBO's finger-drawn signature (at most one per collection).</summary>
+    CboSignature,
+
+    /// <summary>One of the donation photos; the slot says which numbered shot.</summary>
+    Photo,
+
+    /// <summary>The photo of the paper delivery note (at most one per collection).</summary>
+    DeliveryNote
+}
+
 public enum DecisionOutcome
 {
     Approve,

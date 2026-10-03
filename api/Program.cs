@@ -7,6 +7,7 @@ using api.Infrastructure;
 using api.Models;
 using api.Options;
 using api.Services;
+using api.Services.Attachments;
 using api.Services.Foodspace;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -155,6 +156,22 @@ builder.Services.AddScoped<IAdminSyncStatusService, AdminSyncStatusService>();
 builder.Services.AddScoped<IAdminSyncResolutionService, AdminSyncResolutionService>();
 builder.Services.AddScoped<IAdminUserActivityService, AdminUserActivityService>();
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+
+// ── Signatures and photos (Azure Blob Storage) ────────────────────────────────────────────
+// In Azure: Storage:AccountUri (an app setting) + the Web App's managed identity, with the "Storage Blob Data Contributor" role on the one
+// private container. No account key, connection string or SAS anywhere. Locally: Storage:ConnectionString against Azurite (Development
+// only, see SecurityStartupChecks). With neither set the API still starts and uploads are answered 503: the app keeps the files.
+builder.Services.AddOptions<StorageOptions>().Bind(builder.Configuration.GetSection(StorageOptions.SectionName));
+builder.Services.AddSingleton<IAttachmentStore>(sp =>
+{
+    var storage = sp.GetRequiredService<IOptions<StorageOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(storage.ConnectionString))
+        return AzureBlobAttachmentStore.ForEmulator(storage.ConnectionString, storage.Container);
+    if (!string.IsNullOrWhiteSpace(storage.AccountUri))
+        return AzureBlobAttachmentStore.ForAccount(new Uri(storage.AccountUri), storage.Container);
+    return new NotConfiguredAttachmentStore();
+});
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 
 // The first administrator, from configuration (Bootstrap:AdminUsername / Bootstrap:AdminPassword): see AdminBootstrapper.
 builder.Services.AddOptions<BootstrapOptions>().Bind(builder.Configuration.GetSection(BootstrapOptions.SectionName));

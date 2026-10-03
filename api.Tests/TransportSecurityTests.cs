@@ -205,6 +205,29 @@ public class TransportSecurityTests : IClassFixture<TransportSecurityTests.Produ
     }
 
     [Fact]
+    public void AStorageConnectionString_CarriesAnAccountKey_SoItIsOnlyAllowedInDevelopment()
+    {
+        var config = Config(("ConnectionStrings:Default", EncryptedDb), ("Storage:ConnectionString", "UseDevelopmentStorage=true"));
+
+        Assert.Contains(SecurityStartupChecks.FindProblems(config, Env("Production"), new SecurityOptions(), HttpsFoodspace), p => p.StartsWith("Storage:ConnectionString"));
+        Assert.Contains(SecurityStartupChecks.FindProblems(config, Env("Staging"), new SecurityOptions(), HttpsFoodspace), p => p.StartsWith("Storage:ConnectionString"));
+        Assert.DoesNotContain(SecurityStartupChecks.FindProblems(config, Env("Development"), new SecurityOptions(), HttpsFoodspace), p => p.StartsWith("Storage:"));
+    }
+
+    [Theory]
+    [InlineData("https://sahprodsteinstore.blob.core.windows.net/", true)]
+    [InlineData("http://sahprodsteinstore.blob.core.windows.net/", false)]
+    [InlineData("not a uri", false)]
+    [InlineData(null, true)]   // not configured at all is allowed: uploads answer 503 and the app keeps the files
+    public void WithHttpsRequired_TheStorageAccountAddressMustBeHttps(string? accountUri, bool ok)
+    {
+        var problems = SecurityStartupChecks.FindProblems(
+            Config(("ConnectionStrings:Default", EncryptedDb), ("Storage:AccountUri", accountUri)), Env("Production"), new SecurityOptions(), HttpsFoodspace);
+
+        Assert.Equal(ok, !problems.Any(p => p.StartsWith("Storage:AccountUri")));
+    }
+
+    [Fact]
     public void WithHttpsNotRequired_TheOnwardHopsAreNotChecked()
     {
         var problems = SecurityStartupChecks.FindProblems(

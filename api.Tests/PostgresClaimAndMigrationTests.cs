@@ -240,4 +240,104 @@ public class PostgresClaimAndMigrationTests : IAsyncLifetime
         Assert.Equal((UserRole.ADMIN, true), (admin.Role, admin.IsActive));
         Assert.Equal(1, await check.UserAudit.CountAsync());
     }
+
+    // ── signatures and photos, arbitrated by real SQL ─────────────────────────────
+
+    private static CollectionAttachment Attachment(string id, string collectionId, AttachmentKind kind, int slot) => new()
+    {
+        Id = id, CollectionId = collectionId, Kind = kind, Slot = slot, BlobName = $"{collectionId}/{id}",
+        ContentType = "image/jpeg", SizeBytes = 10, Sha256 = new string('a', 64), UploadedBy = "someone",
+    };
+
+    private static byte[] JpegBytes(byte fill) => new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, fill, fill, fill, fill };
+
+    [PostgresFact]
+    public async Task TheAttachmentTable_AllowsOneFilePerSlot_AndAFilesCollectionCannotBeDeleted()
+    {
+        await using (var seed = NewDb())
+        {
+            var collection = Collection("c1");
+            collection.SubmittedBy = "someone";
+            seed.CboCollections.Add(collection);
+            seed.CollectionAttachments.Add(Attachment("a1", "c1", AttachmentKind.Photo, 1));
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var sameSlot = NewDb())
+        {
+            sameSlot.CollectionAttachments.Add(Attachment("a2", "c1", AttachmentKind.Photo, 1));
+            await Assert.ThrowsAsync<DbUpdateException>(() => sameSlot.SaveChangesAsync()); // unique (collection, kind, slot)
+        }
+
+        await using (var otherSlot = NewDb())
+        {
+            otherSlot.CollectionAttachments.Add(Attachment("a3", "c1", AttachmentKind.Photo, 2));
+            otherSlot.CollectionAttachments.Add(Attachment("a4", "c1", AttachmentKind.DonorSignature, 0));
+            await otherSlot.SaveChangesAsync(); // a different slot, or a different kind, is fine
+        }
+
+        await using (var remove = NewDb())
+        {
+            remove.CboCollections.Remove(await remove.CboCollections.SingleAsync(c => c.Id == "c1"));
+            await Assert.ThrowsAsync<DbUpdateException>(() => remove.SaveChangesAsync()); // evidence is not deleted with its collection
+        }
+
+        await using var check = NewDb();
+        Assert.Equal(new[] { "DONOR_SIGNATURE", "PHOTO", "PHOTO" }, await check.Database
+            .SqlQueryRaw<string>("SELECT kind AS \"Value\" FROM collection_attachments ORDER BY kind, slot").ToListAsync()); // stored as the wire names
+    }
+
+    [PostgresFact]
+    public async Task TheSameFileUploadedTwiceAtOnce_IsStoredOnce_AndBothCallersSucceed()
+    {
+        await using (var seed = NewDb())
+        {
+            var collection = Collection("c1");
+            collection.SubmittedBy = "someone";
+            seed.CboCollections.Add(collection);
+            await seed.SaveChangesAsync();
+        }
+        var store = new InMemoryAttachmentStore();
+
+        async Task<AttachmentUploadResult> Upload()
+        {
+            await using var db = NewDb();
+            return await new AttachmentService(db, store, NullLogger<AttachmentService>.Instance)
+                .UploadAsync("c1", "a1", AttachmentKind.Photo, 0, "image/jpeg", JpegBytes(1), "someone", default);
+        }
+        var results = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => Task.Run(Upload)));
+
+        Assert.All(results, r => Assert.True(r.Outcome is AttachmentOutcome.Stored or AttachmentOutcome.AlreadyReceived, $"unexpected {r.Outcome}"));
+        Assert.Contains(results, r => r.Outcome == AttachmentOutcome.Stored);
+        await using var check = NewDb();
+        Assert.Equal(1, await check.CollectionAttachments.CountAsync());
+        Assert.Equal(new[] { "c1/a1" }, store.Names);
+    }
+
+    [PostgresFact]
+    public async Task TwoDifferentFilesForOneSlotAtOnce_ExactlyOneWins_AndTheLoserLeavesNothingBehind()
+    {
+        await using (var seed = NewDb())
+        {
+            var collection = Collection("c1");
+            collection.SubmittedBy = "someone";
+            seed.CboCollections.Add(collection);
+            await seed.SaveChangesAsync();
+        }
+        var store = new InMemoryAttachmentStore();
+
+        async Task<AttachmentUploadResult> Upload(string id, byte fill)
+        {
+            await using var db = NewDb();
+            return await new AttachmentService(db, store, NullLogger<AttachmentService>.Instance)
+                .UploadAsync("c1", id, AttachmentKind.DeliveryNote, 0, "image/jpeg", JpegBytes(fill), "someone", default);
+        }
+        var results = await Task.WhenAll(Enumerable.Range(0, 6).Select(i => Task.Run(() => Upload("a" + i, (byte)i))));
+
+        Assert.Equal(1, results.Count(r => r.Outcome == AttachmentOutcome.Stored));
+        Assert.All(results.Where(r => r.Outcome != AttachmentOutcome.Stored), r => Assert.Equal(AttachmentOutcome.Conflict, r.Outcome));
+        await using var check = NewDb();
+        var winner = await check.CollectionAttachments.SingleAsync();
+        Assert.Equal(new[] { winner.BlobName }, store.Names); // the losers' bytes were cleaned up, nothing orphaned
+    }
 }

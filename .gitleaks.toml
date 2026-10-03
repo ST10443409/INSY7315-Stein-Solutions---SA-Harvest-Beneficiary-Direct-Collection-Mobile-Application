@@ -41,3 +41,8 @@ description = "An example image tag in the description of a workflow input in a6
 condition = "AND"
 commits = ["a6f48b9c8ced8f89defe8f5ff971b03b10052765"]
 paths = ['''^\.github/workflows/_deploy-backend\.yml$''']
+
+[[allowlists]]
+description = "The Azurite storage emulator's PUBLISHED, fixed development account (devstoreaccount1) and its key, in compose.yaml: Microsoft documents both and they are identical on every machine. They protect nothing: the emulator listens only on the developer's machine, and the API refuses a storage connection string in every environment but Development. Flagged by the generic-key rule only because the key is base64. Matched by its account-name prefix, so any other key is still caught."
+regexTarget = "line"
+regexes = ['''AccountName=devstoreaccount1;AccountKey=''']

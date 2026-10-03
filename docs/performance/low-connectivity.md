@@ -156,14 +156,15 @@ the first released schema (v2) exists and is tested, so the fallback now only ap
 - The vetting records download (`GET /api/vetting/records`) was not load-tested on 2G: the Foodspace simulator has only
   3 beneficiaries. It fetches pages of 100 and keeps the old list if any page fails. With a real list of thousands, one
   failed page on a flaky connection throws away the pages already fetched (follow-up 1).
-- Photos and signatures are not uploaded yet, only flags saying they exist. When uploads are built, test them the same way:
-  one photo (up to 1600 px, JPEG 85) is far larger than a whole batch of records.
+- Photos and signatures are uploaded now (one request per file, after the record they belong to), and verified on the emulator
+  over the normal link, but **not yet timed on 2G**: test them the same way. One photo (up to 1600 px, JPEG 85) is far larger
+  than a whole batch of records, and images are sent uncompressed on purpose (JPEG and PNG are compressed already).
 
 ## Follow-up issues
 
 1. **Vetting records refresh: resume or retry a failed page** instead of discarding the pages already downloaded, once a
    realistic list size is known from Foodspace (#74).
-2. **Test attachment upload on 2G** when photo and signature upload is built (separate requests, resumable or chunked)
-   (#75).
+2. **Test attachment upload on 2G** (#75). Upload is built as separate requests, one per file, each retried from the start
+   after a drop; if a photo cannot finish within the 60 s socket timeouts on 2G, make it resumable or chunked.
 3. **Report the emulator network-profile regression** (P1) to the Android emulator issue tracker (upstream, not this
    repository).

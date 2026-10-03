@@ -2,6 +2,7 @@ package com.example.client.di
 
 import com.example.client.BuildConfig
 import com.example.client.network.AdminApiService
+import com.example.client.network.AttachmentApiService
 import com.example.client.network.AuthApiService
 import com.example.client.network.AuthInterceptor
 import com.example.client.network.HttpClients
@@ -56,6 +57,11 @@ object NetworkModule {
     @Singleton
     fun provideSyncApiService(retrofit: Retrofit): SyncApiService =
         retrofit.create(SyncApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAttachmentApiService(retrofit: Retrofit): AttachmentApiService =
+        retrofit.create(AttachmentApiService::class.java)
 
     @Provides
     @Singleton

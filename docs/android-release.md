@@ -14,7 +14,7 @@ a phone, cannot be fixed by the store. Read the keystore section before building
 | Version | `versionCode` / `versionName` | `-PappVersionCode=<n> -PappVersionName=<x.y.z>`. **`versionCode` must go up with every APK that reaches a phone**; Android refuses to install a lower one. The release pipeline passes the run number. Local builds default to `1` / `1.0` and must never be distributed. |
 | API address | `-PapiBaseUrl=https://<host>/` | Baked in at build time; the release build refuses anything but `https://`. A custom domain in front of the API means a later host change does not need a new APK. |
 
-Build variants: `debug` (local, plain HTTP to the emulator's host), `release` (shipped), `r8Check` (see below; never shipped).
+Build variants: `debug` (talks to the live API by default; pass `-PapiBaseUrl=http://10.0.2.2:5000/` for a local `docker compose` API, which debug builds may reach over plain HTTP), `release` (shipped), `r8Check` (see below; never shipped).
 
 ## The release keystore (do this once, carefully)
 

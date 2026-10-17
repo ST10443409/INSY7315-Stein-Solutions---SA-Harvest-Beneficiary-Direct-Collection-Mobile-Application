@@ -8,8 +8,9 @@ plugins {
 }
 
 // Where the app talks to the API. Override per machine or build with -PapiBaseUrl=https://host/ (it must end in "/").
-// The default is the host machine as seen from the Android emulator.
-val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "http://10.0.2.2:5000/"
+// The default is the live API on Azure. To use a local `docker compose up` API from the emulator, pass
+// -PapiBaseUrl=http://10.0.2.2:5000/ (10.0.2.2 is the host machine as the emulator sees it; debug builds allow that plain HTTP).
+val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "https://sah-collection-vetting-api.azurewebsites.net/"
 
 // Release version (#59). Android refuses to install an APK over a newer one, so versionCode must go up with every build that
 // reaches a phone: CI passes -PappVersionCode=<run number> and -PappVersionName=<tag or 1.0.<run number>>. The defaults are

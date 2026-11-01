@@ -111,6 +111,19 @@ class BeneficiaryDetailScreenTest {
     }
 
     @Test
+    fun theProgressBar_countsSectionsOpenedAtLeastOnce_evenAfterTheyClose() {
+        show()
+        composeRule.onNodeWithTag(DetailTags.PROGRESS).assertTextContains("1 of 11 reviewed")
+
+        header("location").performScrollTo().performClick()
+        composeRule.onNodeWithTag(DetailTags.PROGRESS).assertTextContains("2 of 11 reviewed")
+
+        header("location").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(DetailTags.PROGRESS).assertTextContains("2 of 11 reviewed")
+    }
+
+    @Test
     fun expandAll_opensEverySection_andThenOffersCollapseAll() {
         show()
 

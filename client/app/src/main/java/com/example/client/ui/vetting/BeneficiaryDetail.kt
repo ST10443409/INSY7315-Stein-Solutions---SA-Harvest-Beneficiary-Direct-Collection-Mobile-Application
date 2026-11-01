@@ -7,11 +7,13 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +78,7 @@ object DetailTags {
     const val RECORD_DECISION = "vetting_record_decision"
     const val CURRENT_DECISION = "vetting_current_decision"
     const val BACK = "vetting_detail_back"
+    const val PROGRESS = "vetting_review_progress"
     fun field(sheetKey: String) = "vetting_field_$sheetKey"
 }
 
@@ -169,6 +173,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReadyContent(
     var expanded by rememberSaveable(
         stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })
     ) { mutableStateOf(initiallyExpanded) }
+    // A section counts as reviewed once the officer has opened it (the demo's "complete" state); it stays so after closing.
+    var reviewed by rememberSaveable(
+        stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })
+    ) { mutableStateOf(initiallyExpanded) }
+    fun open(next: Set<String>) {
+        expanded = next
+        reviewed = reviewed + next
+    }
     val allIds = BENEFICIARY_SECTIONS.map { it.id }.toSet()
 
     Column(
@@ -180,6 +192,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReadyContent(
     ) {
         ScreenHeader(title = record.legalName, subtitle = record.province, onBack = onBack, modifier = Modifier.padding(bottom = 4.dp))
 
+        ReviewProgress(reviewed = reviewed.size, total = BENEFICIARY_SECTIONS.size)
+
         DecisionSummary(state.currentDecision)
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -190,20 +204,22 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReadyContent(
                 fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = SaColors.LinkGold,
                 modifier = Modifier
                     .clip(PillShape)
-                    .clickable { expanded = if (allOpen) emptySet() else allIds }
+                    .clickable { open(if (allOpen) emptySet() else allIds) }
                     .padding(horizontal = 10.dp, vertical = 8.dp)
                     .testTag(tag)
             )
         }
 
         val context = LocalContext.current
-        BENEFICIARY_SECTIONS.forEach { section ->
+        BENEFICIARY_SECTIONS.forEachIndexed { index, section ->
             AccordionSection(
                 id = section.id,
+                number = index + 1,
+                reviewed = section.id in reviewed,
                 title = stringResource(section.title),
                 subtitle = pluralStringResource(R.plurals.vetting_field_count, section.fields.size, section.fields.size),
                 expanded = section.id in expanded,
-                onToggle = { expanded = if (section.id in expanded) expanded - section.id else expanded + section.id },
+                onToggle = { open(if (section.id in expanded) expanded - section.id else expanded + section.id) },
             ) {
                 section.fields.forEachIndexed { index, spec ->
                     FieldRow(spec, spec.read(record), record, onOpenAddress = { openInMaps(context, it) })
@@ -231,6 +247,41 @@ private fun androidx.compose.foundation.layout.ColumnScope.ReadyContent(
                 fontFamily = Figtree, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = SaColors.Ink
             )
         }
+    }
+}
+
+/** The demo's progress bar: how many of the sections the officer has looked at, so nothing is skipped by accident. */
+@Composable
+private fun ReviewProgress(reviewed: Int, total: Int) {
+    val text = stringResource(R.string.vetting_review_progress, reviewed, total)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp)
+            .testTag(DetailTags.PROGRESS)
+            .semantics(mergeDescendants = true) { contentDescription = text },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(8.dp)
+                .clip(PillShape)
+                .background(SaColors.Divider)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(if (total == 0) 0f else reviewed.toFloat() / total)
+                    .fillMaxHeight()
+                    .clip(PillShape)
+                    .background(SaColors.Yellow)
+            )
+        }
+        Text(
+            text,
+            fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = SaColors.Muted,
+            modifier = Modifier.padding(start = 10.dp)
+        )
     }
 }
 

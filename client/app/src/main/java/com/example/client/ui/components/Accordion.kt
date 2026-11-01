@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +39,6 @@ import androidx.compose.ui.unit.sp
 import com.example.client.R
 import com.example.client.ui.theme.Figtree
 import com.example.client.ui.theme.GlyphPaths
-import com.example.client.ui.theme.Poppins
 import com.example.client.ui.theme.SaColors
 import com.example.client.ui.theme.StrokeIcon
 
@@ -48,6 +48,10 @@ object AccordionTags {
 }
 
 /**
+ * One expandable / retractable section, drawn like the demo's vetting form: a numbered badge, a white card with a yellow
+ * outline while open, a dark card with a tick once the section has been [reviewed] and is closed, and a quiet grey card
+ * otherwise.
+ *
  * One expandable / retractable section. Tapping the header toggles [expanded]; the state is owned by the caller so a
  * list of sections can offer "expand all / collapse all" and keep its state across rotation. The body is only
  * composed while open. The header announces its state ("Expanded" / "Collapsed") to screen readers.
@@ -60,9 +64,24 @@ fun AccordionSection(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    number: Int? = null,
+    reviewed: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(14.dp)
+    val dark = reviewed && !expanded
+    val container = when {
+        expanded -> SaColors.White
+        reviewed -> SaColors.Ink
+        else -> SaColors.SurfaceAlt
+    }
+    val outline = when {
+        expanded -> SaColors.Yellow
+        reviewed -> SaColors.Divider
+        else -> SaColors.inkAlpha(0.12f)
+    }
+    val titleColor = if (dark) SaColors.Cream else SaColors.Ink
+    val quietColor = if (dark) SaColors.Cream.copy(alpha = 0.6f) else SaColors.MutedLight
     val chevron by animateFloatAsState(if (expanded) 90f else 0f, label = "accordionChevron")
     val stateText = stringResource(if (expanded) R.string.accordion_expanded else R.string.accordion_collapsed)
 
@@ -70,8 +89,8 @@ fun AccordionSection(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(SaColors.White, shape)
-            .border(1.dp, SaColors.inkAlpha(0.12f), shape)
+            .background(container, shape)
+            .border(1.dp, outline, shape)
             .animateContentSize()
     ) {
         Row(
@@ -84,16 +103,33 @@ fun AccordionSection(
                 .semantics { stateDescription = stateText },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = SaColors.Ink)
+            if (number != null) {
+                val lit = reviewed || expanded
+                Box(
+                    modifier = Modifier.size(26.dp).clip(CircleShape).background(if (lit) SaColors.Yellow else SaColors.Divider),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (reviewed) {
+                        StrokeIcon(pathData = GlyphPaths.Check, modifier = Modifier.size(13.dp), tint = SaColors.Ink)
+                    } else {
+                        Text(
+                            number.toString(),
+                            fontFamily = Figtree, fontWeight = FontWeight.Bold, fontSize = 11.sp,
+                            color = if (lit) SaColors.Ink else SaColors.Muted,
+                        )
+                    }
+                }
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = if (number != null) 12.dp else 0.dp)) {
+                Text(title, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = titleColor)
                 if (subtitle != null) {
-                    Text(subtitle, fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight)
+                    Text(subtitle, fontFamily = Figtree, fontSize = 11.5.sp, color = quietColor)
                 }
             }
             StrokeIcon(
                 pathData = GlyphPaths.ChevronRight,
                 modifier = Modifier.size(18.dp).rotate(chevron),
-                tint = SaColors.Muted,
+                tint = quietColor,
             )
         }
         AnimatedVisibility(

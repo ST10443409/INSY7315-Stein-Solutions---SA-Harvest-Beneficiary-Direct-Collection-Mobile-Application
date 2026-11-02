@@ -11,9 +11,10 @@ param namePrefix = 'sah'
 // CHOOSE ONCE: this becomes https://<webAppName>.azurewebsites.net, which is baked into every APK. Must be globally unique.
 param webAppName = 'sah-collection-vetting-api'
 
-// F1 is free but sleeps when idle (no Always On), which stops the Foodspace retry loop. B1 (about US$13/month) is the floor
-// for real use. Change here and redeploy; no data is lost.
-param appServicePlanSku = 'B1'
+// F1 (free) is what the live plan runs on, so this matches it: a redeploy must not quietly upgrade the plan. It sleeps when idle
+// (no Always On), which stops the Foodspace retry loop and makes the first request after a quiet spell slow. B1 (about
+// US$13/month) is the floor for real use. Change here and redeploy; no data is lost.
+param appServicePlanSku = 'F1'
 
 // The GitHub user the container-registry pull token (a classic personal access token with read:packages) belongs to.
 param registryUsername = 'ST10443409'
@@ -31,6 +32,10 @@ param foodspaceForwardingEnabled = true
 // step 2 again and delete the secret: the bootstrap does nothing once an admin exists, and a spent secret should not linger.
 param bootstrapAdminUsername = ''
 param bootstrapAdminPasswordSecretExists = false
+
+// The API's container image. The pipeline keeps this tag pointed at the newest release, so a template run must not reset the Web
+// App to Microsoft's placeholder sample image (the template's default), which would take the API down until the next release.
+param initialContainerImage = 'ghcr.io/st10443409/saharvest-api:live'
 
 param migrateOnStartup = true
 

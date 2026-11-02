@@ -299,9 +299,9 @@ private fun DecisionSummary(decision: VettingDecision?) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (decision == null) {
-                Text(stringResource(R.string.vetting_no_decision_yet), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
+                Text(stringResource(R.string.vetting_no_decision_yet), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted, modifier = Modifier.weight(1f, fill = false))
             } else {
-                Text(stringResource(R.string.vetting_current_decision), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
+                Text(stringResource(R.string.vetting_current_decision), fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted, modifier = Modifier.weight(1f, fill = false))
                 DecisionBadge(decision.outcome)
             }
         }
@@ -317,12 +317,12 @@ private fun DecisionSummary(decision: VettingDecision?) {
 }
 
 @Composable
-fun DecisionBadge(outcome: DecisionOutcome?) {
+fun DecisionBadge(outcome: DecisionOutcome?, modifier: Modifier = Modifier) {
     when (outcome) {
-        null -> TagBadge(stringResource(R.string.vetting_decision_none), Tone.NEW)
-        DecisionOutcome.APPROVE -> TagBadge(stringResource(R.string.vetting_outcome_approve), Tone.OK)
-        DecisionOutcome.REJECT -> TagBadge(stringResource(R.string.vetting_outcome_reject), ErrorTagPalette)
-        DecisionOutcome.FLAG -> TagBadge(stringResource(R.string.vetting_outcome_flag), Tone.WARN)
+        null -> TagBadge(stringResource(R.string.vetting_decision_none), Tone.NEW, modifier)
+        DecisionOutcome.APPROVE -> TagBadge(stringResource(R.string.vetting_outcome_approve), Tone.OK, modifier)
+        DecisionOutcome.REJECT -> TagBadge(stringResource(R.string.vetting_outcome_reject), ErrorTagPalette, modifier)
+        DecisionOutcome.FLAG -> TagBadge(stringResource(R.string.vetting_outcome_flag), Tone.WARN, modifier)
     }
 }
 

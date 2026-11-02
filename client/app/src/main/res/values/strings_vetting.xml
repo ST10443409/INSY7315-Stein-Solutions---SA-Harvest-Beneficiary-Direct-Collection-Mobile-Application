@@ -3,6 +3,7 @@
     <!-- Accordion -->
     <string name="accordion_expanded">Expanded</string>
     <string name="accordion_collapsed">Collapsed</string>
+    <string name="vetting_review_progress">%1$d of %2$d reviewed</string>
 
     <!-- Vetting list -->
     <string name="vetting_title">Vetting</string>

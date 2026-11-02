@@ -20,7 +20,7 @@ services:
   api:
     build: ./api
     ports:
-      # 5000 is where the Android app (10.0.2.2:5000 from the emulator) expects the API.
+      # 5000 is where the emulator reaches this API as 10.0.2.2:5000 (build the app with -PapiBaseUrl=http://10.0.2.2:5000/).
       - "5000:8080"
     environment:
       # This file is the LOCAL DEVELOPMENT stack (plain HTTP, seeded test users), so it says so. In any other

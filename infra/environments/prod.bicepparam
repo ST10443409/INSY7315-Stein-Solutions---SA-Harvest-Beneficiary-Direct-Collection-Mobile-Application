@@ -9,7 +9,7 @@ param environmentName = 'prod'
 param namePrefix = 'sah'
 
 // CHOOSE ONCE: this becomes https://<webAppName>.azurewebsites.net, which is baked into every APK. Must be globally unique.
-param webAppName = 'REPLACE-WITH-YOUR-WEBAPP-NAME'
+param webAppName = 'sah-collection-vetting-api'
 
 // F1 is free but sleeps when idle (no Always On), which stops the Foodspace retry loop. B1 (about US$13/month) is the floor
 // for real use. Change here and redeploy; no data is lost.

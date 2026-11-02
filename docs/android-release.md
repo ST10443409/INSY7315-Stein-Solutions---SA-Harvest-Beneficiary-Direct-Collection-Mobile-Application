@@ -14,7 +14,7 @@ a phone, cannot be fixed by the store. Read the keystore section before building
 | Version | `versionCode` / `versionName` | `-PappVersionCode=<n> -PappVersionName=<x.y.z>`. **`versionCode` must go up with every APK that reaches a phone**; Android refuses to install a lower one. The release pipeline passes the run number. Local builds default to `1` / `1.0` and must never be distributed. |
 | API address | `-PapiBaseUrl=https://<host>/` | Baked in at build time; the release build refuses anything but `https://`. A custom domain in front of the API means a later host change does not need a new APK. |
 
-Build variants: `debug` (local, plain HTTP to the emulator's host), `release` (shipped), `r8Check` (see below; never shipped).
+Build variants: `debug` (talks to the live API by default; pass `-PapiBaseUrl=http://10.0.2.2:5000/` for a local `docker compose` API, which debug builds may reach over plain HTTP), `release` (shipped), `r8Check` (see below; never shipped).
 
 ## The release keystore (do this once, carefully)
 
@@ -71,6 +71,36 @@ what they downloaded (risk register: sideloading a tampered APK).
 crash report from a phone is unreadable (`a.b.c`); with it, `retrace mapping.txt trace.txt` restores the names. The release
 pipeline archives it next to the APK.
 
+## Publishing a release on GitHub (#62)
+
+The APK is published as a GitHub Release by `.github/workflows/release-apk.yml`. It reuses the signing secrets and `API_BASE_URL`
+that `deploy.yml` uses (the `production` environment), so nothing more needs configuring.
+
+1. Merge `development` into `main` by pull request as usual and wait for the **Deploy (main)** run to go green.
+2. Tag that commit and push the tag (tags must look like `v1.0.0`, and the commit must be on `main`):
+
+   ```bash
+   git checkout main && git pull
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+3. The **Release APK** run (Actions tab) builds and signs the APK, verifies the signature and creates the release at
+   `https://github.com/<owner>/<repo>/releases`, with these files attached: `sah-collection-vetting-1.0.0.apk`, `SHA256SUMS`,
+   `signature.txt` (the certificate fingerprint: compare it with the one recorded when the keystore was made) and
+   `mapping-1.0.0.txt` (keep it: it decodes crash traces from this build).
+4. Open the release, check the notes, and share the release link with staff. To re-attach files to an existing tag, run the
+   workflow by hand (Actions > Release APK > Run workflow > the tag).
+
+`versionName` is the tag without the `v`; `versionCode` is `major*10000 + minor*100 + patch` (v1.0.0 = 10000, v1.0.1 = 10001),
+so every higher tag is installable over the previous one. Never reuse or move a tag that staff have installed.
+
+**By hand, without the workflow:** Actions > **Deploy (main)** > the run > Artifacts > `sah-collection-vetting-1.0.<run>`. Unzip,
+then Releases > Draft a new release > choose or create the tag > drag the `.apk` and `SHA256SUMS` onto the page > Publish.
+
+The release repository must be one staff can open. On a private repository only people with access can download, so for staff
+without GitHub accounts hand the APK over another way (the Blob link proposal below).
+
 ## R8 (shrinking and obfuscation) and how to check it
 
 Release builds are minified (`isMinifyEnabled`, `isShrinkResources`), which the design document requires (B9.4). R8's failure mode is
@@ -109,5 +139,5 @@ several cannot be added to an installed app without an update:
 - **Certificate pinning (#73)**: needs the production host decided; pin the issuing CA with a backup pin, never a leaf.
 - **Local database encryption (#71)** (the design document says SQLCipher) and an **app PIN/biometric lock** (B9.4).
 - **Signing-certificate self-check at launch** (risk register: tampered APK).
-- **Distribution (#62)**: where staff download the APK (private Blob container with a short-lived link is the default proposal).
-- **Signed release in the pipeline**: added with the deploy workflow (it needs the four secrets above).
+- **Distribution (#62)**: GitHub Releases (above) is in place. Staff without GitHub access need another route (a private Blob
+  container with a short-lived link is the default proposal).

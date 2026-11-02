@@ -172,7 +172,7 @@ private fun ReportRow(label: String, value: Int, tag: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted)
+        Text(label, fontFamily = Figtree, fontSize = 13.5.sp, color = SaColors.Muted, modifier = Modifier.weight(1f).padding(end = 12.dp))
         Text(
             value.toString(),
             fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = SaColors.LinkGold,

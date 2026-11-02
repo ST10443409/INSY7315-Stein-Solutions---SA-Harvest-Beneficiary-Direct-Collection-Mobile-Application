@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -167,10 +171,15 @@ fun SignaturePadScreen(
     val scope = rememberCoroutineScope()
     val stamp = remember { SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date()) }
 
+    // The pad takes what the screen can spare instead of a fixed 260dp: rotated, a phone is only about 360dp tall, and a fixed pad
+    // pushed Accept off the bottom with no way to reach it. The page scrolls too, for the shortest screens; a stroke on the pad is
+    // consumed by the pad, so drawing never scrolls it.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(SaColors.Surface)) {
+    val padHeight = (maxHeight - 340.dp).coerceIn(150.dp, 280.dp)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaColors.Surface)
+            .verticalScroll(rememberScrollState())
             .padding(20.dp, 20.dp, 20.dp, 26.dp)
             .testTag(SignatureTags.SCREEN)
     ) {
@@ -195,7 +204,7 @@ fun SignaturePadScreen(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(padHeight)
                     .onSizeChanged { padSize = it }
                     .semantics { contentDescription = description }
                     .testTag(SignatureTags.PAD)
@@ -272,7 +281,7 @@ fun SignaturePadScreen(
                 )
             }
         }
-        Box(Modifier.weight(1f))
+        Spacer(Modifier.height(20.dp))
         Text(
             text = if (kind == AttachmentKind.DONOR_SIGNATURE) {
                 if (donorName.isBlank()) stringResource(R.string.sign_footer_donor_unnamed, stamp)
@@ -283,5 +292,6 @@ fun SignaturePadScreen(
             fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+    }
     }
 }

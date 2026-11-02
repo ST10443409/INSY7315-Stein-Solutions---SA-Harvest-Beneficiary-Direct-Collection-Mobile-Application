@@ -74,7 +74,7 @@ fun ScreenHeader(
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 19.sp,
                 color = SaColors.Ink,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             if (subtitle != null) {
@@ -83,7 +83,7 @@ fun ScreenHeader(
                     fontFamily = Figtree,
                     fontSize = 12.sp,
                     color = SaColors.MutedLight,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

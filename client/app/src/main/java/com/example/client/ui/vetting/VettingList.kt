@@ -185,47 +185,54 @@ fun VettingListScreen(
 ) = CBOCollectorTheme {
     val dateText = remember { SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()) }
     val name = displayName(state.username)
-    Column(
+    // One scrolling list for the whole screen, header included: rotated, a phone is only about 360dp tall, and a fixed header plus the
+    // bottom bar left a sliver for the records.
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(SaColors.Surface)
             .testTag(ListTags.SCREEN)
     ) {
-        GreetingHeader(
-            date = dateText,
-            title = if (name != null) stringResource(R.string.greeting_hello, name) else stringResource(R.string.vetting_title),
-            subtitle = stringResource(R.string.role_vetting),
-            initials = initialsOf(state.username)
-        )
-        // What is on the list and how fresh it is, with the one action: fetch the latest records.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp)
-                .padding(bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        LazyColumn(
+            // Tagged as the list only while there are records to list (a test relies on that): with none, it is just the screen.
+            modifier = Modifier.fillMaxSize().then(if (state.loaded && state.items.isNotEmpty()) Modifier.testTag(ListTags.LIST) else Modifier),
+            contentPadding = PaddingValues(bottom = 26.dp)
         ) {
-            Text(
-                subtitleFor(state, now) ?: stringResource(R.string.vetting_title),
-                fontFamily = Figtree, fontSize = 12.5.sp, color = SaColors.MutedLight,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 12.dp)
-            )
-            SyncButton(state.refreshing, onSync)
-        }
+            item {
+                GreetingHeader(
+                    date = dateText,
+                    title = if (name != null) stringResource(R.string.greeting_hello, name) else stringResource(R.string.vetting_title),
+                    subtitle = stringResource(R.string.role_vetting),
+                    initials = initialsOf(state.username)
+                )
+            }
+            // What is on the list and how fresh it is, with the one action: fetch the latest records.
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 22.dp)
+                        .padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        subtitleFor(state, now) ?: stringResource(R.string.vetting_title),
+                        fontFamily = Figtree, fontSize = 12.5.sp, color = SaColors.MutedLight,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp)
+                    )
+                    SyncButton(state.refreshing, onSync)
+                }
+            }
+            state.notice?.let { notice -> item { Column(modifier = Modifier.padding(horizontal = 22.dp)) { Notice(notice, state.meta) } } }
 
-        Column(modifier = Modifier.padding(horizontal = 22.dp)) { state.notice?.let { Notice(it, state.meta) } }
-
-        when {
-            !state.loaded -> Unit
-            state.items.isEmpty() -> Column(modifier = Modifier.padding(horizontal = 22.dp)) { EmptyState(state.refreshing, onSync) }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().testTag(ListTags.LIST),
-                contentPadding = PaddingValues(start = 22.dp, top = 6.dp, end = 22.dp, bottom = 26.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(state.items, key = { it.id }) { RecordRow(it, onOpen) }
+            when {
+                !state.loaded -> Unit
+                state.items.isEmpty() -> item { Column(modifier = Modifier.padding(horizontal = 22.dp)) { EmptyState(state.refreshing, onSync) } }
+                else -> items(state.items, key = { it.id }) {
+                    Box(modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 5.dp, bottom = 5.dp)) { RecordRow(it, onOpen) }
+                }
             }
         }
     }
@@ -349,13 +356,15 @@ private fun RecordRow(item: RecordItem, onOpen: (String) -> Unit) {
             Text(
                 item.legalName,
                 fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = SaColors.Ink,
-                maxLines = 2, overflow = TextOverflow.Ellipsis
+                maxLines = 3, overflow = TextOverflow.Ellipsis
             )
             Text(
                 listOf(item.province, item.contactName).filter { it.isNotBlank() }.joinToString(" · "),
                 fontFamily = Figtree, fontSize = 12.sp, color = SaColors.MutedLight,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                maxLines = 2, overflow = TextOverflow.Ellipsis
             )
+            // Under the name, not beside it: beside it the badge took a third of a narrow screen and cut the name short.
+            DecisionBadge(item.decision, modifier = Modifier.padding(top = 6.dp))
             // Only while the decision has not reached the server: once it has, there is nothing to say.
             val sync = item.decisionSync
             if (sync != null && sync != DecisionSyncDisplay.SYNCED) {
@@ -367,6 +376,5 @@ private fun RecordRow(item: RecordItem, onOpen: (String) -> Unit) {
                 )
             }
         }
-        DecisionBadge(item.decision)
     }
 }

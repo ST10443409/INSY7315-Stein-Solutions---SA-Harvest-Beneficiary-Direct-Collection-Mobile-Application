@@ -16,7 +16,7 @@ Android app ──► sah-collection-vetting-api (existing)  ──https + X-Api
                  forwards decisions and collections                              records what it is sent (/received)
 ```
 
-- One new Web App on the **same App Service plan** as the API (no extra monthly cost on B1).
+- One new Web App on the **same App Service plan** as the API (no extra monthly cost; your plan is the free F1).
 - Its image: `ghcr.io/st10443409/saharvest-foodspace-sim:live`, built by the **Publish Foodspace simulator image** workflow.
 - A shared API key stored in Key Vault as `Foodspace--ApiKey`, read by both Web Apps. The simulator refuses calls without it.
 - The simulator keeps everything in memory: a restart resets what it has "received", and the 3 beneficiaries come back as new.
@@ -64,7 +64,7 @@ az webapp create -g $RG -p $PLAN -n $SIM \
 unset TOKEN
 
 az webapp update -g $RG -n $SIM --https-only true -o none
-az webapp config set -g $RG -n $SIM --always-on true --min-tls-version 1.2 --ftps-state Disabled -o none
+az webapp config set -g $RG -n $SIM --min-tls-version 1.2 --ftps-state Disabled -o none
 az webapp identity assign -g $RG -n $SIM -o none        # lets it read the key from Key Vault
 ```
 
@@ -72,7 +72,15 @@ If `az webapp create` complains about the `--container-*` arguments, your Cloud 
 portal instead: **Create a resource > Web App**, Publish **Container**, OS **Linux**, the same plan, Image source **Other container
 registries**, Registry `https://ghcr.io`, the image above, then fill in the user and token under **Deployment Center**.
 
-`--always-on` matters: without it the process sleeps when idle and the API's cache refresh times out.
+**The free F1 plan has no Always On** (the command above leaves it out, because Azure refuses it with `Conflict`). Both Web Apps sleep
+after about 20 minutes without traffic, and the first request then takes 10 to 40 seconds. The API waits only 15 seconds for the
+simulator, so a sync straight after a quiet spell can show an empty or stale list. Wake the simulator first, then sync:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://sah-foodspace-sim.azurewebsites.net/api/external/status   # 401 means it is awake
+```
+
+On B1 or above you can add `--always-on true` and this goes away (`appServicePlanSku` in `prod.bicepparam`, about US$13/month).
 
 ## 3. Create the shared API key
 

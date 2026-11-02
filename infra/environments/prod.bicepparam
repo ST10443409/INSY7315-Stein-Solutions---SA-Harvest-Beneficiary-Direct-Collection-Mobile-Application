@@ -33,6 +33,10 @@ param foodspaceForwardingEnabled = true
 param bootstrapAdminUsername = ''
 param bootstrapAdminPasswordSecretExists = false
 
+// The API's container image. The pipeline keeps this tag pointed at the newest release, so a template run must not reset the Web
+// App to Microsoft's placeholder sample image (the template's default), which would take the API down until the next release.
+param initialContainerImage = 'ghcr.io/st10443409/saharvest-api:live'
+
 param migrateOnStartup = true
 
 // az ad signed-in-user show --query id -o tsv

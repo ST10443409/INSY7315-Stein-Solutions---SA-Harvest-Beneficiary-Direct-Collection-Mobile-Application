@@ -130,8 +130,7 @@ path).
 
 ## 6. Point the API at it
 
-The API's Foodspace settings are managed by `infra/environments/prod.bicepparam`, so they are changed there (a hand-edited setting
-would be overwritten by the next deployment). The file in this repository already says:
+The API needs three Foodspace settings. `infra/environments/prod.bicepparam` records them (so the repository matches what is deployed):
 
 ```
 param foodspaceBaseUrl = 'https://sah-foodspace-sim.azurewebsites.net/'
@@ -139,28 +138,33 @@ param foodspaceApiKeySecretExists = true
 param foodspaceForwardingEnabled = true
 ```
 
-If you chose a different simulator name in step 2, change the address to match. Merging that file changes nothing in Azure by itself:
-the pipeline never applies `infra/`. It only takes effect when you run the deployment below.
+If you chose a different simulator name in step 2, use it in the address. Merging that file changes nothing in Azure by itself:
+the pipeline never applies `infra/`.
 
 `foodspaceApiKeySecretExists = true` is only safe now, because step 3 created the secret.
 
-If you set the first-admin bootstrap values (`bootstrapAdminUsername` and friends) in this file or in the portal, it is time to clear
-them: you have signed in, and the bootstrap has done its job (`infra/README.md`, section 7, step 4). Setting
-`bootstrapAdminUsername = ''` and `bootstrapAdminPasswordSecretExists = false` removes both settings on this deployment. Then
-delete the spent secret: `az keyvault secret delete --vault-name $KV --name Bootstrap--AdminPassword`.
-
-Apply it from Cloud Shell (clone the repo, or upload the edited file):
+**Apply the three settings straight to the API (recommended).** This changes only those settings and leaves everything else on the
+API (its container image, the bootstrap admin settings, the database) alone:
 
 ```bash
-git clone https://github.com/ST10443409/INSY7315-Stein-Solutions---SA-Harvest-Beneficiary-Direct-Collection-Mobile-Application.git
-cd INSY7315-Stein-Solutions---SA-Harvest-Beneficiary-Direct-Collection-Mobile-Application
-# (the Foodspace values are already in infra/environments/prod.bicepparam; change the address there if your simulator has another name)
-az deployment group what-if --resource-group $RG --parameters infra/environments/prod.bicepparam   # read it: only app settings change
-az deployment group create  --resource-group $RG --parameters infra/environments/prod.bicepparam --name main
+APP=sah-collection-vetting-api
+az webapp config appsettings set -g $RG -n $APP -o none --settings \
+  "Foodspace__BaseUrl=https://$SIM.azurewebsites.net/" \
+  "Foodspace__ApiKey=@Microsoft.KeyVault(VaultName=$KV;SecretName=Foodspace--ApiKey)" \
+  Foodspace__ForwardingEnabled=true
 ```
 
-The API restarts and now uses the simulator. This does not touch the simulator Web App: it is not part of the template.
-Also commit the edited `prod.bicepparam` so the repository matches what is deployed.
+The API restarts by itself. Check in the portal (sah-collection-vetting-api, Settings, Environment variables) that `Foodspace__ApiKey`
+has a **green tick**, as in step 4.
+
+`prod.bicepparam` holds the same three values, so a later infrastructure deployment keeps them instead of undoing them. It also pins
+the API's container image to `:live` (`initialContainerImage`). Without that, running the template resets the API to Microsoft's
+placeholder sample image until the next release. If you ever run `az deployment group create`, read `what-if` first and check it
+changes only what you expect.
+
+The first-admin bootstrap settings (`Bootstrap__AdminUsername` and `Bootstrap__AdminPassword`) can be removed now that you can sign
+in (`infra/README.md`, section 7, step 4): delete the two rows in the portal, then
+`az keyvault secret delete --vault-name $KV --name Bootstrap--AdminPassword`. Do that last, after everything else works.
 
 ## 7. Prove it end to end
 

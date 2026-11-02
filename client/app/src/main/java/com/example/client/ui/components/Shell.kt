@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,7 +93,11 @@ fun BottomNavBar(
                     ) {
                         StrokeIcon(pathData = item.glyph, tint = labelColor, modifier = Modifier.size(21.dp))
                     }
-                    Text(label, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = labelColor)
+                    // One line, always: at a large font a wrapped label would push the bar taller or split the word.
+                    Text(
+                        label, fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = labelColor,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -134,7 +139,7 @@ fun GreetingHeader(
             Text(
                 title,
                 fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 25.sp, color = SaColors.Ink,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 4.dp)
             )
             Text(subtitle, fontFamily = Figtree, fontSize = 12.5.sp, color = SaColors.MutedLight, modifier = Modifier.padding(top = 3.dp))

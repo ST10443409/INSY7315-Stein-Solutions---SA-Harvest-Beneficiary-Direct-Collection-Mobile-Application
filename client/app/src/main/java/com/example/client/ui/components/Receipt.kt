@@ -93,11 +93,14 @@ fun ReceiptScreen(
                         .padding(18.dp, 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(row.key, fontFamily = Figtree, fontSize = 13.sp, color = SaColors.MutedLight)
+                    // Both may wrap: without weights a long value (a donor's name, a delivery-note number) would be squeezed
+                    // into a sliver by the label and break one letter per line.
+                    Text(row.key, fontFamily = Figtree, fontSize = 13.sp, color = SaColors.MutedLight, modifier = Modifier.weight(0.4f, fill = false))
                     Text(
                         row.value,
                         fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Ink,
-                        modifier = Modifier.padding(start = 16.dp)
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        modifier = Modifier.weight(0.6f, fill = false).padding(start = 16.dp)
                     )
                 }
                 if (index != rows.lastIndex) {

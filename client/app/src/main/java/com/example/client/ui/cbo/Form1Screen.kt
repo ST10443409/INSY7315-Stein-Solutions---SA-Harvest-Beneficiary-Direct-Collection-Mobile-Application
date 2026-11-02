@@ -37,6 +37,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -185,21 +187,35 @@ fun Form1Screen(
         ) {
             // Times
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Side by side, but one above the other at a large font: "DEPARTURE" does not fit half a narrow screen and would split mid-word.
+                val arrival: @Composable (Modifier) -> Unit = { m ->
                     StatBox(
                         label = stringResource(R.string.form1_arrival),
                         value = form.arrivalTime,
                         containerColor = SaColors.SurfaceAlt,
                         textColor = SaColors.Ink,
-                        modifier = Modifier.weight(1f)
+                        modifier = m
                     )
+                }
+                val departure: @Composable (Modifier) -> Unit = { m ->
                     StatBox(
                         label = stringResource(R.string.form1_departure),
                         value = form.departureTime ?: "—",
                         containerColor = if (form.departureTime != null) SaColors.SurfaceAlt else SaColors.AppBg,
                         textColor = if (form.departureTime != null) SaColors.Ink else SaColors.MutedLight,
-                        modifier = Modifier.weight(1f)
+                        modifier = m
                     )
+                }
+                if (LocalDensity.current.fontScale > 1.3f) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        arrival(Modifier.fillMaxWidth())
+                        departure(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        arrival(Modifier.weight(1f))
+                        departure(Modifier.weight(1f))
+                    }
                 }
                 FieldError(Form1Field.ARRIVAL, errors)
                 FieldError(Form1Field.DEPARTURE, errors)
@@ -209,7 +225,8 @@ fun Form1Screen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
                         stringResource(R.string.form1_products),
-                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Ink
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Ink,
+                        modifier = Modifier.weight(1f).padding(end = 12.dp)
                     )
                     Text(
                         if (form.productLines.size == 1) stringResource(R.string.form1_line_count_one)
@@ -243,7 +260,8 @@ fun Form1Screen(
                 ) {
                     Text(
                         stringResource(R.string.form1_total_weight),
-                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Cream
+                        fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = SaColors.Cream,
+                        modifier = Modifier.weight(1f).padding(end = 12.dp)
                     )
                     Text(
                         Form1Validator.formatKg(form.totalKg) + " kg",
@@ -488,7 +506,9 @@ private fun StatBox(label: String, value: String, containerColor: Color, textCol
         Text(
             label.uppercase(),
             fontFamily = Figtree, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.1.sp,
-            color = textColor.copy(alpha = 0.7f)
+            color = textColor.copy(alpha = 0.7f),
+            // Never split a word across lines: shorten it with an ellipsis rather than "DEPARTUR / E".
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis
         )
         Text(
             value,
@@ -636,24 +656,37 @@ private fun AddProductSheet(
                     )
                     SaTextArea(value = draft.notes, onValueChange = onNotesChange, minLines = 2)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinePillButton(onClick = onDismiss, contentPadding = PaddingValues(vertical = 14.dp, horizontal = 22.dp)) {
+                // Side by side, but stacked once the font is large: "Add to collection" would otherwise wrap inside a narrow pill.
+                val stacked = LocalDensity.current.fontScale > 1.25f
+                val cancel: @Composable (Modifier) -> Unit = { m ->
+                    OutlinePillButton(onClick = onDismiss, modifier = m, contentPadding = PaddingValues(vertical = 14.dp, horizontal = 22.dp)) {
                         Text(
                             stringResource(R.string.form1_dialog_cancel),
                             fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = SaColors.Ink
                         )
                     }
+                }
+                val confirm: @Composable (Modifier) -> Unit = { m ->
                     FilledPillButton(
                         onClick = onConfirm,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag(Form1Tags.DRAFT_CONFIRM),
+                        modifier = m.testTag(Form1Tags.DRAFT_CONFIRM),
                         contentPadding = PaddingValues(14.dp)
                     ) {
                         Text(
                             stringResource(R.string.form1_dialog_add_to_collection),
                             fontFamily = Figtree, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = SaColors.Ink
                         )
+                    }
+                }
+                if (stacked) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        confirm(Modifier.fillMaxWidth())
+                        cancel(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        cancel(Modifier)
+                        confirm(Modifier.weight(1f))
                     }
                 }
             }

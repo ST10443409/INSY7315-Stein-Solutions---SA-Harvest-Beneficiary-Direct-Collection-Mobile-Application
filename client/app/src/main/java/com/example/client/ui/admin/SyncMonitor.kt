@@ -227,7 +227,7 @@ private fun FormCard(tag: String, title: String, counts: FormSyncCounts, rows: L
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Text(title, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = SaColors.Ink)
+            Text(title, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = SaColors.Ink, modifier = Modifier.weight(1f).padding(end = 12.dp))
             Text(
                 stringResource(R.string.admin_sync_total, counts.total),
                 fontFamily = Figtree, fontSize = 13.sp, color = SaColors.Muted,

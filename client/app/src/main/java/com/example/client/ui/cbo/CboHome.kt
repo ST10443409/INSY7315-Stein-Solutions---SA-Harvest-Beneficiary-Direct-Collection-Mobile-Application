@@ -226,7 +226,7 @@ private fun androidx.compose.foundation.layout.RowScope.HomeCardText(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = SaColors.Ink)
+            Text(title, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = SaColors.Ink, modifier = Modifier.weight(1f).padding(end = 8.dp))
             StrokeIcon(pathData = GlyphPaths.ArrowRight, tint = SaColors.Ink, modifier = Modifier.size(22.dp))
         }
         Text(body, fontFamily = Figtree, fontSize = 13.sp, color = bodyColor, modifier = Modifier.padding(top = 6.dp))

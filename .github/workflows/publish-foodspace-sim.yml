@@ -1,0 +1,36 @@
+name: Publish Foodspace simulator image
+
+# Builds external-api-sim and publishes it to GitHub Container Registry as
+#     ghcr.io/<owner>/saharvest-foodspace-sim:live
+# so the simulator's own Web App can run it (see docs/foodspace-simulator-azure.md). Run it by hand from the Actions tab; it does
+# not touch the API or its Web App. It needs no secrets: it signs in to the registry with the workflow's own token.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write # to push the image with the workflow's own token
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Sign in to the registry
+      env:
+        REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+    - name: Build and push
+      run: |
+        owner="${GITHUB_REPOSITORY_OWNER,,}" # registry names must be lowercase
+        image="ghcr.io/${owner}/saharvest-foodspace-sim"
+        docker build -t "${image}:${GITHUB_SHA::12}" -t "${image}:live" ./external-api-sim
+        docker push --quiet "${image}:${GITHUB_SHA::12}"
+        docker push --quiet "${image}:live"
+        {
+          echo "### Published"
+          echo "\`${image}:live\` (revision \`${GITHUB_SHA::12}\`). Restart the simulator's Web App to run it."
+        } >> "$GITHUB_STEP_SUMMARY"

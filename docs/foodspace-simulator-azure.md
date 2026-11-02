@@ -16,7 +16,7 @@ Android app ──► sah-collection-vetting-api (existing)  ──https + X-Api
                  forwards decisions and collections                              records what it is sent (/received)
 ```
 
-- One new Web App on the **same App Service plan** as the API (no extra monthly cost on B1).
+- One new Web App on the **same App Service plan** as the API (no extra monthly cost; your plan is the free F1).
 - Its image: `ghcr.io/st10443409/saharvest-foodspace-sim:live`, built by the **Publish Foodspace simulator image** workflow.
 - A shared API key stored in Key Vault as `Foodspace--ApiKey`, read by both Web Apps. The simulator refuses calls without it.
 - The simulator keeps everything in memory: a restart resets what it has "received", and the 3 beneficiaries come back as new.
@@ -64,7 +64,7 @@ az webapp create -g $RG -p $PLAN -n $SIM \
 unset TOKEN
 
 az webapp update -g $RG -n $SIM --https-only true -o none
-az webapp config set -g $RG -n $SIM --always-on true --min-tls-version 1.2 --ftps-state Disabled -o none
+az webapp config set -g $RG -n $SIM --min-tls-version 1.2 --ftps-state Disabled -o none
 az webapp identity assign -g $RG -n $SIM -o none        # lets it read the key from Key Vault
 ```
 
@@ -72,7 +72,15 @@ If `az webapp create` complains about the `--container-*` arguments, your Cloud 
 portal instead: **Create a resource > Web App**, Publish **Container**, OS **Linux**, the same plan, Image source **Other container
 registries**, Registry `https://ghcr.io`, the image above, then fill in the user and token under **Deployment Center**.
 
-`--always-on` matters: without it the process sleeps when idle and the API's cache refresh times out.
+**The free F1 plan has no Always On** (the command above leaves it out, because Azure refuses it with `Conflict`). Both Web Apps sleep
+after about 20 minutes without traffic, and the first request then takes 10 to 40 seconds. The API waits only 15 seconds for the
+simulator, so a sync straight after a quiet spell can show an empty or stale list. Wake the simulator first, then sync:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://sah-foodspace-sim.azurewebsites.net/api/external/status   # 401 means it is awake
+```
+
+On B1 or above you can add `--always-on true` and this goes away (`appServicePlanSku` in `prod.bicepparam`, about US$13/month).
 
 ## 3. Create the shared API key
 
@@ -122,8 +130,7 @@ path).
 
 ## 6. Point the API at it
 
-The API's Foodspace settings are managed by `infra/environments/prod.bicepparam`, so they are changed there (a hand-edited setting
-would be overwritten by the next deployment). The file in this repository already says:
+The API needs three Foodspace settings. `infra/environments/prod.bicepparam` records them (so the repository matches what is deployed):
 
 ```
 param foodspaceBaseUrl = 'https://sah-foodspace-sim.azurewebsites.net/'
@@ -131,28 +138,33 @@ param foodspaceApiKeySecretExists = true
 param foodspaceForwardingEnabled = true
 ```
 
-If you chose a different simulator name in step 2, change the address to match. Merging that file changes nothing in Azure by itself:
-the pipeline never applies `infra/`. It only takes effect when you run the deployment below.
+If you chose a different simulator name in step 2, use it in the address. Merging that file changes nothing in Azure by itself:
+the pipeline never applies `infra/`.
 
 `foodspaceApiKeySecretExists = true` is only safe now, because step 3 created the secret.
 
-If you set the first-admin bootstrap values (`bootstrapAdminUsername` and friends) in this file or in the portal, it is time to clear
-them: you have signed in, and the bootstrap has done its job (`infra/README.md`, section 7, step 4). Setting
-`bootstrapAdminUsername = ''` and `bootstrapAdminPasswordSecretExists = false` removes both settings on this deployment. Then
-delete the spent secret: `az keyvault secret delete --vault-name $KV --name Bootstrap--AdminPassword`.
-
-Apply it from Cloud Shell (clone the repo, or upload the edited file):
+**Apply the three settings straight to the API (recommended).** This changes only those settings and leaves everything else on the
+API (its container image, the bootstrap admin settings, the database) alone:
 
 ```bash
-git clone https://github.com/ST10443409/INSY7315-Stein-Solutions---SA-Harvest-Beneficiary-Direct-Collection-Mobile-Application.git
-cd INSY7315-Stein-Solutions---SA-Harvest-Beneficiary-Direct-Collection-Mobile-Application
-# (the Foodspace values are already in infra/environments/prod.bicepparam; change the address there if your simulator has another name)
-az deployment group what-if --resource-group $RG --parameters infra/environments/prod.bicepparam   # read it: only app settings change
-az deployment group create  --resource-group $RG --parameters infra/environments/prod.bicepparam --name main
+APP=sah-collection-vetting-api
+az webapp config appsettings set -g $RG -n $APP -o none --settings \
+  "Foodspace__BaseUrl=https://$SIM.azurewebsites.net/" \
+  "Foodspace__ApiKey=@Microsoft.KeyVault(VaultName=$KV;SecretName=Foodspace--ApiKey)" \
+  Foodspace__ForwardingEnabled=true
 ```
 
-The API restarts and now uses the simulator. This does not touch the simulator Web App: it is not part of the template.
-Also commit the edited `prod.bicepparam` so the repository matches what is deployed.
+The API restarts by itself. Check in the portal (sah-collection-vetting-api, Settings, Environment variables) that `Foodspace__ApiKey`
+has a **green tick**, as in step 4.
+
+`prod.bicepparam` holds the same three values, so a later infrastructure deployment keeps them instead of undoing them. It also pins
+the API's container image to `:live` (`initialContainerImage`). Without that, running the template resets the API to Microsoft's
+placeholder sample image until the next release. If you ever run `az deployment group create`, read `what-if` first and check it
+changes only what you expect.
+
+The first-admin bootstrap settings (`Bootstrap__AdminUsername` and `Bootstrap__AdminPassword`) can be removed now that you can sign
+in (`infra/README.md`, section 7, step 4): delete the two rows in the portal, then
+`az keyvault secret delete --vault-name $KV --name Bootstrap--AdminPassword`. Do that last, after everything else works.
 
 ## 7. Prove it end to end
 
